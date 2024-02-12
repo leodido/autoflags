@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Options are those Options that are directly attachable to cobra.Command instances.
+// Options can be directly attached to cobra.Command instances.
 type Options interface {
 	Attach(*cobra.Command)
 }
