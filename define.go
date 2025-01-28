@@ -10,16 +10,10 @@ import (
 
 	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func Define(c *cobra.Command, o options.Options, exclusions ...string) {
-	v := viper.New()
-	if reuse, ok := vipers[c]; !ok {
-		vipers[c] = v
-	} else {
-		v = reuse
-	}
+	v := GetViper(c.Name())
 
 	// Map flags to exclude to the current command
 	ignores := map[string]string{}
@@ -73,14 +67,14 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		if cname, ok := exclusions[alias]; ok && c.Name() == cname {
 			continue
 		}
-		defval := f.Tag.Get("default") // TODO: flagdefault?
+		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
 		group := f.Tag.Get("flaggroup")
 		if startingGroup != "" {
 			group = startingGroup
 		}
 		name := getName(path, alias)
-		envs, defineEnv := getEnv(f, defineEnv, path, alias)
+		envs, defineEnv := getEnv(f, defineEnv, path, alias) // FIXME: pass down hierarchy?
 		mandatory := isMandatory(f) || mandatory
 
 		// Flags with custom definition hooks
@@ -105,7 +99,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			}
 		}
 
-		// TODO: complete type switch
+		// TODO: complete type switch with missing types
 		switch f.Type.Kind() {
 		case reflect.Struct:
 			// NOTE > field.Interface() doesn't work because it actually returns a copy of the object wrapping the interface
@@ -148,6 +142,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 				val := field.Interface().([]string)
 				ref := (*[]string)(unsafe.Pointer(field.UnsafeAddr()))
 				c.Flags().StringSliceVarP(ref, name, short, val, descr)
+				inferDecodeHooks(c, name, f.Type.String())
 			}
 
 		case reflect.Int64:
@@ -179,14 +174,14 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 
 		// Set the defaults
 		if defval != "" {
-			vipers[c].SetDefault(name, defval)
+			vipers[c.Name()].SetDefault(name, defval)
 			// This is needed for the usage help messages
 			c.Flags().Lookup(name).DefValue = defval
 		}
 
 		if alias != "" && path != alias {
 			// Alias the actual path to the flag name (ie., the alias when not empty)
-			vipers[c].RegisterAlias(path, alias)
+			vipers[c.Name()].RegisterAlias(path, alias)
 		}
 
 		if len(envs) > 0 {
