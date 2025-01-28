@@ -2,6 +2,7 @@ package autoflags
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/leodido/autoflags/options"
 	"github.com/mitchellh/mapstructure"
@@ -23,6 +24,21 @@ func GetViper(path string) *viper.Viper {
 	}
 
 	return reuse
+}
+
+func Debug(c *cobra.Command, opts options.DebuggableOptions) error {
+	if !opts.Debuggable() {
+		return nil
+	}
+
+	res, ok := vipers[c.Name()]
+	if !ok {
+		return fmt.Errorf("couldn't find a viper instance for %s", c.Name())
+	}
+	res.Debug()
+	fmt.Fprintf(os.Stdout, "Values:\n%#v\n", res.AllSettings())
+
+	return nil
 }
 
 func Viper(c *cobra.Command) (*viper.Viper, error) {
