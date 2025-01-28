@@ -11,11 +11,22 @@ import (
 )
 
 var (
-	vipers map[*cobra.Command]*viper.Viper = map[*cobra.Command]*viper.Viper{}
+	vipers map[string]*viper.Viper = map[string]*viper.Viper{}
 )
 
+func GetViper(path string) *viper.Viper {
+	reuse, ok := vipers[path]
+	if !ok {
+		vipers[path] = viper.New()
+
+		return vipers[path]
+	}
+
+	return reuse
+}
+
 func Viper(c *cobra.Command) (*viper.Viper, error) {
-	res, ok := vipers[c]
+	res, ok := vipers[c.Name()]
 	if !ok {
 		return nil, fmt.Errorf("couldn't find a viper instance for %s", c.Name())
 	}
@@ -62,10 +73,11 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 				ret += e.Error()
 			}
 
-			return fmt.Errorf(ret)
+			return fmt.Errorf("%s", ret)
 		}
 	}
 
+	// FIXME: transform before validation?
 	// Automatically transform options if feasible
 	if o, ok := opts.(options.TransformableOptions); ok {
 		if transformErr := o.Transform(c.Context()); transformErr != nil {
