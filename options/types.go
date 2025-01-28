@@ -20,5 +20,11 @@ type TransformableOptions interface {
 }
 
 type CommonOptions interface {
+	Options
 	Context(context.Context) context.Context
+}
+
+type DebuggableOptions interface {
+	Options
+	Debuggable() bool
 }
