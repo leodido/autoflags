@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/leodido/autoflags/options"
 	"github.com/go-viper/mapstructure/v2"
+	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -50,6 +50,31 @@ func Viper(c *cobra.Command) (*viper.Viper, error) {
 	return res, nil
 }
 
+// createConfigC creates a configuration map for a specific command by merging
+// top-level settings with command-specific settings from the global configuration.
+func createConfigC(globalSettings map[string]any, commandName string) map[string]any {
+	configToMerge := make(map[string]any)
+
+	// First, add all top-level settings (for root command and shared config)
+	for key, value := range globalSettings {
+		// Skip command-specific sections to avoid conflicts
+		if _, isMap := value.(map[string]any); !isMap || key == commandName {
+			configToMerge[key] = value
+		}
+	}
+
+	// Then, if there's a command-specific section, promote its contents to top level
+	if commandSettings, exists := globalSettings[commandName]; exists {
+		if commandMap, ok := commandSettings.(map[string]any); ok {
+			for key, value := range commandMap {
+				configToMerge[key] = value
+			}
+		}
+	}
+
+	return configToMerge
+}
+
 // NOTE: See https://github.com/spf13/viper/pull/1715
 func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.DecodeHookFunc) error {
 	res, err := Viper(c)
@@ -58,7 +83,8 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 	}
 
 	// Merging the config map (if any) from the global viper singleton instance
-	if err := res.MergeConfigMap(viper.AllSettings()); err != nil {
+	configToMerge := createConfigC(viper.AllSettings(), c.Name())
+	if err := res.MergeConfigMap(configToMerge); err != nil {
 		return err
 	}
 
