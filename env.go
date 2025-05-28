@@ -35,7 +35,7 @@ func bindEnv(v *viper.Viper, c *cobra.Command) {
 	})
 }
 
-func getEnv(f reflect.StructField, inherit bool, path, alias string) ([]string, bool) {
+func getEnv(f reflect.StructField, inherit bool, path, alias, envPrefix string) ([]string, bool) {
 	ret := []string{}
 
 	env := f.Tag.Get("flagenv")
@@ -43,9 +43,25 @@ func getEnv(f reflect.StructField, inherit bool, path, alias string) ([]string, 
 
 	if defineEnv || inherit {
 		if f.Type.Kind() != reflect.Struct {
-			ret = append(ret, prefix+envRep.Replace(strings.ToUpper(path)))
+			envPath := path
+			envAlias := alias
+
+			// Apply env prefix to current env variable
+			// But avoid double prefixing if the given prefix matches the global prefix (usually the CLI/app name)
+			if envPrefix != "" {
+				// Extract app name from prefix (remove trailing underscore and lowercase)
+				appName := strings.ToLower(strings.TrimSuffix(prefix, "_"))
+				if envPrefix != appName {
+					envPath = envPrefix + "." + path
+					if alias != "" {
+						envAlias = envPrefix + "." + alias
+					}
+				}
+			}
+
+			ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envPath)))
 			if alias != "" && path != alias {
-				ret = append(ret, prefix+envRep.Replace(strings.ToUpper(alias)))
+				ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envAlias)))
 			}
 		}
 	}
