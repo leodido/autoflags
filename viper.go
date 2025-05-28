@@ -58,7 +58,7 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 	// First, add all top-level settings (for root command and shared config)
 	for key, value := range globalSettings {
 		// Skip command-specific sections to avoid conflicts
-		if _, isMap := value.(map[string]any); !isMap || key != commandName {
+		if _, isMap := value.(map[string]any); !isMap {
 			configToMerge[key] = value
 		}
 	}
