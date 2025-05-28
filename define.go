@@ -74,7 +74,15 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			group = startingGroup
 		}
 		name := getName(path, alias)
-		envs, defineEnv := getEnv(f, defineEnv, path, alias) // FIXME: pass down hierarchy?
+
+		// Determine whether to represent hierarchy with the command name
+		// We assume that options that are not common options are subcommand-specific options
+		cName := ""
+		if _, isCommonOptions := o.(options.CommonOptions); !isCommonOptions {
+			cName = c.Name()
+		}
+
+		envs, defineEnv := getEnv(f, defineEnv, path, alias, cName)
 		mandatory := isMandatory(f) || mandatory
 
 		// Flags with custom definition hooks
