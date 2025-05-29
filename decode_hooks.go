@@ -1,7 +1,10 @@
 package autoflags
 
 import (
+	"fmt"
 	"reflect"
+	"strconv"
+	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
@@ -16,6 +19,7 @@ var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
 	"StringToZapcoreLevelHookFunc": StringToZapcoreLevelHookFunc(),
 	"StringToSliceHookFunc":        mapstructure.StringToSliceHookFunc(","),
 	"StringToTimeDurationHookFunc": mapstructure.StringToTimeDurationHookFunc(),
+	"StringToIntSliceHookFunc":     StringToIntSliceHookFunc(","),
 }
 
 func inferDecodeHooks(c *cobra.Command, name, typename string) {
@@ -26,6 +30,8 @@ func inferDecodeHooks(c *cobra.Command, name, typename string) {
 		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
 	case "[]string":
 		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
+	case "[]int":
+		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
 	}
 }
 
@@ -41,5 +47,39 @@ func StringToZapcoreLevelHookFunc() mapstructure.DecodeHookFunc {
 		}
 
 		return zapcore.ParseLevel(data.(string))
+	}
+}
+
+func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
+	return func(
+		f reflect.Type,
+		t reflect.Type,
+		data interface{},
+	) (interface{}, error) {
+		if f.Kind() != reflect.String {
+			return data, nil
+		}
+		if t != reflect.SliceOf(reflect.TypeOf(int(0))) {
+			return data, nil
+		}
+
+		raw := data.(string)
+		if raw == "" {
+			return []int{}, nil
+		}
+
+		parts := strings.Split(raw, sep)
+		result := make([]int, len(parts))
+
+		for i, part := range parts {
+			trimmed := strings.TrimSpace(part)
+			num, err := strconv.Atoi(trimmed)
+			if err != nil {
+				return nil, fmt.Errorf("invalid integer '%s' at position %d: %w", trimmed, i, err)
+			}
+			result[i] = num
+		}
+
+		return result, nil
 	}
 }
