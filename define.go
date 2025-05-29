@@ -33,10 +33,9 @@ func Define(c *cobra.Command, o options.Options, exclusions ...string) {
 
 func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
 	val := getValue(o)
-	// TODO: double-check this one
-	// if !val.IsValid() {
-	// 	val = getValue(getValuePtr(o))
-	// }
+	if !val.IsValid() {
+		val = getValue(getValuePtr(o).Interface())
+	}
 
 	for i := 0; i < val.NumField(); i++ {
 		field := val.Field(i)
@@ -267,9 +266,14 @@ func getValue(o interface{}) reflect.Value {
 	return val
 }
 
-func getValuePtr(o interface{}) reflect.Value {
+func getValuePtr(o any) reflect.Value {
 	val := reflect.ValueOf(o)
 	if val.Type().Kind() == reflect.Ptr {
+		// Create a new zero-valued instance of the pointed-to type
+		if val.IsNil() {
+			return reflect.New(val.Type().Elem())
+		}
+
 		return val
 	}
 
