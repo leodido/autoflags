@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func (suite *AutoflagsSuite) TestBindEnv_FirstCall() {
+func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
 	v := viper.New()
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"},
@@ -21,7 +21,7 @@ func (suite *AutoflagsSuite) TestBindEnv_FirstCall() {
 	assert.True(suite.T(), boundEnvs["dns"]["cgroup"], "cgroup flag should be marked as bound")
 }
 
-func (suite *AutoflagsSuite) TestBindEnv_SecondCallSameCommand() {
+func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 	v := viper.New()
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"},
@@ -45,7 +45,7 @@ func (suite *AutoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 	assert.True(suite.T(), boundEnvs["dns"]["new-flag"], "new-flag should be bound")
 }
 
-func (suite *AutoflagsSuite) TestBindEnv_DifferentCommands() {
+func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
 	v1 := viper.New()
 	v2 := viper.New()
 
@@ -71,7 +71,7 @@ func (suite *AutoflagsSuite) TestBindEnv_DifferentCommands() {
 	assert.Len(suite.T(), boundEnvs, 2, "should have exactly 2 command entries")
 }
 
-func (suite *AutoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
+func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 	v := viper.New()
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"}, // Has env annotation
@@ -85,7 +85,7 @@ func (suite *AutoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 	assert.False(suite.T(), boundEnvs["dns"]["no-env"], "no-env flag should not be bound")
 }
 
-func (suite *AutoflagsSuite) TestBindEnv_EmptyCommand() {
+func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
 	v := viper.New()
 	cmd := &cobra.Command{Use: "empty"}
 

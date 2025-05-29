@@ -1,4 +1,4 @@
-package autoflags
+package autoflags_test
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/leodido/autoflags"
 	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -68,9 +69,9 @@ func (suite *FlagsBaseSuite) TestDefine() {
 	for _, tc := range cases {
 		suite.T().Run(tc.desc, func(t *testing.T) {
 			c := &cobra.Command{}
-			Define(c, tc.input)
+			autoflags.Define(c, tc.input)
 			f := c.Flags()
-			vip, e := Viper(c)
+			vip, e := autoflags.Viper(c)
 			assert.Nil(t, e)
 
 			assert.NotNil(t, f.Lookup("log-level"))
@@ -78,14 +79,14 @@ func (suite *FlagsBaseSuite) TestDefine() {
 			assert.Equal(t, vip.Get("configflags.loglevel"), vip.Get("log-level"))
 			assert.NotNil(t, f.Lookup("configflags.endpoint"))
 			assert.NotNil(t, f.Lookup("configflags.timeout"))
-			assert.NotNil(t, f.Lookup("log-level").Annotations[FlagGroupAnnotation])
-			assert.Equal(t, confAnnotation, f.Lookup("log-level").Annotations[FlagGroupAnnotation])
-			assert.NotNil(t, f.Lookup("configflags.endpoint").Annotations[FlagGroupAnnotation])
-			assert.Equal(t, confAnnotation, f.Lookup("configflags.endpoint").Annotations[FlagGroupAnnotation])
+			assert.NotNil(t, f.Lookup("log-level").Annotations[autoflags.FlagGroupAnnotation])
+			assert.Equal(t, confAnnotation, f.Lookup("log-level").Annotations[autoflags.FlagGroupAnnotation])
+			assert.NotNil(t, f.Lookup("configflags.endpoint").Annotations[autoflags.FlagGroupAnnotation])
+			assert.Equal(t, confAnnotation, f.Lookup("configflags.endpoint").Annotations[autoflags.FlagGroupAnnotation])
 			assert.NotNil(t, f.Lookup("configflags.endpoint").Annotations[cobra.BashCompOneRequiredFlag])
 			assert.Equal(t, requiredAnnotation, f.Lookup("configflags.endpoint").Annotations[cobra.BashCompOneRequiredFlag])
-			assert.NotNil(t, f.Lookup("configflags.timeout").Annotations[FlagGroupAnnotation])
-			assert.Equal(t, confAnnotation, f.Lookup("configflags.timeout").Annotations[FlagGroupAnnotation])
+			assert.NotNil(t, f.Lookup("configflags.timeout").Annotations[autoflags.FlagGroupAnnotation])
+			assert.Equal(t, confAnnotation, f.Lookup("configflags.timeout").Annotations[autoflags.FlagGroupAnnotation])
 			assert.Equal(t, "set the logging level", f.Lookup("log-level").Usage)
 			assert.Equal(t, "the listen.dev endpoint emitting the verdicts", f.Lookup("configflags.endpoint").Usage)
 			assert.Equal(t, "set the timeout, in seconds", f.Lookup("configflags.timeout").Usage)
@@ -100,8 +101,8 @@ func (suite *FlagsBaseSuite) TestDefine() {
 			assert.NotNil(t, f.ShorthandLookup("d"))
 			assert.Equal(t, "deepdown", vip.Get("nest.deep.deep"))
 			assert.Equal(t, vip.Get("nest.deep.deep"), vip.Get("deep"))
-			assert.NotNil(t, f.Lookup("deep").Annotations[FlagGroupAnnotation])
-			assert.Equal(t, deepAnnotation, f.Lookup("deep").Annotations[FlagGroupAnnotation])
+			assert.NotNil(t, f.Lookup("deep").Annotations[autoflags.FlagGroupAnnotation])
+			assert.Equal(t, deepAnnotation, f.Lookup("deep").Annotations[autoflags.FlagGroupAnnotation])
 			assert.NotNil(t, f.Lookup("deep").Annotations[cobra.BashCompOneRequiredFlag])
 			assert.Equal(t, requiredAnnotation, f.Lookup("deep").Annotations[cobra.BashCompOneRequiredFlag])
 			assert.Equal(t, "output the verdicts (if any) in JSON form", f.Lookup("nest.json").Usage)
@@ -132,7 +133,7 @@ func (suite *FlagsBaseSuite) TestDefine_UintTypesSupport() {
 	}
 	cmd := &cobra.Command{}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Test uint
 	flagUint := cmd.Flags().Lookup("uint-field")
@@ -197,7 +198,7 @@ func (suite *FlagsBaseSuite) TestDefine_IntTypesSupport() {
 	}
 	cmd := &cobra.Command{}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Test int
 	flagInt := cmd.Flags().Lookup("int-field")
@@ -252,7 +253,7 @@ func (suite *FlagsBaseSuite) TestDefine_CountFlagSupport() {
 	opts := &countTestOptions{Verbose: 0}
 	cmd := &cobra.Command{}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Verify the flag was created
 	flagVerbose := cmd.Flags().Lookup("verbose")
@@ -292,7 +293,7 @@ func (suite *FlagsBaseSuite) TestDefine_SliceSupport() {
 	}
 	cmd := &cobra.Command{}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Test string slice (should be supported)
 	flagStrings := cmd.Flags().Lookup("strings")
@@ -321,13 +322,13 @@ func (suite *FlagsBaseSuite) TestDefine_NilPointerHandling() {
 	cmd1 := &cobra.Command{}
 
 	assert.NotPanics(suite.T(), func() {
-		Define(cmd1, nilOpts)
+		autoflags.Define(cmd1, nilOpts)
 	})
 
 	// Should create same flags as zero-valued struct
 	zeroOpts := &testOptions{}
 	cmd2 := &cobra.Command{}
-	Define(cmd2, zeroOpts)
+	autoflags.Define(cmd2, zeroOpts)
 
 	// Count defined flags
 	nilFlags := 0
@@ -379,7 +380,7 @@ func (suite *FlagsBaseSuite) TestFlagcustom_ComprehensiveScenarios() {
 	opts := &comprehensiveCustomOptions{}
 
 	c := &cobra.Command{Use: "test"}
-	Define(c, opts)
+	autoflags.Define(c, opts)
 
 	f := c.Flags()
 
@@ -417,7 +418,7 @@ func (suite *FlagsBaseSuite) TestFlagcustom_EdgeCases() {
 	// Test struct fields (should be ignored)
 	structOpts := &structFieldOptions{}
 	c1 := &cobra.Command{Use: "test1"}
-	Define(c1, structOpts)
+	autoflags.Define(c1, structOpts)
 
 	assert.False(suite.T(), structOpts.methodCalled, "custom methods should not be called for struct fields")
 

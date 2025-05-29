@@ -4,7 +4,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func (suite *AutoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
+func (suite *autoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
 	globalSettings := map[string]interface{}{}
 	commandName := "dns"
 
@@ -13,7 +13,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
 	assert.Empty(suite.T(), result, "should return empty map when global settings are empty")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_MissingCommandSection() {
+func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
 	globalSettings := map[string]interface{}{
 		"loglevel":    "debug",
 		"jsonlogging": true,
@@ -29,7 +29,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_MissingCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should include only top-level settings when command section is missing")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_WithCommandSection() {
+func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
 	globalSettings := map[string]interface{}{
 		"loglevel":    "debug",
 		"jsonlogging": true,
@@ -51,7 +51,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_WithCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should merge top-level settings with promoted command-specific settings")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
+func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
 	globalSettings := map[string]interface{}{
 		"loglevel": "debug",
 		"dns":      "invalid-not-a-map",
@@ -69,7 +69,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
 	assert.Equal(suite.T(), expected, result, "should include command section as-is when it's not a map")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel() {
+func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel() {
 	globalSettings := map[string]interface{}{
 		"freeze":   false,
 		"loglevel": "info",
@@ -91,7 +91,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel()
 	assert.Equal(suite.T(), expected, result, "command-specific settings should override top-level settings")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
+func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 	globalSettings := map[string]interface{}{
 		"loglevel": "info",
 		"dns": map[string]interface{}{
@@ -113,7 +113,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 	assert.Equal(suite.T(), expected, result, "should only include the specific command section, excluding other command sections")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
+func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 	globalSettings := map[string]interface{}{
 		"shared-setting": "value",
 		"dns": map[string]interface{}{
@@ -137,7 +137,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 	assert.Equal(suite.T(), expected, result, "should preserve nested structures within command sections")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
+func (suite *autoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
 	globalSettings := map[string]interface{}{
 		"loglevel": "debug",
 		"dns":      map[string]interface{}{},
@@ -152,7 +152,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should handle empty command sections gracefully")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_NilCommandSection() {
+func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
 	globalSettings := map[string]interface{}{
 		"loglevel": "debug",
 		"dns":      nil,
@@ -168,7 +168,7 @@ func (suite *AutoflagsSuite) TestCreateConfigC_NilCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should handle nil command sections as non-maps")
 }
 
-func (suite *AutoflagsSuite) TestCreateConfigC_TypeConflicts() {
+func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
 	globalSettings := map[string]interface{}{
 		"timeout": "30s", // string at top level
 		"dns": map[string]interface{}{
