@@ -169,17 +169,17 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			c.Flags().Uint64VarP(ref, name, short, val, descr)
 
 		case reflect.Slice:
-			if f.Type.Elem().Kind() == reflect.String {
+			switch f.Type.Elem().Kind() {
+			case reflect.String:
 				val := field.Interface().([]string)
 				ref := (*[]string)(unsafe.Pointer(field.UnsafeAddr()))
 				c.Flags().StringSliceVarP(ref, name, short, val, descr)
-				inferDecodeHooks(c, name, f.Type.String())
-			} else if f.Type.Elem().Kind() == reflect.Int {
+			case reflect.Int:
 				val := field.Interface().([]int)
 				ref := (*[]int)(unsafe.Pointer(field.UnsafeAddr()))
 				c.Flags().IntSliceVarP(ref, name, short, val, descr)
-				inferDecodeHooks(c, name, f.Type.String())
 			}
+			inferDecodeHooks(c, name, f.Type.String())
 
 		case reflect.Int64:
 			switch f.Type.String() {
