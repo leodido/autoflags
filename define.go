@@ -90,19 +90,28 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			hookName := fmt.Sprintf("Define%s", f.Name)
 			if structPtr := getValuePtr(o); structPtr.IsValid() {
 				hookFunc := structPtr.MethodByName(hookName)
-				if !hookFunc.IsValid() {
+				if hookFunc.IsValid() {
+					hookFunc.Call([]reflect.Value{
+						getValuePtr(c),
+						getValue(f.Type.String()),
+						getValue(name),
+						getValue(short),
+						getValue(descr),
+					})
+					inferDecodeHooks(c, name, f.Type.String())
+
+					goto definition_done
+				} else {
+					// Fallback to define hooks registry
+					if inferDefineHooks(c, f.Type.String(), f, name, short, descr, field) {
+						inferDecodeHooks(c, name, f.Type.String())
+
+						goto definition_done
+					}
+
+					// Neither user method nor registry can handle this: skip it
 					continue
 				}
-				hookFunc.Call([]reflect.Value{
-					getValuePtr(c),
-					getValue(f.Type.String()),
-					getValue(name),
-					getValue(short),
-					getValue(descr),
-				})
-				inferDecodeHooks(c, name, f.Type.String())
-
-				goto definition_done
 			}
 		}
 
