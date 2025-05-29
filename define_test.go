@@ -7,6 +7,7 @@ import (
 
 	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
@@ -311,4 +312,28 @@ func (suite *FlagsBaseSuite) TestDefine_SliceSupport() {
 
 	expectedInts := []int{10, 20, 30}
 	assert.Equal(suite.T(), expectedInts, opts.IntSliceField, "int slice field should be updated")
+}
+
+func (suite *FlagsBaseSuite) TestDefine_NilPointerHandling() {
+	// Test with nil pointer - should not panic and should create same flags as zero-valued struct
+	var nilOpts *testOptions = nil
+	cmd1 := &cobra.Command{}
+
+	assert.NotPanics(suite.T(), func() {
+		Define(cmd1, nilOpts)
+	})
+
+	// Should create same flags as zero-valued struct
+	zeroOpts := &testOptions{}
+	cmd2 := &cobra.Command{}
+	Define(cmd2, zeroOpts)
+
+	// Count defined flags
+	nilFlags := 0
+	cmd1.Flags().VisitAll(func(flag *pflag.Flag) { nilFlags++ })
+
+	zeroFlags := 0
+	cmd2.Flags().VisitAll(func(flag *pflag.Flag) { zeroFlags++ })
+
+	assert.Equal(suite.T(), zeroFlags, nilFlags, "nil pointer should create same flags as zero-valued struct")
 }
