@@ -187,3 +187,216 @@ func (suite *autoflagsSuite) TestHooks_DurationFlagOverridesConfig() {
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 90*time.Second, opts.Timeout) // flag wins over config
 }
+
+type stringSliceOptions struct {
+	Cgroups []string `flag:"cgroups" flagdescr:"list of cgroups to monitor"`
+}
+
+func (o *stringSliceOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceFromFlag() {
+	// Test setting string slice via command line flag
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts)
+
+	// Set flag value (simulating command line)
+	err := cmd.Flags().Set("cgroups", "group1,group2,group3")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLCommaSeparated() {
+	// Test hook converting comma-separated string from YAML to []string
+	configContent := `cgroups: "group1,group2,group3"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLArray() {
+	// Test YAML array directly (no hook needed, mapstructure handles this)
+	configContent := `cgroups:
+  - group1
+  - group2
+  - group3`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceEmptyString() {
+	// Test hook behavior with empty string
+	configContent := `cgroups: ""`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	// StringToSliceHookFunc with empty string results in []string{""}
+	assert.Equal(suite.T(), []string{}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceSingleValue() {
+	// Test hook with single value (no commas)
+	configContent := `cgroups: "single-group"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"single-group"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceWithSpaces() {
+	// Test hook with values containing spaces
+	configContent := `cgroups: "group with spaces,another group,normal"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group with spaces", "another group", "normal"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceMultipleFlags() {
+	// Test setting multiple flag values
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts)
+
+	// Set flag multiple times
+	err := cmd.Flags().Set("cgroups", "group1")
+	require.NoError(suite.T(), err)
+	err = cmd.Flags().Set("cgroups", "group2")
+	require.NoError(suite.T(), err)
+	err = cmd.Flags().Set("cgroups", "group3")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceFlagOverridesConfig() {
+	// Test that flag values override config values
+	configContent := `cgroups: "config1,config2"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+
+	// Set flag value (should override config)
+	err := cmd.Flags().Set("cgroups", "flag1,flag2,flag3")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	// Flag values should win over config values
+	assert.Equal(suite.T(), []string{"flag1", "flag2", "flag3"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceYAMLSpecialCharacters() {
+	// Test hook with special characters that might cause issues
+	configContent := `cgroups: "group-1_test,group:2@domain,group[3]"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []string{"group-1_test", "group:2@domain", "group[3]"}, opts.Cgroups)
+}
+
+func (suite *autoflagsSuite) TestHooks_StringSliceEmptyAfterSplit() {
+	// Test hook behavior with leading/trailing commas
+	configContent := `cgroups: ",group1,,group2,"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &stringSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	// Should include empty strings from the split
+	assert.Equal(suite.T(), []string{"", "group1", "", "group2", ""}, opts.Cgroups)
+}
