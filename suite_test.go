@@ -1,9 +1,11 @@
 package autoflags
 
 import (
+	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -34,4 +36,18 @@ func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][
 	}
 
 	return cmd
+}
+
+// createTempYAMLFile creates a temporary YAML files for testing
+func (suite *autoflagsSuite) createTempYAMLFile(content string) string {
+	tmpFile, err := os.CreateTemp("", "autoflags_test_*.yaml")
+	require.NoError(suite.T(), err)
+
+	_, err = tmpFile.WriteString(content)
+	require.NoError(suite.T(), err)
+
+	err = tmpFile.Close()
+	require.NoError(suite.T(), err)
+
+	return tmpFile.Name()
 }
