@@ -25,12 +25,24 @@ func SetEnvPrefix(str string) {
 	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(str, envSep), envSep)
 }
 
+// boundEnvs tracks which environment variable have been bound for each command to prevent duplicates
+var boundEnvs = make(map[string]map[string]bool)
+
 func bindEnv(v *viper.Viper, c *cobra.Command) {
+	cName := c.Name()
+	if boundEnvs[cName] == nil {
+		boundEnvs[cName] = make(map[string]bool)
+	}
+
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if envs, defineEnv := f.Annotations[FlagEnvsAnnotation]; defineEnv {
-			input := []string{f.Name}
-			input = append(input, envs...)
-			v.BindEnv(input...)
+			// Only bind if we haven't already bound this env var for this command
+			if !boundEnvs[cName][f.Name] {
+				boundEnvs[cName][f.Name] = true
+				input := []string{f.Name}
+				input = append(input, envs...)
+				v.BindEnv(input...)
+			}
 		}
 	})
 }
