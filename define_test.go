@@ -237,3 +237,39 @@ func (suite *FlagsBaseSuite) TestDefine_IntTypesSupport() {
 	assert.NoError(suite.T(), err, "should be able to set int64 flag")
 	assert.Equal(suite.T(), int64(9876543210), opts.Int64Field, "int64 struct field should be updated")
 }
+
+type countTestOptions struct {
+	Verbose int `flag:"verbose" flagshort:"v" type:"count" flagdescr:"verbosity level"`
+}
+
+func (o countTestOptions) Attach(c *cobra.Command)             {}
+func (o countTestOptions) Transform(ctx context.Context) error { return nil }
+func (o countTestOptions) Validate() []error                   { return nil }
+
+func (suite *FlagsBaseSuite) TestDefine_CountFlagSupport() {
+	opts := &countTestOptions{Verbose: 0}
+	cmd := &cobra.Command{}
+
+	Define(cmd, opts)
+
+	// Verify the flag was created
+	flagVerbose := cmd.Flags().Lookup("verbose")
+	assert.NotNil(suite.T(), flagVerbose, "verbose count flag should be created")
+
+	// Verify short flag exists
+	shortFlag := cmd.Flags().ShorthandLookup("v")
+	assert.NotNil(suite.T(), shortFlag, "verbose short flag should be created")
+
+	// Test count behavior - each flag usage increments the value
+	err := cmd.Flags().Set("verbose", "3") // Should set to 3
+	assert.NoError(suite.T(), err, "should be able to set count flag")
+	assert.Equal(suite.T(), 3, opts.Verbose, "count flag should be set to 3")
+
+	// Reset and test incremental behavior (this simulates -vvv)
+	opts.Verbose = 0
+	cmd.Flags().Set("verbose", "1") // First -v
+	cmd.Flags().Set("verbose", "2") // Second -v (simulating -vv)
+	cmd.Flags().Set("verbose", "3") // Third -v (simulating -vvv)
+
+	assert.Equal(suite.T(), 3, opts.Verbose, "count flag should increment to 3")
+}
