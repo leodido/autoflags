@@ -145,6 +145,21 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			ref := (*uint8)(unsafe.Pointer(field.UnsafeAddr()))
 			c.Flags().Uint8VarP(ref, name, short, val, descr)
 
+		case reflect.Uint16:
+			val := field.Interface().(uint16)
+			ref := (*uint16)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Uint16VarP(ref, name, short, val, descr)
+
+		case reflect.Uint32:
+			val := field.Interface().(uint32)
+			ref := (*uint32)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Uint32VarP(ref, name, short, val, descr)
+
+		case reflect.Uint64:
+			val := field.Interface().(uint64)
+			ref := (*uint64)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Uint64VarP(ref, name, short, val, descr)
+
 		case reflect.Slice:
 			if f.Type.Elem().Kind() == reflect.String {
 				val := field.Interface().([]string)
@@ -168,6 +183,21 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			default:
 				continue
 			}
+
+		case reflect.Int8:
+			val := field.Interface().(int8)
+			ref := (*int8)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Int8VarP(ref, name, short, val, descr)
+
+		case reflect.Int16:
+			val := field.Interface().(int16)
+			ref := (*int16)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Int16VarP(ref, name, short, val, descr)
+
+		case reflect.Int32:
+			val := field.Interface().(int32)
+			ref := (*int32)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Int32VarP(ref, name, short, val, descr)
 
 		default:
 			continue
