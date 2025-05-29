@@ -273,3 +273,42 @@ func (suite *FlagsBaseSuite) TestDefine_CountFlagSupport() {
 
 	assert.Equal(suite.T(), 3, opts.Verbose, "count flag should increment to 3")
 }
+
+type sliceTestOptions struct {
+	StringSliceField []string `flag:"strings" flagshort:"s" flagdescr:"string slice field"`
+	IntSliceField    []int    `flag:"ints" flagshort:"i" flagdescr:"int slice field"`
+}
+
+func (o sliceTestOptions) Attach(c *cobra.Command)             {}
+func (o sliceTestOptions) Transform(ctx context.Context) error { return nil }
+func (o sliceTestOptions) Validate() []error                   { return nil }
+
+func (suite *FlagsBaseSuite) TestDefine_SliceSupport() {
+	opts := &sliceTestOptions{
+		StringSliceField: []string{"default1", "default2"},
+		IntSliceField:    []int{1, 2, 3},
+	}
+	cmd := &cobra.Command{}
+
+	Define(cmd, opts)
+
+	// Test string slice (should be supported)
+	flagStrings := cmd.Flags().Lookup("strings")
+	assert.NotNil(suite.T(), flagStrings, "string slice flag should be created")
+
+	err := cmd.Flags().Set("strings", "value1,value2,value3")
+	assert.NoError(suite.T(), err, "should be able to set string slice flag")
+
+	expected := []string{"value1", "value2", "value3"}
+	assert.Equal(suite.T(), expected, opts.StringSliceField, "string slice field should be updated")
+
+	// Test int slice (should ALSO be supported)
+	flagInts := cmd.Flags().Lookup("ints")
+	assert.NotNil(suite.T(), flagInts, "int slice flag should be created")
+
+	err = cmd.Flags().Set("ints", "10,20,30")
+	assert.NoError(suite.T(), err, "should be able to set int slice flag")
+
+	expectedInts := []int{10, 20, 30}
+	assert.Equal(suite.T(), expectedInts, opts.IntSliceField, "int slice field should be updated")
+}
