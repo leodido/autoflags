@@ -7,21 +7,21 @@ import (
 	"github.com/stretchr/testify/suite"
 )
 
-type AutoflagsSuite struct {
+type autoflagsSuite struct {
 	suite.Suite
 }
 
 func TestAutoflagsSuite(t *testing.T) {
-	suite.Run(t, new(AutoflagsSuite))
+	suite.Run(t, new(autoflagsSuite))
 }
 
-func (suite *AutoflagsSuite) SetupTest() {
+func (suite *autoflagsSuite) SetupTest() {
 	// Reset the global boundEnvs map before each test
 	boundEnvs = make(map[string]map[string]bool)
 }
 
 // createTestC creates a command with flags that have environment annotations
-func (suite *AutoflagsSuite) createTestC(name string, flagsWithEnvs map[string][]string) *cobra.Command {
+func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][]string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: name,
 	}
