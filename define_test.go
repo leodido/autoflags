@@ -425,3 +425,46 @@ func (suite *FlagsBaseSuite) TestFlagcustom_EdgeCases() {
 	nestedFlag := c1.Flags().Lookup("nest.value")
 	assert.NotNil(suite.T(), nestedFlag, "nested fields should be processed normally")
 }
+
+type envAnnotationsTestOptions struct {
+	HasEnv string `flagenv:"true" flag:"has-env" flagdescr:"this will have len(envs) > 0"`
+	NoEnv  string `flag:"no-env" flagdescr:"this will have len(envs) == 0"`
+}
+
+func (o *envAnnotationsTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
+	autoflags.SetEnvPrefix("TEST")
+
+	opts := &envAnnotationsTestOptions{}
+	c := &cobra.Command{Use: "test"}
+	autoflags.Define(c, opts)
+
+	f := c.Flags()
+
+	// Case 1: len(envs) > 0 - should set annotation
+	flagWithEnv := f.Lookup("has-env")
+	assert.NotNil(suite.T(), flagWithEnv, "flag should exist")
+
+	// The critical test: verify annotation was set
+	envAnnotation := flagWithEnv.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.NotNil(suite.T(), envAnnotation, "annotation should be set when len(envs) > 0")
+	assert.Greater(suite.T(), len(envAnnotation), 0, "annotation should contain env vars")
+	assert.Contains(suite.T(), envAnnotation, "TEST_HAS_ENV", "should contain expected env var")
+}
+
+func (suite *FlagsBaseSuite) TestEnvAnnotations_WhenEnvsEmpty() {
+	opts := &envAnnotationsTestOptions{}
+	c := &cobra.Command{Use: "test"}
+	autoflags.Define(c, opts)
+
+	f := c.Flags()
+
+	// Case 2: len(envs) == 0 - should NOT set annotation
+	flagWithoutEnv := f.Lookup("no-env")
+	assert.NotNil(suite.T(), flagWithoutEnv, "flag should exist")
+
+	// The critical test: verify annotation was NOT set
+	envAnnotation := flagWithoutEnv.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.Nil(suite.T(), envAnnotation, "annotation should NOT be set when len(envs) == 0")
+}
