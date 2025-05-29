@@ -192,6 +192,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 				val := field.Interface().(time.Duration)
 				ref := (*time.Duration)(unsafe.Pointer(field.UnsafeAddr()))
 				c.Flags().DurationVarP(ref, name, short, val, descr)
+				inferDecodeHooks(c, name, f.Type.String())
 
 			default:
 				continue
