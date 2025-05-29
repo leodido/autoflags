@@ -400,3 +400,257 @@ func (suite *autoflagsSuite) TestHooks_StringSliceEmptyAfterSplit() {
 	// Should include empty strings from the split
 	assert.Equal(suite.T(), []string{"", "group1", "", "group2", ""}, opts.Cgroups)
 }
+
+type intSliceOptions struct {
+	Ports []int `flag:"ports" flagdescr:"list of ports to listen on"`
+}
+
+func (o *intSliceOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceFromFlag() {
+	// Test setting int slice via command line flag
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts)
+
+	// Set flag value (simulating command line)
+	err := cmd.Flags().Set("ports", "8080,9090,3000")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLCommaSeparated() {
+	// Test hook converting comma-separated string from YAML to []int
+	configContent := `ports: "8080,9090,3000"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLArray() {
+	// Test YAML array directly (no hook needed, mapstructure handles this)
+	configContent := `ports:
+  - 8080
+  - 9090
+  - 3000`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceEmptyString() {
+	// Test hook behavior with empty string
+	configContent := `ports: ""`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	// StringToIntSliceHookFunc with empty string results in empty slice
+	assert.Equal(suite.T(), []int{}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceSingleValue() {
+	// Test hook with single value (no commas)
+	configContent := `ports: "8080"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceWithSpaces() {
+	// Test hook with values containing spaces (should be trimmed)
+	configContent := `ports: " 8080 , 9090 , 3000 "`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceNegativeNumbers() {
+	// Test hook with negative numbers
+	configContent := `ports: "-1,0,8080,-9090"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{-1, 0, 8080, -9090}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceMultipleFlags() {
+	// Test setting multiple flag values
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts)
+
+	// Set flag multiple times
+	err := cmd.Flags().Set("ports", "8080")
+	require.NoError(suite.T(), err)
+	err = cmd.Flags().Set("ports", "9090")
+	require.NoError(suite.T(), err)
+	err = cmd.Flags().Set("ports", "3000")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceFlagOverridesConfig() {
+	// Test that flag values override config values
+	configContent := `ports: "8080,9090"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+
+	// Set flag value (should override config)
+	err := cmd.Flags().Set("ports", "3000,4000,5000")
+	require.NoError(suite.T(), err)
+
+	err = Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	// Flag values should win over config values
+	assert.Equal(suite.T(), []int{3000, 4000, 5000}, opts.Ports)
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceInvalidInteger() {
+	// Test hook error handling with invalid integer
+	configContent := `ports: "8080,invalid,3000"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "invalid integer")
+	assert.Contains(suite.T(), err.Error(), "invalid")
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceFloatNumber() {
+	// Test hook error handling with float number
+	configContent := `ports: "8080,90.5,3000"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "invalid integer")
+	assert.Contains(suite.T(), err.Error(), "90.5")
+}
+
+func (suite *autoflagsSuite) TestHooks_IntSliceOutOfRange() {
+	// Test hook error handling with number out of int range
+	configContent := `ports: "8080,99999999999999999999,3000"`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &intSliceOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	viper.Reset()
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	Define(cmd, opts)
+	err := Unmarshal(cmd, opts)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "invalid integer")
+}
