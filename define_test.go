@@ -2,6 +2,7 @@ package autoflags
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -303,7 +304,7 @@ func (suite *FlagsBaseSuite) TestDefine_SliceSupport() {
 	expected := []string{"value1", "value2", "value3"}
 	assert.Equal(suite.T(), expected, opts.StringSliceField, "string slice field should be updated")
 
-	// Test int slice (should ALSO be supported)
+	// Test int slice (should be supported)
 	flagInts := cmd.Flags().Lookup("ints")
 	assert.NotNil(suite.T(), flagInts, "int slice flag should be created")
 
@@ -315,7 +316,7 @@ func (suite *FlagsBaseSuite) TestDefine_SliceSupport() {
 }
 
 func (suite *FlagsBaseSuite) TestDefine_NilPointerHandling() {
-	// Test with nil pointer - should not panic and should create same flags as zero-valued struct
+	// Test with nil pointer: it should not panic and should create same flags as zero-valued struct
 	var nilOpts *testOptions = nil
 	cmd1 := &cobra.Command{}
 
@@ -336,4 +337,90 @@ func (suite *FlagsBaseSuite) TestDefine_NilPointerHandling() {
 	cmd2.Flags().VisitAll(func(flag *pflag.Flag) { zeroFlags++ })
 
 	assert.Equal(suite.T(), zeroFlags, nilFlags, "nil pointer should create same flags as zero-valued struct")
+}
+
+type serverMode string
+
+const (
+	development serverMode = "dev"
+	staging     serverMode = "staging"
+	production  serverMode = "prod"
+)
+
+type comprehensiveCustomOptions struct {
+	ServerMode serverMode `flagcustom:"true" flag:"server-mode" flagshort:"m" flagdescr:"set server mode"`
+	SomeConfig string     `flagcustom:"true" flag:"some-config" flagshort:"c" flagdescr:"config file path"`
+	NoMethod   string     `flagcustom:"true" flag:"no-method" flagdescr:"this should not appear"`
+	NormalFlag string     `flag:"normal-flag" flagdescr:"normal description"`
+}
+
+func (o *comprehensiveCustomOptions) DefineServerMode(c *cobra.Command, typename, name, short, descr string) {
+	enhancedDesc := descr + fmt.Sprintf(" (%s,%s,%s)", string(development), string(staging), string(production))
+	c.Flags().StringP(name, short, string(development), enhancedDesc)
+
+	// Add shell completion
+	c.RegisterFlagCompletionFunc(name, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{string(development), string(staging), string(production)}, cobra.ShellCompDirectiveDefault
+	})
+}
+
+func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, typename, name, short, descr string) {
+	enhancedDesc := descr + " (must be .yaml, .yml, or .json)"
+	c.Flags().StringP(name, short, "", enhancedDesc)
+
+	c.RegisterFlagCompletionFunc(name, func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return []string{"yaml", "yml", "json"}, cobra.ShellCompDirectiveFilterFileExt
+	})
+}
+
+func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagcustom_ComprehensiveScenarios() {
+	opts := &comprehensiveCustomOptions{}
+
+	c := &cobra.Command{Use: "test"}
+	Define(c, opts)
+
+	f := c.Flags()
+
+	modeFlag := f.Lookup("server-mode")
+	assert.NotNil(suite.T(), modeFlag, "server-mode flag should be defined")
+	assert.Equal(suite.T(), "set server mode (dev,staging,prod)", modeFlag.Usage)
+
+	configFlag := f.Lookup("some-config")
+	assert.NotNil(suite.T(), configFlag, "config flag should be defined")
+	assert.Equal(suite.T(), "config file path (must be .yaml, .yml, or .json)", configFlag.Usage)
+
+	normalFlag := f.Lookup("normal-flag")
+	assert.NotNil(suite.T(), normalFlag, "normal flags should still work")
+
+	missingFlag := f.Lookup("no-method")
+	assert.Nil(suite.T(), missingFlag, "flags without methods should be skipped")
+}
+
+type nestedStruct struct {
+	Value string `flagdescr:"nested value"`
+}
+
+type structFieldOptions struct {
+	Nest         nestedStruct `flagcustom:"true"`
+	methodCalled bool
+}
+
+func (o *structFieldOptions) DefineNest(c *cobra.Command, typename, name, short, descr string) {
+	o.methodCalled = true
+}
+
+func (o *structFieldOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagcustom_EdgeCases() {
+	// Test struct fields (should be ignored)
+	structOpts := &structFieldOptions{}
+	c1 := &cobra.Command{Use: "test1"}
+	Define(c1, structOpts)
+
+	assert.False(suite.T(), structOpts.methodCalled, "custom methods should not be called for struct fields")
+
+	nestedFlag := c1.Flags().Lookup("nest.value")
+	assert.NotNil(suite.T(), nestedFlag, "nested fields should be processed normally")
 }
