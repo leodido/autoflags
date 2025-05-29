@@ -15,10 +15,13 @@ const (
 var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
 	"StringToZapcoreLevelHookFunc": StringToZapcoreLevelHookFunc(),
 	"StringToSliceHookFunc":        mapstructure.StringToSliceHookFunc(","),
+	"StringToTimeDurationHookFunc": mapstructure.StringToTimeDurationHookFunc(),
 }
 
 func inferDecodeHooks(c *cobra.Command, name, typename string) {
 	switch typename {
+	case "time.Duration":
+		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
 	case "zapcore.Level":
 		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
 	case "[]string":
