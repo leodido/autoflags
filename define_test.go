@@ -468,3 +468,243 @@ func (suite *FlagsBaseSuite) TestEnvAnnotations_WhenEnvsEmpty() {
 	envAnnotation := flagWithoutEnv.Annotations[autoflags.FlagEnvsAnnotation]
 	assert.Nil(suite.T(), envAnnotation, "annotation should NOT be set when len(envs) == 0")
 }
+
+type requiredFlagsTestOptions struct {
+	RequiredFlag     string `flag:"required-flag" flagrequired:"true" flagdescr:"this flag is required"`
+	NotRequiredFlag  string `flag:"not-required-flag" flagrequired:"false" flagdescr:"this flag is not required"`
+	DefaultFlag      string `flag:"default-flag" flagdescr:"this flag has no flagrequired tag"`
+	RequiredWithDesc string `flagrequired:"true" flagdescr:"required flag without custom name"`
+}
+
+func (o *requiredFlagsTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagrequired_BasicFunctionality() {
+	opts := &requiredFlagsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	autoflags.Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// Test required flag
+	requiredFlag := flags.Lookup("required-flag")
+	assert.NotNil(suite.T(), requiredFlag, "required-flag should exist")
+
+	// Check if the flag is marked as required using cobra's annotation
+	requiredAnnotation := requiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), requiredAnnotation, "required-flag should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, requiredAnnotation, "required annotation should be 'true'")
+
+	// Test not required flag
+	notRequiredFlag := flags.Lookup("not-required-flag")
+	assert.NotNil(suite.T(), notRequiredFlag, "not-required-flag should exist")
+
+	notRequiredAnnotation := notRequiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), notRequiredAnnotation, "not-required-flag should not have required annotation")
+
+	// Test default flag (no flagrequired tag)
+	defaultFlag := flags.Lookup("default-flag")
+	assert.NotNil(suite.T(), defaultFlag, "default-flag should exist")
+
+	defaultAnnotation := defaultFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), defaultAnnotation, "default-flag should not have required annotation")
+
+	// Test required flag without custom name
+	autoNamedFlag := flags.Lookup("requiredwithdesc")
+	assert.NotNil(suite.T(), autoNamedFlag, "requiredwithdesc should exist")
+
+	autoNamedAnnotation := autoNamedFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), autoNamedAnnotation, "requiredwithdesc should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, autoNamedAnnotation, "required annotation should be 'true'")
+}
+
+type nestedRequiredFlagsOptions struct {
+	TopLevel     string               `flag:"top-level" flagrequired:"true" flagdescr:"top level required flag"`
+	NestedStruct nestedRequiredStruct `flaggroup:"Nested"`
+}
+
+type nestedRequiredStruct struct {
+	NestedRequired    string `flag:"nested-required" flagrequired:"true" flagdescr:"nested required flag"`
+	NestedNotRequired string `flag:"nested-not-required" flagdescr:"nested not required flag"`
+}
+
+func (o *nestedRequiredFlagsOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagrequired_NestedStructs() {
+	opts := &nestedRequiredFlagsOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	autoflags.Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// Test top-level required flag
+	topLevelFlag := flags.Lookup("top-level")
+	assert.NotNil(suite.T(), topLevelFlag, "top-level should exist")
+
+	topLevelAnnotation := topLevelFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), topLevelAnnotation, "top-level should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, topLevelAnnotation)
+
+	// Test nested required flag
+	nestedRequiredFlag := flags.Lookup("nested-required")
+	assert.NotNil(suite.T(), nestedRequiredFlag, "nested-required should exist")
+
+	nestedRequiredAnnotation := nestedRequiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), nestedRequiredAnnotation, "nested-required should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, nestedRequiredAnnotation)
+
+	// Test nested not required flag
+	nestedNotRequiredFlag := flags.Lookup("nested-not-required")
+	assert.NotNil(suite.T(), nestedNotRequiredFlag, "nested-not-required should exist")
+
+	nestedNotRequiredAnnotation := nestedNotRequiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), nestedNotRequiredAnnotation, "nested-not-required should not have required annotation")
+}
+
+type invalidBooleanRequiredOptions struct {
+	InvalidTrue   string `flag:"invalid-true" flagrequired:"yes" flagdescr:"invalid boolean value"`
+	InvalidFalse  string `flag:"invalid-false" flagrequired:"no" flagdescr:"invalid boolean value"`
+	EmptyRequired string `flag:"empty-required" flagrequired:"" flagdescr:"empty flagrequired value"`
+	CaseVariation string `flag:"case-variation" flagrequired:"True" flagdescr:"case variation test"`
+}
+
+func (o *invalidBooleanRequiredOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagrequired_InvalidBooleanValues() {
+	opts := &invalidBooleanRequiredOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	autoflags.Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// Test invalid "yes" - should be treated as false since strconv.ParseBool returns false for invalid values
+	invalidTrueFlag := flags.Lookup("invalid-true")
+	assert.NotNil(suite.T(), invalidTrueFlag, "invalid-true should exist")
+
+	invalidTrueAnnotation := invalidTrueFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), invalidTrueAnnotation, "invalid-true should not have required annotation due to invalid boolean")
+
+	// Test invalid "no" - should be treated as false
+	invalidFalseFlag := flags.Lookup("invalid-false")
+	assert.NotNil(suite.T(), invalidFalseFlag, "invalid-false should exist")
+
+	invalidFalseAnnotation := invalidFalseFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), invalidFalseAnnotation, "invalid-false should not have required annotation due to invalid boolean")
+
+	// Test empty value - should be treated as false
+	emptyRequiredFlag := flags.Lookup("empty-required")
+	assert.NotNil(suite.T(), emptyRequiredFlag, "empty-required should exist")
+
+	emptyRequiredAnnotation := emptyRequiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.Nil(suite.T(), emptyRequiredAnnotation, "empty-required should not have required annotation due to empty value")
+
+	// Test case variation - "True" should work since strconv.ParseBool accepts it
+	caseVariationFlag := flags.Lookup("case-variation")
+	assert.NotNil(suite.T(), caseVariationFlag, "case-variation should exist")
+
+	caseVariationAnnotation := caseVariationFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), caseVariationAnnotation, "case-variation should have required annotation since 'True' is valid")
+	assert.Equal(suite.T(), []string{"true"}, caseVariationAnnotation)
+}
+
+type multipleTypesRequiredOptions struct {
+	RequiredString    string   `flag:"required-string" flagrequired:"true" flagdescr:"required string"`
+	RequiredInt       int      `flag:"required-int" flagrequired:"true" flagdescr:"required int"`
+	RequiredBool      bool     `flag:"required-bool" flagrequired:"true" flagdescr:"required bool"`
+	RequiredSlice     []string `flag:"required-slice" flagrequired:"true" flagdescr:"required slice"`
+	NotRequiredString string   `flag:"not-required-string" flagrequired:"false" flagdescr:"not required string"`
+	NotRequiredInt    int      `flag:"not-required-int" flagrequired:"false" flagdescr:"not required int"`
+}
+
+func (o *multipleTypesRequiredOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagrequired_MultipleTypes() {
+	opts := &multipleTypesRequiredOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	autoflags.Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// Test all required flags
+	requiredFlags := []string{"required-string", "required-int", "required-bool", "required-slice"}
+	for _, flagName := range requiredFlags {
+		flag := flags.Lookup(flagName)
+		assert.NotNil(suite.T(), flag, "%s should exist", flagName)
+
+		annotation := flag.Annotations[cobra.BashCompOneRequiredFlag]
+		assert.NotNil(suite.T(), annotation, "%s should have required annotation", flagName)
+		assert.Equal(suite.T(), []string{"true"}, annotation, "%s required annotation should be 'true'", flagName)
+	}
+
+	// Test all not required flags
+	notRequiredFlags := []string{"not-required-string", "not-required-int"}
+	for _, flagName := range notRequiredFlags {
+		flag := flags.Lookup(flagName)
+		assert.NotNil(suite.T(), flag, "%s should exist", flagName)
+
+		annotation := flag.Annotations[cobra.BashCompOneRequiredFlag]
+		assert.Nil(suite.T(), annotation, "%s should not have required annotation", flagName)
+	}
+}
+
+type requiredWithOtherTagsOptions struct {
+	RequiredWithDefault string `flag:"required-default" flagrequired:"true" default:"default-value" flagdescr:"required with default"`
+	RequiredWithGroup   string `flag:"required-group" flagrequired:"true" flaggroup:"TestGroup" flagdescr:"required with group"`
+	RequiredWithShort   string `flag:"required-short" flagrequired:"true" flagshort:"r" flagdescr:"required with short"`
+	RequiredWithEnv     string `flag:"required-env" flagrequired:"true" flagenv:"true" flagdescr:"required with env"`
+}
+
+func (o *requiredWithOtherTagsOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagrequired_CombinedWithOtherTags() {
+	opts := &requiredWithOtherTagsOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	autoflags.Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// Test required with default
+	requiredDefaultFlag := flags.Lookup("required-default")
+	assert.NotNil(suite.T(), requiredDefaultFlag, "required-default should exist")
+
+	requiredDefaultAnnotation := requiredDefaultFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), requiredDefaultAnnotation, "required-default should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, requiredDefaultAnnotation)
+	assert.Equal(suite.T(), "default-value", requiredDefaultFlag.DefValue, "required-default should have default value")
+
+	// Test required with group
+	requiredGroupFlag := flags.Lookup("required-group")
+	assert.NotNil(suite.T(), requiredGroupFlag, "required-group should exist")
+
+	requiredGroupAnnotation := requiredGroupFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), requiredGroupAnnotation, "required-group should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, requiredGroupAnnotation)
+
+	groupAnnotation := requiredGroupFlag.Annotations[autoflags.FlagGroupAnnotation]
+	assert.NotNil(suite.T(), groupAnnotation, "required-group should have group annotation")
+	assert.Equal(suite.T(), []string{"TestGroup"}, groupAnnotation)
+
+	// Test required with short
+	requiredShortFlag := flags.Lookup("required-short")
+	assert.NotNil(suite.T(), requiredShortFlag, "required-short should exist")
+
+	requiredShortAnnotation := requiredShortFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), requiredShortAnnotation, "required-short should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, requiredShortAnnotation)
+	assert.Equal(suite.T(), "r", requiredShortFlag.Shorthand, "required-short should have shorthand")
+
+	// Test required with env
+	requiredEnvFlag := flags.Lookup("required-env")
+	assert.NotNil(suite.T(), requiredEnvFlag, "required-env should exist")
+
+	requiredEnvAnnotation := requiredEnvFlag.Annotations[cobra.BashCompOneRequiredFlag]
+	assert.NotNil(suite.T(), requiredEnvAnnotation, "required-env should have required annotation")
+	assert.Equal(suite.T(), []string{"true"}, requiredEnvAnnotation)
+
+	envAnnotation := requiredEnvFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.NotNil(suite.T(), envAnnotation, "required-env should have env annotation")
+}
