@@ -388,6 +388,11 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 			return err
 		}
 
+		// Validate flagrequired tag
+		if err := validateBooleanTag(fieldName, "flagrequired", fieldType.Tag.Get("flagrequired")); err != nil {
+			return err
+		}
+
 		// Recursively validate children structs
 		if fieldType.Type.Kind() == reflect.Struct {
 			if err := validateFieldTags(field, fieldName); err != nil {
