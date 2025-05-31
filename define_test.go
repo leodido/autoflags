@@ -1228,3 +1228,102 @@ func (suite *FlagsBaseSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
 	// Should return the first error (flagcustom is validated first in the current implementation)
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
 }
+
+type flagEnvValidationTimingOptions struct {
+	ValidEnv   string `flagenv:"true" flag:"valid-env" flagdescr:"valid env binding"`
+	InvalidEnv string `flagenv:"invalid" flag:"invalid-env" flagdescr:"invalid env value"`
+	NoEnv      string `flag:"no-env" flagdescr:"no env binding"`
+}
+
+func (o *flagEnvValidationTimingOptions) Attach(c *cobra.Command) {}
+
+type backwardCompatOptions struct {
+	ShouldWork  string `flagenv:"true" flag:"should-work" flagdescr:"should have env"`
+	ShouldFail  string `flagenv:"invalid" flag:"should-fail" flagdescr:"invalid but silent"`
+	YesNo       string `flagenv:"yes" flag:"yes-no" flagdescr:"common mistake"`
+	EmptyString string `flagenv:"" flag:"empty" flagdescr:"empty should be false"`
+}
+
+func (o *backwardCompatOptions) Attach(c *cobra.Command) {}
+
+type errorMessageOptions struct {
+	BadValue string `flagenv:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
+}
+
+func (o *errorMessageOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_ValidationTiming_EarlyValidationPreventsLaterErrors() {
+	opts := &flagEnvValidationTimingOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// With validation enabled, should fail at Define() time
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+	assert.Error(suite.T(), err, "Should fail during Define() with validation enabled")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should be about flagenv validation")
+
+	// Without validation enabled, should succeed at Define() time
+	opts2 := &flagEnvValidationTimingOptions{}
+	cmd2 := &cobra.Command{Use: "test2"}
+
+	err2 := autoflags.Define(cmd2, opts2) // No WithValidation()
+	assert.NoError(suite.T(), err2, "Should succeed during Define() without validation")
+
+	// Verify that the invalid flagenv value is silently treated as false (backward compatibility)
+	invalidFlag := cmd2.Flags().Lookup("invalid-env")
+	assert.NotNil(suite.T(), invalidFlag, "Invalid env flag should still be created")
+
+	invalidEnvAnnotation := invalidFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.Nil(suite.T(), invalidEnvAnnotation, "Invalid flagenv should be treated as false (no env binding)")
+
+	// Verify that valid flagenv still works
+	validFlag := cmd2.Flags().Lookup("valid-env")
+	assert.NotNil(suite.T(), validFlag, "Valid env flag should be created")
+
+	validEnvAnnotation := validFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.NotNil(suite.T(), validEnvAnnotation, "Valid flagenv should have env binding")
+}
+
+func (suite *FlagsBaseSuite) TestFlagenv_BackwardCompatibility_SilentFailureWithoutValidation() {
+	opts := &backwardCompatOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Should not fail without validation
+	err := autoflags.Define(cmd, opts)
+	assert.NoError(suite.T(), err, "Should not fail without validation enabled")
+
+	// Check the behavior matches expectations
+	flags := cmd.Flags()
+
+	shouldWorkFlag := flags.Lookup("should-work")
+	shouldFailFlag := flags.Lookup("should-fail")
+	yesNoFlag := flags.Lookup("yes-no")
+	emptyFlag := flags.Lookup("empty")
+
+	// Check environment annotations
+	shouldWorkAnnotation := shouldWorkFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	shouldFailAnnotation := shouldFailFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	yesNoAnnotation := yesNoFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	emptyAnnotation := emptyFlag.Annotations[autoflags.FlagEnvsAnnotation]
+
+	assert.NotNil(suite.T(), shouldWorkAnnotation, "flagenv='true' should work")
+	assert.Nil(suite.T(), shouldFailAnnotation, "flagenv='invalid' should be treated as false")
+	assert.Nil(suite.T(), yesNoAnnotation, "flagenv='yes' should be treated as false")
+	assert.Nil(suite.T(), emptyAnnotation, "flagenv='' should be treated as false")
+}
+
+func (suite *FlagsBaseSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() {
+	opts := &errorMessageOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagenv")
+
+	errorMsg := err.Error()
+
+	// These are the expected components of a FieldError
+	assert.Contains(suite.T(), errorMsg, "BadValue", "Error should contain field name")
+	assert.Contains(suite.T(), errorMsg, "flagenv", "Error should contain tag name")
+	assert.Contains(suite.T(), errorMsg, "maybe", "Error should contain tag value")
+	assert.Contains(suite.T(), errorMsg, "invalid boolean value", "Error should contain message")
+}
