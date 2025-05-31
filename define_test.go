@@ -1012,3 +1012,219 @@ func (suite *FlagsBaseSuite) TestFlagCustom_EdgeCases_WithValidation_ShouldRetur
 	assert.Contains(suite.T(), err.Error(), " true ", "Error should mention the invalid value with spaces")
 	assert.Contains(suite.T(), err.Error(), "WithSpaces", "Error should mention the field name")
 }
+
+type flagEnvTestOptions struct {
+	ValidEnv   string `flagenv:"true" flag:"valid-env" flagdescr:"should have env binding"`
+	InvalidEnv string `flagenv:"invalid" flag:"invalid-env" flagdescr:"has invalid flagenv value"`
+	EmptyEnv   string `flagenv:"" flag:"empty-env" flagdescr:"has empty flagenv value"`
+	FalseEnv   string `flagenv:"false" flag:"false-env" flagdescr:"explicitly false env"`
+	NormalFlag string `flag:"normal" flagdescr:"normal field without flagenv"`
+}
+
+func (o *flagEnvTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_WithValidation_ShouldReturnError() {
+	opts := &flagEnvTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagenv value")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "InvalidEnv", "Error should mention the field name")
+}
+
+func (suite *FlagsBaseSuite) TestFlagenv_WithValidation_OptionsPattern() {
+	opts := &flagEnvTestOptions{}
+	cmd1 := &cobra.Command{Use: "test1"}
+	cmd2 := &cobra.Command{Use: "test2"}
+
+	// Without validation - should not return error (backward compatible)
+	err1 := autoflags.Define(cmd1, opts)
+	assert.NoError(suite.T(), err1, "Without validation should not return error")
+
+	// With validation - should return error
+	err2 := autoflags.Define(cmd2, opts, autoflags.WithValidation())
+	assert.Error(suite.T(), err2, "With validation should return error")
+}
+
+type validFlagEnvOptions struct {
+	TrueEnv  string `flagenv:"true" flag:"true-env" flagdescr:"should have env"`
+	FalseEnv string `flagenv:"false" flag:"false-env" flagdescr:"should not have env"`
+	EmptyEnv string `flagenv:"" flag:"empty-env" flagdescr:"should not have env"`
+	NoEnv    string `flag:"no-env" flagdescr:"should not have env"`
+}
+
+func (o *validFlagEnvOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_WithValidation_ValidValues() {
+	opts := &validFlagEnvOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.NoError(suite.T(), err, "Should not return error for valid flagenv values")
+
+	// Check that flags are created correctly
+	trueFlag := cmd.Flags().Lookup("true-env")
+	falseFlag := cmd.Flags().Lookup("false-env")
+	emptyFlag := cmd.Flags().Lookup("empty-env")
+	noFlag := cmd.Flags().Lookup("no-env")
+
+	// Check environment annotations
+	trueEnvAnnotation := trueFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	falseEnvAnnotation := falseFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	emptyEnvAnnotation := emptyFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	noEnvAnnotation := noFlag.Annotations[autoflags.FlagEnvsAnnotation]
+
+	// Only the true env should have environment binding
+	assert.NotNil(suite.T(), trueEnvAnnotation, "flagenv='true' should have env annotation")
+	assert.Nil(suite.T(), falseEnvAnnotation, "flagenv='false' should not have env annotation")
+	assert.Nil(suite.T(), emptyEnvAnnotation, "flagenv='' should not have env annotation")
+	assert.Nil(suite.T(), noEnvAnnotation, "no flagenv should not have env annotation")
+}
+
+type flagEnvEdgeCasesOptions struct {
+	CaseTrue   string `flagenv:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagenv:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagenv:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagenv:"0" flag:"number-zero" flagdescr:"number 0"`
+	WithSpaces string `flagenv:" true " flag:"with-spaces" flagdescr:"spaces around true"`
+}
+
+func (o *flagEnvEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+type validEnvEdgeCasesOptions struct {
+	CaseTrue   string `flagenv:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagenv:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagenv:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagenv:"0" flag:"number-zero" flagdescr:"number 0"`
+}
+
+func (o *validEnvEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_EdgeCases_ValidValues() {
+	opts := &validEnvEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// These should all pass validation
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
+
+	// Check behavior
+	caseTrueFlag := cmd.Flags().Lookup("case-true")
+	caseFalseFlag := cmd.Flags().Lookup("case-false")
+	numberOneFlag := cmd.Flags().Lookup("number-one")
+	numberZeroFlag := cmd.Flags().Lookup("number-zero")
+
+	// strconv.ParseBool accepts these case variations and numbers
+	caseTrueAnnotation := caseTrueFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	caseFalseAnnotation := caseFalseFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	numberOneAnnotation := numberOneFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	numberZeroAnnotation := numberZeroFlag.Annotations[autoflags.FlagEnvsAnnotation]
+
+	assert.NotNil(suite.T(), caseTrueAnnotation, "ParseBool should accept 'True' as true")
+	assert.Nil(suite.T(), caseFalseAnnotation, "ParseBool should accept 'FALSE' as false")
+	assert.NotNil(suite.T(), numberOneAnnotation, "ParseBool should accept '1' as true")
+	assert.Nil(suite.T(), numberZeroAnnotation, "ParseBool should accept '0' as false")
+}
+
+func (suite *FlagsBaseSuite) TestFlagenv_EdgeCases_WithValidation_ShouldReturnError() {
+	opts := &flagEnvEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Spaces should cause validation error
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for flagenv value with spaces")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
+	assert.Contains(suite.T(), err.Error(), " true ", "Error should mention the invalid value with spaces")
+	assert.Contains(suite.T(), err.Error(), "WithSpaces", "Error should mention the field name")
+}
+
+type nestedFlagEnvOptions struct {
+	TopLevel     string          `flag:"top-level" flagenv:"true" flagdescr:"top level env flag"`
+	NestedStruct nestedEnvStruct `flaggroup:"Nested"`
+}
+
+type nestedEnvStruct struct {
+	ValidNestedEnv   string `flag:"nested-valid" flagenv:"true" flagdescr:"nested valid env"`
+	InvalidNestedEnv string `flag:"nested-invalid" flagenv:"invalid" flagdescr:"nested invalid env"`
+}
+
+func (o *nestedFlagEnvOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_NestedStructs_WithValidation() {
+	opts := &nestedFlagEnvOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid nested flagenv value")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "NestedStruct.InvalidNestedEnv", "Error should mention the nested field name")
+}
+
+type multipleInvalidEnvOptions struct {
+	InvalidEnv1 string `flagenv:"yes" flag:"invalid1" flagdescr:"first invalid"`
+	InvalidEnv2 string `flagenv:"no" flag:"invalid2" flagdescr:"second invalid"`
+	ValidEnv    string `flagenv:"true" flag:"valid" flagdescr:"valid env"`
+}
+
+func (o *multipleInvalidEnvOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_MultipleInvalid_ReturnsFirstError() {
+	opts := &multipleInvalidEnvOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagenv values")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
+	// Should return the first error encountered (InvalidEnv1)
+	assert.Contains(suite.T(), err.Error(), "InvalidEnv1", "Error should mention the first invalid field")
+}
+
+type flagEnvCombinedOptions struct {
+	EnvWithCustom   string `flagenv:"true" flagcustom:"true" flag:"env-custom" flagdescr:"env with custom"`
+	EnvWithRequired string `flagenv:"true" flagrequired:"true" flag:"env-required" flagdescr:"env with required"`
+	EnvWithGroup    string `flagenv:"true" flaggroup:"TestGroup" flag:"env-group" flagdescr:"env with group"`
+	InvalidEnvValid string `flagenv:"invalid" flagcustom:"true" flag:"invalid-env-valid" flagdescr:"invalid env with valid custom"`
+}
+
+func (o *flagEnvCombinedOptions) DefineEnvWithCustom(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
+}
+
+func (o *flagEnvCombinedOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_CombinedWithOtherTags() {
+	opts := &flagEnvCombinedOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Should fail due to invalid flagenv, even though flagcustom is valid
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagenv value")
+	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+}
+
+type bothInvalidOptions struct {
+	InvalidBoth string `flagenv:"invalid" flagcustom:"invalid" flag:"invalid-both" flagdescr:"both invalid"`
+}
+
+func (o *bothInvalidOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
+	opts := &bothInvalidOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid tag values")
+	// Should return the first error (flagcustom is validated first in the current implementation)
+	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
+}
