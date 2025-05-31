@@ -592,6 +592,7 @@ func (suite *autoflagsSuite) TestHooks_IntSliceInvalidInteger() {
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
 	assert.Contains(suite.T(), err.Error(), "invalid")
+	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:")
 }
 
 func (suite *autoflagsSuite) TestHooks_IntSliceFloatNumber() {
@@ -611,6 +612,7 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFloatNumber() {
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
+	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:")
 	assert.Contains(suite.T(), err.Error(), "90.5")
 }
 
@@ -631,6 +633,7 @@ func (suite *autoflagsSuite) TestHooks_IntSliceOutOfRange() {
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
+	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:")
 }
 
 type requiredWithEnvRuntimeOptions struct {
@@ -759,4 +762,25 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvConfigFile() {
 		assert.NoError(t, err, "should unmarshal successfully with config file")
 		assert.Equal(t, "config-value", opts.RequiredEnvFlag, "should get value from config")
 	})
+}
+
+func (suite *autoflagsSuite) TestHooks_ZapcoreLevelFromYAML_InvalidLevel() {
+	configContent := `loglevel: "invalidlevelstring"` // Livello non valido
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &zapcoreLevelOptions{}
+	cmd := &cobra.Command{Use: "testinvalidlevel"}
+
+	Define(cmd, opts)
+
+	viper.SetConfigFile(configFile)
+	errRead := viper.ReadInConfig()
+	require.NoError(suite.T(), errRead, "Failed to read test config file")
+
+	err := Unmarshal(cmd, opts)
+
+	assert.Error(suite.T(), err, "Unmarshal should return an error for invalid zapcore.Level")
+	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:", "Error should be wrapped by Unmarshal")
+	assert.Contains(suite.T(), err.Error(), "invalid string for zapcore.Level 'invalidlevelstring'", "Error should contain the specific hook error message")
 }
