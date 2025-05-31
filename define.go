@@ -115,6 +115,10 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			}
 		}
 
+		if !field.CanAddr() {
+			continue
+		}
+
 		// TODO: complete type switch with missing types
 		switch f.Type.Kind() {
 		case reflect.Struct:

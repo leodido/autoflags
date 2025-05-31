@@ -23,6 +23,10 @@ var defineHookRegistry = map[string]DefineHookFunc{
 // DefineZapcoreLevelHookFunc creates a flag definition function for zapcore.Level
 func DefineZapcoreLevelHookFunc() DefineHookFunc {
 	return func(c *cobra.Command, field reflect.StructField, name, short, descr string, fieldValue reflect.Value) {
+		if !fieldValue.CanAddr() {
+			return
+		}
+
 		logLevels := map[zapcore.Level][]string{
 			zapcore.DebugLevel:  {"debug"},
 			zapcore.InfoLevel:   {"info"},
