@@ -3,6 +3,7 @@ package autoflags_test
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -707,4 +708,165 @@ func (suite *FlagsBaseSuite) TestFlagrequired_CombinedWithOtherTags() {
 
 	envAnnotation := requiredEnvFlag.Annotations[autoflags.FlagEnvsAnnotation]
 	assert.NotNil(suite.T(), envAnnotation, "required-env should have env annotation")
+}
+
+type embeddedStruct struct {
+	Value string `flag:"embedded-value" flagdescr:"embedded field"`
+}
+
+func (e embeddedStruct) GetValue() string { return e.Value }
+
+type testInterface interface {
+	GetValue() string
+}
+
+type testOptionsWithInterface struct {
+	NormalField    string        `flag:"normal" flagdescr:"normal field"`
+	InterfaceField testInterface // Interface fields can create addressability issues
+}
+
+func (o testOptionsWithInterface) Attach(c *cobra.Command) {}
+
+type simpleTestStruct struct {
+	Field string `flag:"test-field" flagdescr:"test field"`
+}
+
+func (o simpleTestStruct) Attach(c *cobra.Command) {}
+
+type addressabilityTestOptions struct {
+	StringField string `flag:"string-field" flagdescr:"string field"`
+	IntField    int    `flag:"int-field" flagdescr:"int field"`
+}
+
+func (o addressabilityTestOptions) Attach(c *cobra.Command) {}
+
+type deepNested struct {
+	Value string `flag:"deep-value" flagdescr:"deep nested value"`
+}
+
+type middleNested struct {
+	Deep deepNested
+}
+
+type topLevelNested struct {
+	Middle middleNested
+	Direct string `flag:"direct" flagdescr:"direct field"`
+}
+
+func (o topLevelNested) Attach(c *cobra.Command) {}
+
+type canAddrTestOptions struct {
+	Field string `flag:"field" flagdescr:"test field"`
+}
+
+func (o canAddrTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestDefine_NonAddressableFields() {
+	suite.T().Run("interface_with_embedded_struct", func(t *testing.T) {
+		// Create options with interface containing a struct
+		opts := &testOptionsWithInterface{
+			NormalField:    "test",
+			InterfaceField: embeddedStruct{Value: "interface-value"},
+		}
+
+		cmd := &cobra.Command{Use: "test"}
+
+		// This should not panic even if interface fields cause addressability issues
+		assert.NotPanics(t, func() {
+			autoflags.Define(cmd, opts)
+		})
+
+		// Verify that the normal field was processed
+		normalFlag := cmd.Flags().Lookup("normal")
+		assert.NotNil(t, normalFlag, "normal field should be processed")
+	})
+
+	suite.T().Run("manually_created_non_addressable_value", func(t *testing.T) {
+		// Create a non-addressable value by using reflect.ValueOf on a struct value
+		structValue := reflect.ValueOf(simpleTestStruct{Field: "test"})
+
+		// Verify this creates a non-addressable value
+		assert.False(t, structValue.CanAddr(), "struct value should not be addressable")
+
+		// The field from this struct should also be non-addressable
+		if structValue.NumField() > 0 {
+			fieldValue := structValue.Field(0)
+			assert.False(t, fieldValue.CanAddr(), "field from non-addressable struct should not be addressable")
+		}
+	})
+
+	suite.T().Run("value_vs_pointer_addressability", func(t *testing.T) {
+		// Test with struct value (potentially non-addressable)
+		structValue := addressabilityTestOptions{StringField: "test", IntField: 42}
+		cmd1 := &cobra.Command{Use: "test1"}
+
+		assert.NotPanics(t, func() {
+			autoflags.Define(cmd1, structValue)
+		})
+
+		// Test with struct pointer (should be addressable)
+		structPtr := &addressabilityTestOptions{StringField: "test", IntField: 42}
+		cmd2 := &cobra.Command{Use: "test2"}
+
+		assert.NotPanics(t, func() {
+			autoflags.Define(cmd2, structPtr)
+		})
+
+		// Both should create the same flags
+		flag1 := cmd1.Flags().Lookup("string-field")
+		flag2 := cmd2.Flags().Lookup("string-field")
+
+		assert.NotNil(t, flag1, "struct value should create flags")
+		assert.NotNil(t, flag2, "struct pointer should create flags")
+		assert.Equal(t, flag1.Usage, flag2.Usage, "both should create equivalent flags")
+	})
+
+	suite.T().Run("complex_nested_non_addressable", func(t *testing.T) {
+		// Create with struct value (not pointer)
+		opts := topLevelNested{
+			Middle: middleNested{
+				Deep: deepNested{Value: "nested"},
+			},
+			Direct: "direct-value",
+		}
+
+		cmd := &cobra.Command{Use: "test"}
+
+		// Should handle complex nesting without panicking
+		assert.NotPanics(t, func() {
+			autoflags.Define(cmd, opts)
+		})
+
+		// Should process the direct field
+		directFlag := cmd.Flags().Lookup("direct")
+		assert.NotNil(t, directFlag, "direct field should be processed")
+
+		// Should process nested fields
+		deepFlag := cmd.Flags().Lookup("deep-value")
+		assert.NotNil(t, deepFlag, "deep nested field should be processed")
+	})
+}
+
+func (suite *FlagsBaseSuite) TestDefine_CanAddrValidation() {
+	suite.T().Run("ensure_canaddr_prevents_panic", func(t *testing.T) {
+		// Use reflection to create a scenario that would panic without CanAddr() check
+		structValue := reflect.ValueOf(canAddrTestOptions{Field: "test"})
+
+		// Verify the field is not addressable
+		if structValue.NumField() > 0 {
+			field := structValue.Field(0)
+			assert.False(t, field.CanAddr(), "field should not be addressable")
+
+			// This would panic if we called UnsafeAddr() without checking CanAddr()
+			assert.Panics(t, func() {
+				_ = field.UnsafeAddr() // This should panic
+			}, "UnsafeAddr() should panic on non-addressable field")
+		}
+
+		// But the Define() function should handle this gracefully
+		cmd := &cobra.Command{Use: "test"}
+		assert.NotPanics(t, func() {
+			autoflags.Define(cmd, canAddrTestOptions{Field: "test"})
+		})
+	})
 }
