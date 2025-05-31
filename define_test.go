@@ -869,3 +869,146 @@ func (suite *FlagsBaseSuite) TestDefine_CanAddrValidation() {
 		})
 	})
 }
+
+type flagCustomTestOptions struct {
+	ValidCustom   string `flagcustom:"true" flag:"valid-custom" flagdescr:"should use custom handler"`
+	InvalidCustom string `flagcustom:"invalid" flag:"invalid-custom" flagdescr:"has invalid flagcustom value"`
+	EmptyCustom   string `flagcustom:"" flag:"empty-custom" flagdescr:"has empty flagcustom value"`
+	FalseCustom   string `flagcustom:"false" flag:"false-custom" flagdescr:"explicitly false custom"`
+	NormalField   string `flag:"normal" flagdescr:"normal field without flagcustom"`
+}
+
+func (o *flagCustomTestOptions) DefineValidCustom(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
+}
+
+func (o *flagCustomTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagCustom_WithValidation_ShouldReturnError() {
+	opts := &flagCustomTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagcustom value")
+	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention flagcustom")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "InvalidCustom", "Error should mention the field name")
+}
+
+func (suite *FlagsBaseSuite) TestFlagCustom_WithValidation_OptionsPattern() {
+	opts := &flagCustomTestOptions{}
+	cmd1 := &cobra.Command{Use: "test1"}
+	cmd2 := &cobra.Command{Use: "test2"}
+
+	// Without validation - should not return error (backward compatible)
+	err1 := autoflags.Define(cmd1, opts)
+	assert.NoError(suite.T(), err1, "Without validation should not return error")
+
+	// With validation - should return error
+	err2 := autoflags.Define(cmd2, opts, autoflags.WithValidation())
+	assert.Error(suite.T(), err2, "With validation should return error")
+}
+
+type validFlagCustomOptions struct {
+	TrueCustom  string `flagcustom:"true" flag:"true-custom" flagdescr:"should use custom"`
+	FalseCustom string `flagcustom:"false" flag:"false-custom" flagdescr:"should not use custom"`
+	EmptyCustom string `flagcustom:"" flag:"empty-custom" flagdescr:"should not use custom"`
+	NoCustom    string `flag:"no-custom" flagdescr:"should not use custom"`
+}
+
+func (o *validFlagCustomOptions) DefineTrueCustom(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_VALUE", descr+" [CUSTOM]")
+}
+
+func (o *validFlagCustomOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagCustom_WithValidation_ValidValues() {
+	opts := &validFlagCustomOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.NoError(suite.T(), err, "Should not return error for valid flagcustom values")
+
+	// Check that flags are created correctly
+	trueFlag := cmd.Flags().Lookup("true-custom")
+	falseFlag := cmd.Flags().Lookup("false-custom")
+	emptyFlag := cmd.Flags().Lookup("empty-custom")
+	noFlag := cmd.Flags().Lookup("no-custom")
+
+	// Only the true custom should use custom handler
+	assert.Equal(suite.T(), "CUSTOM_VALUE", trueFlag.DefValue, "flagcustom='true' should use custom handler")
+	assert.NotEqual(suite.T(), "CUSTOM_VALUE", falseFlag.DefValue, "flagcustom='false' should not use custom handler")
+	assert.NotEqual(suite.T(), "CUSTOM_VALUE", emptyFlag.DefValue, "flagcustom='' should not use custom handler")
+	assert.NotEqual(suite.T(), "CUSTOM_VALUE", noFlag.DefValue, "no flagcustom should not use custom handler")
+}
+
+type flagCustomEdgeCasesOptions struct {
+	CaseTrue   string `flagcustom:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagcustom:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagcustom:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagcustom:"0" flag:"number-zero" flagdescr:"number 0"`
+	WithSpaces string `flagcustom:" true " flag:"with-spaces" flagdescr:"spaces around true"`
+}
+
+func (o *flagCustomEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_TRUE", descr)
+}
+
+func (o *flagCustomEdgeCasesOptions) DefineNumberOne(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_ONE", descr)
+}
+
+func (o *flagCustomEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+type validEdgeCasesOptions struct {
+	CaseTrue   string `flagcustom:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagcustom:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagcustom:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagcustom:"0" flag:"number-zero" flagdescr:"number 0"`
+}
+
+func (o *validEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_TRUE", descr)
+}
+
+func (o *validEdgeCasesOptions) DefineNumberOne(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_ONE", descr)
+}
+
+func (o *validEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagCustom_EdgeCases_ValidValues() {
+	opts := &validEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// These should all pass validation
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
+
+	// Check behavior
+	caseTrueFlag := cmd.Flags().Lookup("case-true")
+	caseFalseFlag := cmd.Flags().Lookup("case-false")
+	numberOneFlag := cmd.Flags().Lookup("number-one")
+	numberZeroFlag := cmd.Flags().Lookup("number-zero")
+
+	// strconv.ParseBool accepts these case variations and numbers
+	assert.Equal(suite.T(), "CUSTOM_TRUE", caseTrueFlag.DefValue, "ParseBool should accept 'True'")
+	assert.NotEqual(suite.T(), "CUSTOM_TRUE", caseFalseFlag.DefValue, "ParseBool should accept 'FALSE' as false")
+	assert.Equal(suite.T(), "CUSTOM_ONE", numberOneFlag.DefValue, "ParseBool should accept '1' as true")
+	assert.NotEqual(suite.T(), "CUSTOM_ONE", numberZeroFlag.DefValue, "ParseBool should accept '0' as false")
+}
+
+func (suite *FlagsBaseSuite) TestFlagCustom_EdgeCases_WithValidation_ShouldReturnError() {
+	opts := &flagCustomEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Spaces should cause validation error
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for flagcustom value with spaces")
+	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention flagcustom")
+	assert.Contains(suite.T(), err.Error(), " true ", "Error should mention the invalid value with spaces")
+	assert.Contains(suite.T(), err.Error(), "WithSpaces", "Error should mention the field name")
+}
