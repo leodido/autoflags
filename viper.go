@@ -85,6 +85,13 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 		c.SetContext(o.Context(c.Context()))
 	}
 
+	// Automatically transform options if feasible
+	if o, ok := opts.(options.TransformableOptions); ok {
+		if transformErr := o.Transform(c.Context()); transformErr != nil {
+			return fmt.Errorf("couldn't transform options: %w", transformErr)
+		}
+	}
+
 	// Automatically run options validation if feasible
 	if o, ok := opts.(options.ValidatableOptions); ok {
 		if validationErrors := o.Validate(); validationErrors != nil {
@@ -95,14 +102,6 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 			}
 
 			return fmt.Errorf("%s", ret)
-		}
-	}
-
-	// FIXME: transform before validation?
-	// Automatically transform options if feasible
-	if o, ok := opts.(options.TransformableOptions); ok {
-		if transformErr := o.Transform(c.Context()); transformErr != nil {
-			return fmt.Errorf("couldn't transform options: %w", transformErr)
 		}
 	}
 
