@@ -1327,3 +1327,301 @@ func (suite *FlagsBaseSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() 
 	assert.Contains(suite.T(), errorMsg, "maybe", "Error should contain tag value")
 	assert.Contains(suite.T(), errorMsg, "invalid boolean value", "Error should contain message")
 }
+
+type flagIgnoreTestOptions struct {
+	ValidIgnore   string `flagignore:"true" flag:"valid-ignore" flagdescr:"should be ignored"`
+	InvalidIgnore string `flagignore:"invalid" flag:"invalid-ignore" flagdescr:"has invalid flagignore value"`
+	EmptyIgnore   string `flagignore:"" flag:"empty-ignore" flagdescr:"has empty flagignore value"`
+	FalseIgnore   string `flagignore:"false" flag:"false-ignore" flagdescr:"explicitly false ignore"`
+	NormalFlag    string `flag:"normal" flagdescr:"normal field without flagignore"`
+}
+
+func (o *flagIgnoreTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_WithValidation_ShouldReturnError() {
+	opts := &flagIgnoreTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagignore value")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "InvalidIgnore", "Error should mention the field name")
+}
+
+func (suite *FlagsBaseSuite) TestFlagignore_WithValidation_OptionsPattern() {
+	opts := &flagIgnoreTestOptions{}
+	cmd1 := &cobra.Command{Use: "test1"}
+	cmd2 := &cobra.Command{Use: "test2"}
+
+	// Without validation - should not return error (backward compatible)
+	err1 := autoflags.Define(cmd1, opts)
+	assert.NoError(suite.T(), err1, "Without validation should not return error")
+
+	// With validation - should return error
+	err2 := autoflags.Define(cmd2, opts, autoflags.WithValidation())
+	assert.Error(suite.T(), err2, "With validation should return error")
+}
+
+type validFlagIgnoreOptions struct {
+	TrueIgnore  string `flagignore:"true" flag:"true-ignore" flagdescr:"should be ignored"`
+	FalseIgnore string `flagignore:"false" flag:"false-ignore" flagdescr:"should not be ignored"`
+	EmptyIgnore string `flagignore:"" flag:"empty-ignore" flagdescr:"should not be ignored"`
+	NoIgnore    string `flag:"no-ignore" flagdescr:"should not be ignored"`
+}
+
+func (o *validFlagIgnoreOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_WithValidation_ValidValues() {
+	opts := &validFlagIgnoreOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.NoError(suite.T(), err, "Should not return error for valid flagignore values")
+
+	// Check that flags are created/ignored correctly
+	trueIgnoreFlag := cmd.Flags().Lookup("true-ignore")
+	falseIgnoreFlag := cmd.Flags().Lookup("false-ignore")
+	emptyIgnoreFlag := cmd.Flags().Lookup("empty-ignore")
+	noIgnoreFlag := cmd.Flags().Lookup("no-ignore")
+
+	// Only the true ignore should be skipped
+	assert.Nil(suite.T(), trueIgnoreFlag, "flagignore='true' should skip flag creation")
+	assert.NotNil(suite.T(), falseIgnoreFlag, "flagignore='false' should create flag")
+	assert.NotNil(suite.T(), emptyIgnoreFlag, "flagignore='' should create flag")
+	assert.NotNil(suite.T(), noIgnoreFlag, "no flagignore should create flag")
+}
+
+type flagIgnoreEdgeCasesOptions struct {
+	CaseTrue   string `flagignore:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagignore:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagignore:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagignore:"0" flag:"number-zero" flagdescr:"number 0"`
+	WithSpaces string `flagignore:" true " flag:"with-spaces" flagdescr:"spaces around true"`
+}
+
+func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+type validIgnoreEdgeCasesOptions struct {
+	CaseTrue   string `flagignore:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagignore:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagignore:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagignore:"0" flag:"number-zero" flagdescr:"number 0"`
+}
+
+func (o *validIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_EdgeCases_ValidValues() {
+	opts := &validIgnoreEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// These should all pass validation
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
+
+	// Check behavior - strconv.ParseBool accepts these case variations and numbers
+	caseTrueFlag := cmd.Flags().Lookup("case-true")
+	caseFalseFlag := cmd.Flags().Lookup("case-false")
+	numberOneFlag := cmd.Flags().Lookup("number-one")
+	numberZeroFlag := cmd.Flags().Lookup("number-zero")
+
+	assert.Nil(suite.T(), caseTrueFlag, "ParseBool should accept 'True' as true (ignore flag)")
+	assert.NotNil(suite.T(), caseFalseFlag, "ParseBool should accept 'FALSE' as false (create flag)")
+	assert.Nil(suite.T(), numberOneFlag, "ParseBool should accept '1' as true (ignore flag)")
+	assert.NotNil(suite.T(), numberZeroFlag, "ParseBool should accept '0' as false (create flag)")
+}
+
+func (suite *FlagsBaseSuite) TestFlagignore_EdgeCases_WithValidation_ShouldReturnError() {
+	opts := &flagIgnoreEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Spaces should cause validation error
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for flagignore value with spaces")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
+	assert.Contains(suite.T(), err.Error(), " true ", "Error should mention the invalid value with spaces")
+	assert.Contains(suite.T(), err.Error(), "WithSpaces", "Error should mention the field name")
+}
+
+type nestedFlagIgnoreOptions struct {
+	TopLevel     string             `flag:"top-level" flagignore:"false" flagdescr:"top level flag"`
+	NestedStruct nestedIgnoreStruct `flaggroup:"Nested"`
+}
+
+type nestedIgnoreStruct struct {
+	ValidNestedIgnore   string `flag:"nested-valid" flagignore:"true" flagdescr:"nested ignored flag"`
+	InvalidNestedIgnore string `flag:"nested-invalid" flagignore:"invalid" flagdescr:"nested invalid ignore"`
+}
+
+func (o *nestedFlagIgnoreOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_NestedStructs_WithValidation() {
+	opts := &nestedFlagIgnoreOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid nested flagignore value")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "NestedStruct.InvalidNestedIgnore", "Error should mention the nested field name")
+}
+
+type multipleInvalidIgnoreOptions struct {
+	InvalidIgnore1 string `flagignore:"yes" flag:"invalid1" flagdescr:"first invalid"`
+	InvalidIgnore2 string `flagignore:"no" flag:"invalid2" flagdescr:"second invalid"`
+	ValidIgnore    string `flagignore:"true" flag:"valid" flagdescr:"valid ignore"`
+}
+
+func (o *multipleInvalidIgnoreOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_MultipleInvalid_ReturnsFirstError() {
+	opts := &multipleInvalidIgnoreOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagignore values")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
+	// Should return the first error encountered (InvalidIgnore1)
+	assert.Contains(suite.T(), err.Error(), "InvalidIgnore1", "Error should mention the first invalid field")
+}
+
+type flagIgnoreCombinedOptions struct {
+	IgnoreWithCustom   string `flagignore:"true" flagcustom:"true" flag:"ignore-custom" flagdescr:"ignore with custom"`
+	IgnoreWithRequired string `flagignore:"false" flagrequired:"true" flag:"ignore-required" flagdescr:"ignore with required"`
+	IgnoreWithGroup    string `flagignore:"false" flaggroup:"TestGroup" flag:"ignore-group" flagdescr:"ignore with group"`
+	InvalidIgnoreValid string `flagignore:"invalid" flagenv:"true" flag:"invalid-ignore-valid" flagdescr:"invalid ignore with valid env"`
+}
+
+func (o *flagIgnoreCombinedOptions) DefineIgnoreWithCustom(c *cobra.Command, typename, name, short, descr string) {
+	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
+}
+
+func (o *flagIgnoreCombinedOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_CombinedWithOtherTags() {
+	opts := &flagIgnoreCombinedOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Should fail due to invalid flagignore, even though other tags are valid
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagignore value")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+}
+
+type allThreeInvalidOptions struct {
+	InvalidAll string `flagignore:"invalid" flagenv:"invalid" flagcustom:"invalid" flag:"invalid-all" flagdescr:"all three invalid"`
+}
+
+func (o *allThreeInvalidOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_AllThreeInvalid_ReturnsFirstError() {
+	opts := &allThreeInvalidOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid tag values")
+	// Should return the first error (flagcustom is validated first in the current implementation)
+	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
+}
+
+// Additional struct definitions for timing and compatibility tests
+
+type flagIgnoreValidationTimingOptions struct {
+	ValidIgnore   string `flagignore:"true" flag:"valid-ignore" flagdescr:"valid ignore"`
+	InvalidIgnore string `flagignore:"invalid" flag:"invalid-ignore" flagdescr:"invalid ignore value"`
+	NoIgnore      string `flag:"no-ignore" flagdescr:"no ignore tag"`
+}
+
+func (o *flagIgnoreValidationTimingOptions) Attach(c *cobra.Command) {}
+
+type backwardIgnoreCompatOptions struct {
+	ShouldWork  string `flagignore:"true" flag:"should-work" flagdescr:"should be ignored"`
+	ShouldFail  string `flagignore:"invalid" flag:"should-fail" flagdescr:"invalid but silent"`
+	YesNo       string `flagignore:"yes" flag:"yes-no" flagdescr:"common mistake"`
+	EmptyString string `flagignore:"" flag:"empty" flagdescr:"empty should be false"`
+}
+
+func (o *backwardIgnoreCompatOptions) Attach(c *cobra.Command) {}
+
+type errorIgnoreMessageOptions struct {
+	BadValue string `flagignore:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
+}
+
+func (o *errorIgnoreMessageOptions) Attach(c *cobra.Command) {}
+
+func (suite *FlagsBaseSuite) TestFlagignore_ValidationTiming_EarlyValidationPreventsLaterErrors() {
+	opts := &flagIgnoreValidationTimingOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// With validation enabled, should fail at Define() time
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+	assert.Error(suite.T(), err, "Should fail during Define() with validation enabled")
+	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should be about flagignore validation")
+
+	// Without validation enabled, should succeed at Define() time
+	opts2 := &flagIgnoreValidationTimingOptions{}
+	cmd2 := &cobra.Command{Use: "test2"}
+
+	err2 := autoflags.Define(cmd2, opts2) // No WithValidation()
+	assert.NoError(suite.T(), err2, "Should succeed during Define() without validation")
+
+	// Verify that the invalid flagignore value is silently treated as false (backward compatibility)
+	invalidFlag := cmd2.Flags().Lookup("invalid-ignore")
+	assert.NotNil(suite.T(), invalidFlag, "Invalid ignore flag should still be created (treated as false)")
+
+	// Verify that valid flagignore still works
+	validFlag := cmd2.Flags().Lookup("valid-ignore")
+	assert.Nil(suite.T(), validFlag, "Valid flagignore='true' should skip flag creation")
+
+	// Verify normal flags still work
+	normalFlag := cmd2.Flags().Lookup("no-ignore")
+	assert.NotNil(suite.T(), normalFlag, "Normal flag should be created")
+}
+
+func (suite *FlagsBaseSuite) TestFlagignore_BackwardCompatibility_SilentFailureWithoutValidation() {
+	opts := &backwardIgnoreCompatOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Should not fail without validation
+	err := autoflags.Define(cmd, opts)
+	assert.NoError(suite.T(), err, "Should not fail without validation enabled")
+
+	// Check the behavior matches expectations
+	flags := cmd.Flags()
+
+	shouldWorkFlag := flags.Lookup("should-work") // flagignore="true"
+	shouldFailFlag := flags.Lookup("should-fail") // flagignore="invalid"
+	yesNoFlag := flags.Lookup("yes-no")           // flagignore="yes"
+	emptyFlag := flags.Lookup("empty")            // flagignore=""
+
+	// Check flag creation behavior
+	assert.Nil(suite.T(), shouldWorkFlag, "flagignore='true' should ignore flag")
+	assert.NotNil(suite.T(), shouldFailFlag, "flagignore='invalid' should be treated as false (create flag)")
+	assert.NotNil(suite.T(), yesNoFlag, "flagignore='yes' should be treated as false (create flag)")
+	assert.NotNil(suite.T(), emptyFlag, "flagignore='' should be treated as false (create flag)")
+}
+
+func (suite *FlagsBaseSuite) TestFlagignore_ErrorMessages_ContainExpectedContent() {
+	opts := &errorIgnoreMessageOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := autoflags.Define(cmd, opts, autoflags.WithValidation())
+
+	assert.Error(suite.T(), err, "Should return error for invalid flagignore")
+
+	errorMsg := err.Error()
+
+	// These are the expected components of a FieldError
+	assert.Contains(suite.T(), errorMsg, "BadValue", "Error should contain field name")
+	assert.Contains(suite.T(), errorMsg, "flagignore", "Error should contain tag name")
+	assert.Contains(suite.T(), errorMsg, "maybe", "Error should contain tag value")
+	assert.Contains(suite.T(), errorMsg, "invalid boolean value", "Error should contain message")
+}
