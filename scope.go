@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"maps"
+
 	"github.com/spf13/cobra"
 	spf13viper "github.com/spf13/viper"
 )
@@ -73,8 +75,7 @@ func (s *scope) getBoundEnvs() map[string]bool {
 
 	// Return a copy to avoid race conditions
 	result := make(map[string]bool, len(s.boundEnvs))
-	for k, v := range s.boundEnvs {
-		result[k] = v
-	}
+	maps.Copy(result, s.boundEnvs)
+
 	return result
 }
