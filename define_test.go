@@ -72,8 +72,7 @@ func (suite *FlagsBaseSuite) TestDefine() {
 			c := &cobra.Command{}
 			autoflags.Define(c, tc.input)
 			f := c.Flags()
-			vip, e := autoflags.Viper(c)
-			assert.Nil(t, e)
+			vip := autoflags.GetViper(c)
 
 			assert.NotNil(t, f.Lookup("log-level"))
 			assert.Equal(t, "info", vip.Get("log-level"))
