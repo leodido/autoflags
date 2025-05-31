@@ -11,19 +11,10 @@ import (
 	"github.com/spf13/viper"
 )
 
-var (
-	vipers map[string]*viper.Viper = map[string]*viper.Viper{}
-)
+func GetViper(c *cobra.Command) *viper.Viper {
+	s := getScope(c)
 
-func GetViper(path string) *viper.Viper {
-	reuse, ok := vipers[path]
-	if !ok {
-		vipers[path] = viper.New()
-
-		return vipers[path]
-	}
-
-	return reuse
+	return s.viper()
 }
 
 func Debug(c *cobra.Command, opts options.DebuggableOptions) error {
@@ -31,23 +22,11 @@ func Debug(c *cobra.Command, opts options.DebuggableOptions) error {
 		return nil
 	}
 
-	res, ok := vipers[c.Name()]
-	if !ok {
-		return fmt.Errorf("couldn't find a viper instance for %s", c.Name())
-	}
+	res := GetViper(c)
 	res.Debug()
 	fmt.Fprintf(os.Stdout, "Values:\n%#v\n", res.AllSettings())
 
 	return nil
-}
-
-func Viper(c *cobra.Command) (*viper.Viper, error) {
-	res, ok := vipers[c.Name()]
-	if !ok {
-		return nil, fmt.Errorf("couldn't find a viper instance for %s", c.Name())
-	}
-
-	return res, nil
 }
 
 // createConfigC creates a configuration map for a specific command by merging
@@ -77,10 +56,7 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 
 // NOTE: See https://github.com/spf13/viper/pull/1715
 func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.DecodeHookFunc) error {
-	res, err := Viper(c)
-	if err != nil {
-		return err
-	}
+	res := GetViper(c)
 
 	// Merging the config map (if any) from the global viper singleton instance
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())

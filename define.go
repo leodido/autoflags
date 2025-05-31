@@ -13,7 +13,7 @@ import (
 )
 
 func Define(c *cobra.Command, o options.Options, exclusions ...string) {
-	v := GetViper(c.Name())
+	v := GetViper(c)
 
 	// Map flags to exclude to the current command
 	ignores := map[string]string{}
@@ -230,14 +230,14 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 
 		// Set the defaults
 		if defval != "" {
-			vipers[c.Name()].SetDefault(name, defval)
+			GetViper(c).SetDefault(name, defval)
 			// This is needed for the usage help messages
 			c.Flags().Lookup(name).DefValue = defval
 		}
 
 		if alias != "" && path != alias {
 			// Alias the actual path to the flag name (ie., the alias when not empty)
-			vipers[c.Name()].RegisterAlias(path, alias)
+			GetViper(c).RegisterAlias(path, alias)
 		}
 
 		if len(envs) > 0 {
