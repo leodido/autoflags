@@ -332,6 +332,21 @@ func getValuePtr(o any) reflect.Value {
 	return reflect.New(reflect.TypeOf(o))
 }
 
+// validateBooleanTag validates that a struct tag contains a valid boolean value
+func validateBooleanTag(fieldName, tagName, tagValue string) error {
+	if tagValue != "" {
+		if _, err := strconv.ParseBool(tagValue); err != nil {
+			return &FieldError{
+				FieldName: fieldName,
+				TagName:   tagName,
+				TagValue:  tagValue,
+				Message:   "invalid boolean value",
+			}
+		}
+	}
+	return nil
+}
+
 // validateStructTags checks for invalid boolean values in struct tags
 func validateStructTags(o interface{}) error {
 	val := getValue(o)
@@ -368,6 +383,11 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 			return err
 		}
 
+		// Validate flagignore tag
+		if err := validateBooleanTag(fieldName, "flagignore", fieldType.Tag.Get("flagignore")); err != nil {
+			return err
+		}
+
 		// Recursively validate children structs
 		if fieldType.Type.Kind() == reflect.Struct {
 			if err := validateFieldTags(field, fieldName); err != nil {
@@ -376,19 +396,5 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		}
 	}
 
-	return nil
-}
-
-func validateBooleanTag(fieldName, tagName, tagValue string) error {
-	if tagValue != "" {
-		if _, err := strconv.ParseBool(tagValue); err != nil {
-			return &FieldError{
-				FieldName: fieldName,
-				TagName:   tagName,
-				TagValue:  tagValue,
-				Message:   "invalid boolean value",
-			}
-		}
-	}
 	return nil
 }
