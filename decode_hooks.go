@@ -46,7 +46,12 @@ func StringToZapcoreLevelHookFunc() mapstructure.DecodeHookFunc {
 			return data, nil
 		}
 
-		return zapcore.ParseLevel(data.(string))
+		level, err := zapcore.ParseLevel(data.(string))
+		if err != nil {
+			return nil, fmt.Errorf("invalid string for zapcore.Level '%s': %w", data.(string), err)
+		}
+
+		return level, nil
 	}
 }
 

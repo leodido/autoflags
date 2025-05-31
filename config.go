@@ -20,7 +20,7 @@ func UseConfig(readWhen func() bool) (bool, string) {
 				str = "Running without a configuration file"
 			} else {
 				// Config file was found but another error was produced
-				str = fmt.Sprintf("Error running with config file: %s", viper.ConfigFileUsed())
+				str = fmt.Sprintf("Error running with config file: %s: %v", viper.ConfigFileUsed(), err)
 			}
 		}
 	}

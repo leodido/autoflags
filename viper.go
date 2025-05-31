@@ -61,7 +61,7 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 	// Merging the config map (if any) from the global viper singleton instance
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
 	if err := res.MergeConfigMap(configToMerge); err != nil {
-		return err
+		return fmt.Errorf("couldn't merge config: %w", err)
 	}
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
@@ -79,7 +79,7 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 		hooks...,
 	))
 	if err := res.Unmarshal(opts, decodeHook); err != nil {
-		return err
+		return fmt.Errorf("couldn't unmarshal config to options: %w", err)
 	}
 
 	// Automatically set common options into the context of the cobra command
@@ -104,7 +104,7 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 	// Automatically transform options if feasible
 	if o, ok := opts.(options.TransformableOptions); ok {
 		if transformErr := o.Transform(c.Context()); transformErr != nil {
-			return transformErr
+			return fmt.Errorf("couldn't transform options: %w", transformErr)
 		}
 	}
 
