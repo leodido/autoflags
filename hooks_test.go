@@ -84,7 +84,6 @@ func (suite *autoflagsSuite) TestHooks_DurationFromYAMLString() {
 	opts := &durationOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -105,7 +104,6 @@ func (suite *autoflagsSuite) TestHooks_DurationFromYAMLNumber() {
 	opts := &durationOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -138,7 +136,6 @@ func (suite *autoflagsSuite) TestHooks_DurationVariousFormats() {
 			opts := &durationOptions{}
 			cmd := &cobra.Command{Use: "test"}
 
-			viper.Reset()
 			viper.SetConfigFile(configFile)
 			require.NoError(t, viper.ReadInConfig())
 
@@ -172,7 +169,6 @@ func (suite *autoflagsSuite) TestHooks_DurationFlagOverridesConfig() {
 	opts := &durationOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -219,7 +215,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLCommaSeparated() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -242,7 +237,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLArray() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -262,7 +256,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceEmptyString() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -283,7 +276,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceSingleValue() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -303,7 +295,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceWithSpaces() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -343,7 +334,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFlagOverridesConfig() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -369,7 +359,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceYAMLSpecialCharacters() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -389,7 +378,6 @@ func (suite *autoflagsSuite) TestHooks_StringSliceEmptyAfterSplit() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -432,7 +420,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLCommaSeparated() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -455,7 +442,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLArray() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -475,7 +461,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceEmptyString() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -496,7 +481,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceSingleValue() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -516,7 +500,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceWithSpaces() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -536,7 +519,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceNegativeNumbers() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -576,7 +558,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFlagOverridesConfig() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -602,7 +583,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceInvalidInteger() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -623,7 +603,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFloatNumber() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -644,7 +623,6 @@ func (suite *autoflagsSuite) TestHooks_IntSliceOutOfRange() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	viper.Reset()
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
@@ -653,4 +631,132 @@ func (suite *autoflagsSuite) TestHooks_IntSliceOutOfRange() {
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
+}
+
+type requiredWithEnvRuntimeOptions struct {
+	RequiredEnvFlag string `flag:"required-env-flag" flagrequired:"true" flagenv:"true" flagdescr:"required flag with env"`
+	OptionalEnvFlag string `flag:"optional-env-flag" flagenv:"true" flagdescr:"optional flag with env"`
+}
+
+func (o *requiredWithEnvRuntimeOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
+	suite.T().Run("required_flag_with_env_var_set", func(t *testing.T) {
+		// Clean slate for this test
+		SetEnvPrefix("AUTOFLAGS")
+		defer SetEnvPrefix("")
+
+		// Set the environment variable that will be used
+		envVarName := "AUTOFLAGS_TEST_REQUIRED_ENV_FLAG"
+		originalEnv := os.Getenv(envVarName)
+		defer func() {
+			if originalEnv == "" {
+				os.Unsetenv(envVarName)
+			} else {
+				os.Setenv(envVarName, originalEnv)
+			}
+		}()
+
+		os.Setenv(envVarName, "env-value")
+
+		opts := &requiredWithEnvRuntimeOptions{}
+		cmd := &cobra.Command{Use: "test"}
+
+		Define(cmd, opts)
+
+		// Verify both annotations are set
+		flags := cmd.Flags()
+		requiredEnvFlag := flags.Lookup("required-env-flag")
+		assert.NotNil(t, requiredEnvFlag, "required-env-flag should exist")
+
+		// Should have both required and env annotations
+		requiredAnnotation := requiredEnvFlag.Annotations[cobra.BashCompOneRequiredFlag]
+		assert.NotNil(t, requiredAnnotation, "should have required annotation")
+		assert.Equal(t, []string{"true"}, requiredAnnotation)
+
+		envAnnotation := requiredEnvFlag.Annotations[FlagEnvsAnnotation]
+		assert.NotNil(t, envAnnotation, "should have env annotation")
+		assert.Contains(t, envAnnotation, envVarName, "should contain the correct env var name")
+
+		// Test that Unmarshal works with environment variable
+		err := Unmarshal(cmd, opts)
+		assert.NoError(t, err, "should unmarshal successfully with env var set")
+		assert.Equal(t, "env-value", opts.RequiredEnvFlag, "should get value from environment")
+
+		// Compare with optional env flag behavior
+		optionalEnvFlag := flags.Lookup("optional-env-flag")
+		assert.NotNil(t, optionalEnvFlag, "optional-env-flag should exist")
+
+		optionalRequiredAnnotation := optionalEnvFlag.Annotations[cobra.BashCompOneRequiredFlag]
+		assert.Nil(t, optionalRequiredAnnotation, "optional flag should not have required annotation")
+
+		optionalEnvAnnotation := optionalEnvFlag.Annotations[FlagEnvsAnnotation]
+		assert.NotNil(t, optionalEnvAnnotation, "optional flag should have env annotation")
+	})
+}
+
+func (suite *autoflagsSuite) TestFlagrequired_WithEnvMissingValue() {
+	// Test what happens when a required+env flag has no env var set and no flag provided
+	suite.T().Run("required_flag_with_no_env_var", func(t *testing.T) {
+		// Clean slate for this test
+		SetEnvPrefix("AUTOFLAGS")
+		defer SetEnvPrefix("")
+
+		// Ensure the env vars are not set
+		envVarNames := []string{
+			"AUTOFLAGS_TEST_REQUIREDENVFLAG",
+			"AUTOFLAGS_TEST_REQUIRED_ENV_FLAG",
+		}
+
+		originalEnvs := make(map[string]string)
+		defer func() {
+			for _, envVar := range envVarNames {
+				if originalVal, exists := originalEnvs[envVar]; exists && originalVal != "" {
+					os.Setenv(envVar, originalVal)
+				} else {
+					os.Unsetenv(envVar)
+				}
+			}
+		}()
+
+		for _, envVar := range envVarNames {
+			originalEnvs[envVar] = os.Getenv(envVar)
+			os.Unsetenv(envVar)
+		}
+
+		opts := &requiredWithEnvRuntimeOptions{}
+		cmd := &cobra.Command{Use: "test"}
+
+		Define(cmd, opts)
+
+		// Since the flag is required and no env var is set, this should work fine
+		// because autoflags doesn't enforce cobra's required flags during Unmarshal
+		err := Unmarshal(cmd, opts)
+		assert.NoError(t, err, "Unmarshal should succeed even with missing required flag")
+		assert.Equal(t, "", opts.RequiredEnvFlag, "should have empty value when no env var or flag set")
+
+		// The required enforcement would happen when cobra validates the command execution,
+		// not during the autoflags Unmarshal phase
+	})
+}
+
+func (suite *autoflagsSuite) TestFlagrequired_WithEnvConfigFile() {
+	// Test that required flags work with config files too
+	suite.T().Run("required_flag_from_config", func(t *testing.T) {
+		configContent := `required-env-flag: "config-value"`
+		configFile := suite.createTempYAMLFile(configContent)
+		defer os.Remove(configFile)
+
+		opts := &requiredWithEnvRuntimeOptions{}
+		cmd := &cobra.Command{Use: "test"}
+
+		viper.SetConfigFile(configFile)
+		require.NoError(t, viper.ReadInConfig())
+
+		Define(cmd, opts)
+		err := Unmarshal(cmd, opts)
+
+		assert.NoError(t, err, "should unmarshal successfully with config file")
+		assert.Equal(t, "config-value", opts.RequiredEnvFlag, "should get value from config")
+	})
 }
