@@ -359,15 +359,13 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		}
 
 		// Validate flagcustom tag
-		if flagCustom := fieldType.Tag.Get("flagcustom"); flagCustom != "" {
-			if _, err := strconv.ParseBool(flagCustom); err != nil {
-				return &FieldError{
-					FieldName: fieldName,
-					TagName:   "flagcustom",
-					TagValue:  flagCustom,
-					Message:   "invalid boolean value",
-				}
-			}
+		if err := validateBooleanTag(fieldName, "flagcustom", fieldType.Tag.Get("flagcustom")); err != nil {
+			return err
+		}
+
+		// Validate flagenv tag
+		if err := validateBooleanTag(fieldName, "flagenv", fieldType.Tag.Get("flagenv")); err != nil {
+			return err
 		}
 
 		// Recursively validate children structs
@@ -378,5 +376,19 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		}
 	}
 
+	return nil
+}
+
+func validateBooleanTag(fieldName, tagName, tagValue string) error {
+	if tagValue != "" {
+		if _, err := strconv.ParseBool(tagValue); err != nil {
+			return &FieldError{
+				FieldName: fieldName,
+				TagName:   tagName,
+				TagValue:  tagValue,
+				Message:   "invalid boolean value",
+			}
+		}
+	}
 	return nil
 }

@@ -11,6 +11,5 @@ type FieldError struct {
 }
 
 func (e *FieldError) Error() string {
-	return fmt.Sprintf("field '%s': tag '%s=%s': %s",
-		e.FieldName, e.TagName, e.TagValue, e.Message)
+	return fmt.Sprintf("field '%s': tag '%s=%s': %s", e.FieldName, e.TagName, e.TagValue, e.Message)
 }
