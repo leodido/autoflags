@@ -12,12 +12,48 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func Define(c *cobra.Command, o options.Options, exclusions ...string) {
+// DefineOption configures the Define function behavior
+type DefineOption func(*defineConfig)
+
+// defineConfig holds configuration for the Define function
+type defineConfig struct {
+	validation bool
+	exclusions []string
+}
+
+// WithValidation enables strict validation of struct tags
+func WithValidation() DefineOption {
+	return func(cfg *defineConfig) {
+		cfg.validation = true
+	}
+}
+
+// WithExclusions sets flags to exclude from definition
+func WithExclusions(exclusions ...string) DefineOption {
+	return func(cfg *defineConfig) {
+		cfg.exclusions = append(cfg.exclusions, exclusions...)
+	}
+}
+
+// Define creates flags from struct tags
+func Define(c *cobra.Command, o options.Options, defineOpts ...DefineOption) error {
+	cfg := &defineConfig{}
+	for _, opt := range defineOpts {
+		opt(cfg)
+	}
+
+	// Run validation if requested
+	if cfg.validation {
+		if err := validateStructTags(o); err != nil {
+			return err
+		}
+	}
+
 	v := GetViper(c)
 
 	// Map flags to exclude to the current command
 	ignores := map[string]string{}
-	for _, flag := range exclusions {
+	for _, flag := range cfg.exclusions {
 		ignores[strings.ToLower(flag)] = c.Name()
 	}
 
@@ -29,6 +65,8 @@ func Define(c *cobra.Command, o options.Options, exclusions ...string) {
 	bindEnv(v, c)
 	// Generate the usage message
 	setUsage(c)
+
+	return nil
 }
 
 func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
@@ -292,4 +330,53 @@ func getValuePtr(o any) reflect.Value {
 	}
 
 	return reflect.New(reflect.TypeOf(o))
+}
+
+// validateStructTags checks for invalid boolean values in struct tags
+func validateStructTags(o interface{}) error {
+	val := getValue(o)
+	if !val.IsValid() {
+		val = getValue(getValuePtr(o).Interface())
+	}
+
+	return validateFieldTags(val, "")
+}
+
+// validateFieldTags recursively validates tags in struct fields
+func validateFieldTags(val reflect.Value, prefix string) error {
+	for i := 0; i < val.NumField(); i++ {
+		field := val.Field(i)
+		fieldType := val.Type().Field(i)
+
+		// Skip private fields
+		if !field.CanInterface() {
+			continue
+		}
+
+		fieldName := fieldType.Name
+		if prefix != "" {
+			fieldName = prefix + "." + fieldName
+		}
+
+		// Validate flagcustom tag
+		if flagCustom := fieldType.Tag.Get("flagcustom"); flagCustom != "" {
+			if _, err := strconv.ParseBool(flagCustom); err != nil {
+				return &FieldError{
+					FieldName: fieldName,
+					TagName:   "flagcustom",
+					TagValue:  flagCustom,
+					Message:   "invalid boolean value",
+				}
+			}
+		}
+
+		// Recursively validate children structs
+		if fieldType.Type.Kind() == reflect.Struct {
+			if err := validateFieldTags(field, fieldName); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
