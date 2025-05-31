@@ -60,9 +60,7 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 
 	// Merging the config map (if any) from the global viper singleton instance
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
-	if err := res.MergeConfigMap(configToMerge); err != nil {
-		return fmt.Errorf("couldn't merge config: %w", err)
-	}
+	res.MergeConfigMap(configToMerge)
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
