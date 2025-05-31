@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
@@ -20,6 +21,12 @@ func TestAutoflagsSuite(t *testing.T) {
 func (suite *autoflagsSuite) SetupTest() {
 	// Reset the global boundEnvs map before each test
 	boundEnvs = make(map[string]map[string]bool)
+
+	// Reset viper state before each test to prevent test pollution
+	viper.Reset()
+
+	// Also clear the per-command viper instances map
+	vipers = make(map[string]*viper.Viper)
 }
 
 // createTestC creates a command with flags that have environment annotations

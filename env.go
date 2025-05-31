@@ -80,6 +80,3 @@ func getEnv(f reflect.StructField, inherit bool, path, alias, envPrefix string) 
 
 	return ret, defineEnv
 }
-
-// FIXME: if a flag has flagrequired="true" and flagenv:"true" than flagrequired takes precedence and it forces you to always use the --flag
-// FIXME: no real way to circumvent this... document it
