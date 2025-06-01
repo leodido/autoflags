@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -17,7 +16,7 @@ func GetViper(c *cobra.Command) *viper.Viper {
 	return s.viper()
 }
 
-func Debug(c *cobra.Command, opts options.DebuggableOptions) error {
+func Debug(c *cobra.Command, opts DebuggableOptions) error {
 	if !opts.Debuggable() {
 		return nil
 	}
@@ -55,7 +54,7 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 }
 
 // NOTE: See https://github.com/spf13/viper/pull/1715
-func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.DecodeHookFunc) error {
+func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookFunc) error {
 	res := GetViper(c)
 
 	// Merging the config map (if any) from the global viper singleton instance
@@ -81,19 +80,19 @@ func Unmarshal(c *cobra.Command, opts options.Options, hooks ...mapstructure.Dec
 	}
 
 	// Automatically set common options into the context of the cobra command
-	if o, ok := opts.(options.CommonOptions); ok {
+	if o, ok := opts.(CommonOptions); ok {
 		c.SetContext(o.Context(c.Context()))
 	}
 
 	// Automatically transform options if feasible
-	if o, ok := opts.(options.TransformableOptions); ok {
+	if o, ok := opts.(TransformableOptions); ok {
 		if transformErr := o.Transform(c.Context()); transformErr != nil {
 			return fmt.Errorf("couldn't transform options: %w", transformErr)
 		}
 	}
 
 	// Automatically run options validation if feasible
-	if o, ok := opts.(options.ValidatableOptions); ok {
+	if o, ok := opts.(ValidatableOptions); ok {
 		if validationErrors := o.Validate(); validationErrors != nil {
 			ret := "invalid options" // FIXME: get name of the options
 			for _, e := range validationErrors {
