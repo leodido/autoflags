@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
@@ -164,6 +165,45 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		assert.Error(t, err, "Unmarshal should return an error if Justification is missing when Status is pending")
 		assert.Contains(t, err.Error(), "invalid options")
 		assert.Contains(t, err.Error(), "Error:Field validation for 'Justification' failed on the 'required_if' tag")
+	})
+
+	t.Run("ValidationFails_InvalidEmail_AfterMold", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "testcmd-emailfail"}
+		opts := &unmarshalIntegrationOptions{}
+
+		errDefine := autoflags.Define(cmd, opts)
+		require.NoError(t, errDefine)
+
+		viper.Set("email", "  NOTANEMAIL@domain  ")
+		viper.Set("age", 25)
+
+		err := autoflags.Unmarshal(cmd, opts)
+
+		var valErr *autoflags.ValidationError
+		require.Error(t, err, "Unmarshal should return an error for invalid email format")
+		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
+
+		assert.Equal(t, cmd.Name(), valErr.ContextName, "ValidationError ContextName should match command name")
+
+		foundEmailError := false
+		for _, specificErr := range valErr.UnderlyingErrors() {
+			var fieldErr validator.FieldError
+			require.True(t, errors.As(specificErr, &fieldErr), "Underlying error should be of type validator.FieldError")
+			if errors.As(specificErr, &fieldErr) {
+				if fieldErr.Field() == "Email" && fieldErr.Tag() == "email" {
+					foundEmailError = true
+				}
+			}
+		}
+		assert.True(t, foundEmailError, "Expected a validator.FieldError for 'Email' field with 'email' tag")
+
+		spew.Dump(err.Error())
+		assert.Contains(t, err.Error(), "invalid options for "+cmd.Name()+":")
+		assert.Contains(t, err.Error(), "Error:Field validation for 'Email' failed on the 'email' tag")
+
+		assert.Equal(t, "notanemail@domain", opts.Email)
+		assert.Equal(t, "active", opts.Status)
 	})
 
 	t.Run("Success_WithMoldAndValidator", func(t *testing.T) {
