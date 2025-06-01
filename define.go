@@ -9,72 +9,126 @@ import (
 	"unsafe"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 )
 
 // DefineOption configures the Define function behavior
-type DefineOption func(*defineConfig)
+type DefineOption func(*defineContext)
 
-// defineConfig holds configuration for the Define function
-type defineConfig struct {
-	validation bool
-	exclusions []string
+// defineContext holds configuration for the Define function
+type defineContext struct {
+	validation         bool
+	rawExclusions      []string
+	usePersistentFlags bool
+
+	targetC     *cobra.Command
+	targetF     *pflag.FlagSet
+	targetV     *viper.Viper
+	isGlobalV   bool
+	scope       *scope
+	ignoreFlagC map[string]string
 }
 
 // WithValidation enables strict validation of struct tags
 func WithValidation() DefineOption {
-	return func(cfg *defineConfig) {
+	return func(cfg *defineContext) {
 		cfg.validation = true
 	}
 }
 
 // WithExclusions sets flags to exclude from definition
 func WithExclusions(exclusions ...string) DefineOption {
-	return func(cfg *defineConfig) {
-		cfg.exclusions = append(cfg.exclusions, exclusions...)
+	return func(cfg *defineContext) {
+		if cfg.rawExclusions == nil {
+			cfg.rawExclusions = []string{}
+		}
+		cfg.rawExclusions = append(cfg.rawExclusions, exclusions...)
+	}
+}
+
+// WithPersistentFlags instructs Define to register flags as persistent flags on the command they are defined for.
+func WithPersistentFlags() DefineOption {
+	return func(cfg *defineContext) {
+		cfg.usePersistentFlags = true
 	}
 }
 
 // Define creates flags from struct tags
 func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
-	cfg := &defineConfig{}
+	runCtx := &defineContext{
+		targetC: c,
+	}
+	// Apply user options
 	for _, opt := range defineOpts {
-		opt(cfg)
+		opt(runCtx)
 	}
 
-	// Run validation if requested
-	if cfg.validation {
+	// Map flags to exclude for the current command
+	if len(runCtx.rawExclusions) > 0 {
+		runCtx.ignoreFlagC = make(map[string]string)
+		for _, flagStr := range runCtx.rawExclusions {
+			runCtx.ignoreFlagC[strings.ToLower(flagStr)] = runCtx.targetC.Name()
+		}
+	}
+
+	// Possibly run validation
+	if runCtx.validation {
 		if err := validateStructTags(o); err != nil {
 			return err
 		}
 	}
 
-	v := GetViper(c)
-
-	// Map flags to exclude to the current command
-	ignores := map[string]string{}
-	for _, flag := range cfg.exclusions {
-		ignores[strings.ToLower(flag)] = c.Name()
+	// Determine the target flag set
+	if runCtx.usePersistentFlags {
+		runCtx.targetF = c.PersistentFlags()
+	} else {
+		runCtx.targetF = c.Flags()
 	}
 
+	// Determine the target viper instance
+	isRootC := c.Parent() == nil
+	if runCtx.usePersistentFlags && isRootC {
+		runCtx.targetV = viper.GetViper() // Viper global singleton
+		runCtx.isGlobalV = true
+	} else {
+		runCtx.targetV = GetViper(c) // Viper specific for the target command
+		runCtx.isGlobalV = false
+	}
+
+	// Obtain scope for the target command
+	runCtx.scope = getScope(c)
+
 	// Define the flags from struct
-	define(c, o, "", "", ignores, false, false)
-	// Bind flag values to struct field values
-	v.BindPFlags(c.Flags())
-	// Bind environment
-	bindEnv(v, c)
+	runCtx.process(o, "", "", false, false)
+	runCtx.bind()
+
 	// Generate the usage message
 	setUsage(c)
 
 	return nil
 }
 
-func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
-	val := getValue(o)
+func (ctx *defineContext) bind() {
+	// Bind flag values to struct field values
+	ctx.targetV.BindPFlags(ctx.targetF)
+	// Bind environment
+	ctx.bindEnvironmentVariables()
+}
+
+func (ctx *defineContext) process(
+	currentOptions interface{},
+	currentStartingGroup string,
+	currentStructPath string,
+	shouldDefineEnv bool,
+	mandatory bool,
+) {
+	val := getValue(currentOptions)
 	if !val.IsValid() {
-		val = getValue(getValuePtr(o).Interface())
+		val = getValue(getValuePtr(currentOptions).Interface())
 	}
 
-	for i := 0; i < val.NumField(); i++ {
+	for i := range val.NumField() {
 		field := val.Field(i)
 		// Ignore private fields
 		if !field.CanInterface() {
@@ -82,14 +136,20 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		}
 
 		f := val.Type().Field(i)
-		path := ""
-		if structPath == "" {
-			path = strings.ToLower(f.Name)
+		pathSegment := strings.ToLower(f.Name)
+		fieldFullPath := ""
+		if currentStructPath == "" {
+			fieldFullPath = pathSegment
 		} else {
-			path = fmt.Sprintf("%s.%s", strings.ToLower(structPath), strings.ToLower(f.Name))
+			fieldFullPath = fmt.Sprintf("%s.%s", currentStructPath, pathSegment)
 		}
 
-		if cname, ok := exclusions[strings.TrimPrefix(strings.TrimPrefix(path, "-"), "-")]; ok && c.Name() == cname {
+		if cname, ok := ctx.ignoreFlagC[strings.TrimPrefix(strings.TrimPrefix(fieldFullPath, "-"), "-")]; ok && ctx.targetC.Name() == cname {
+			continue
+		}
+
+		alias := f.Tag.Get("flag")
+		if cname, ok := ctx.ignoreFlagC[strings.ToLower(alias)]; ok && ctx.targetC.Name() == cname {
 			continue
 		}
 
@@ -99,49 +159,45 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		}
 
 		short := f.Tag.Get("flagshort")
-		alias := f.Tag.Get("flag")
-		if cname, ok := exclusions[alias]; ok && c.Name() == cname {
-			continue
-		}
 		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
 		group := f.Tag.Get("flaggroup")
-		if startingGroup != "" {
-			group = startingGroup
+		if currentStartingGroup != "" {
+			group = currentStartingGroup
 		}
-		name := getName(path, alias)
+		name := getName(fieldFullPath, alias)
 
 		// Determine whether to represent hierarchy with the command name
 		// We assume that options that are not common options are subcommand-specific options
 		cName := ""
-		if _, isCommonOptions := o.(CommonOptions); !isCommonOptions {
-			cName = c.Name()
+		if _, isCommonOptions := currentOptions.(CommonOptions); !isCommonOptions && !ctx.isGlobalV {
+			cName = ctx.targetC.Name()
 		}
 
-		envs, defineEnv := getEnv(f, defineEnv, path, alias, cName)
+		envs, shouldDefineEnv := getEnv(f, shouldDefineEnv, fieldFullPath, alias, cName)
 		mandatory := isMandatory(f) || mandatory
 
 		// Flags with custom definition hooks
 		custom, _ := strconv.ParseBool(f.Tag.Get("flagcustom"))
 		if custom && f.Type.Kind() != reflect.Struct {
 			hookName := fmt.Sprintf("Define%s", f.Name)
-			if structPtr := getValuePtr(o); structPtr.IsValid() {
+			if structPtr := getValuePtr(currentOptions); structPtr.IsValid() {
 				hookFunc := structPtr.MethodByName(hookName)
 				if hookFunc.IsValid() {
 					hookFunc.Call([]reflect.Value{
-						getValuePtr(c),
+						getValuePtr(ctx.targetC),
 						getValue(f.Type.String()),
 						getValue(name),
 						getValue(short),
 						getValue(descr),
 					})
-					inferDecodeHooks(c, name, f.Type.String())
+					ctx.decodeHookFromRegistry(name, f.Type.String())
 
 					goto definition_done
 				} else {
 					// Fallback to define hooks registry
-					if inferDefineHooks(c, f.Type.String(), f, name, short, descr, field) {
-						inferDecodeHooks(c, name, f.Type.String())
+					if ctx.defineHookFromRegistry(f.Type.String(), f, name, short, descr, field) {
+						ctx.decodeHookFromRegistry(name, f.Type.String())
 
 						goto definition_done
 					}
@@ -160,80 +216,80 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		switch f.Type.Kind() {
 		case reflect.Struct:
 			// NOTE > field.Interface() doesn't work because it actually returns a copy of the object wrapping the interface
-			define(c, field.Addr().Interface(), group, path, exclusions, defineEnv, mandatory)
+			ctx.process(field.Addr().Interface(), group, fieldFullPath, shouldDefineEnv, mandatory)
 
 			continue
 
 		case reflect.Bool:
 			val := field.Interface().(bool)
 			ref := (*bool)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().BoolVarP(ref, name, short, val, descr)
+			ctx.targetF.BoolVarP(ref, name, short, val, descr)
 
 		case reflect.String:
 			val := field.Interface().(string)
 			ref := (*string)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().StringVarP(ref, name, short, val, descr)
+			ctx.targetF.StringVarP(ref, name, short, val, descr)
 
 		case reflect.Int:
 			val := field.Interface().(int)
 			ref := (*int)(unsafe.Pointer(field.UnsafeAddr()))
-			if f.Tag.Get("type") == "count" {
-				c.Flags().CountVarP(ref, name, short, descr)
+			if f.Tag.Get("flagtype") == "count" {
+				ctx.targetF.CountVarP(ref, name, short, descr)
 
 				continue
 			}
-			c.Flags().IntVarP(ref, name, short, val, descr)
+			ctx.targetF.IntVarP(ref, name, short, val, descr)
 
 		case reflect.Uint:
 			val := field.Interface().(uint)
 			ref := (*uint)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().UintVarP(ref, name, short, val, descr)
+			ctx.targetF.UintVarP(ref, name, short, val, descr)
 
 		case reflect.Uint8:
 			val := field.Interface().(uint8)
 			ref := (*uint8)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Uint8VarP(ref, name, short, val, descr)
+			ctx.targetF.Uint8VarP(ref, name, short, val, descr)
 
 		case reflect.Uint16:
 			val := field.Interface().(uint16)
 			ref := (*uint16)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Uint16VarP(ref, name, short, val, descr)
+			ctx.targetF.Uint16VarP(ref, name, short, val, descr)
 
 		case reflect.Uint32:
 			val := field.Interface().(uint32)
 			ref := (*uint32)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Uint32VarP(ref, name, short, val, descr)
+			ctx.targetF.Uint32VarP(ref, name, short, val, descr)
 
 		case reflect.Uint64:
 			val := field.Interface().(uint64)
 			ref := (*uint64)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Uint64VarP(ref, name, short, val, descr)
+			ctx.targetF.Uint64VarP(ref, name, short, val, descr)
 
 		case reflect.Slice:
 			switch f.Type.Elem().Kind() {
 			case reflect.String:
 				val := field.Interface().([]string)
 				ref := (*[]string)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().StringSliceVarP(ref, name, short, val, descr)
+				ctx.targetF.StringSliceVarP(ref, name, short, val, descr)
 			case reflect.Int:
 				val := field.Interface().([]int)
 				ref := (*[]int)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().IntSliceVarP(ref, name, short, val, descr)
+				ctx.targetF.IntSliceVarP(ref, name, short, val, descr)
 			}
-			inferDecodeHooks(c, name, f.Type.String())
+			ctx.decodeHookFromRegistry(name, f.Type.String())
 
 		case reflect.Int64:
 			switch f.Type.String() {
 			case "int64":
 				val := field.Interface().(int64)
 				ref := (*int64)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().Int64VarP(ref, name, short, val, descr)
+				ctx.targetF.Int64VarP(ref, name, short, val, descr)
 
 			case "time.Duration":
 				val := field.Interface().(time.Duration)
 				ref := (*time.Duration)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().DurationVarP(ref, name, short, val, descr)
-				inferDecodeHooks(c, name, f.Type.String())
+				ctx.targetF.DurationVarP(ref, name, short, val, descr)
+				ctx.decodeHookFromRegistry(name, f.Type.String())
 
 			default:
 				continue
@@ -242,17 +298,17 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		case reflect.Int8:
 			val := field.Interface().(int8)
 			ref := (*int8)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Int8VarP(ref, name, short, val, descr)
+			ctx.targetF.Int8VarP(ref, name, short, val, descr)
 
 		case reflect.Int16:
 			val := field.Interface().(int16)
 			ref := (*int16)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Int16VarP(ref, name, short, val, descr)
+			ctx.targetF.Int16VarP(ref, name, short, val, descr)
 
 		case reflect.Int32:
 			val := field.Interface().(int32)
 			ref := (*int32)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Int32VarP(ref, name, short, val, descr)
+			ctx.targetF.Int32VarP(ref, name, short, val, descr)
 
 		default:
 			continue
@@ -262,28 +318,31 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 
 		// Marking the flag
 		if mandatory {
-			c.MarkFlagRequired(name)
+			cobra.MarkFlagRequired(ctx.targetF, name)
 		}
 
 		// Set the defaults
-		if defval != "" {
-			GetViper(c).SetDefault(name, defval)
+		if defval != "" && f.Tag.Get("flagtype") != "count" {
+			ctx.targetV.SetDefault(name, defval)
 			// This is needed for the usage help messages
-			c.Flags().Lookup(name).DefValue = defval
+			ctx.targetF.Lookup(name).DefValue = defval
 		}
 
-		if alias != "" && path != alias {
+		if alias != "" && name == alias && fieldFullPath != alias {
 			// Alias the actual path to the flag name (ie., the alias when not empty)
-			GetViper(c).RegisterAlias(path, alias)
+			ctx.targetV.RegisterAlias(fieldFullPath, alias)
 		}
 
-		if len(envs) > 0 {
-			_ = c.Flags().SetAnnotation(name, FlagEnvsAnnotation, envs)
-		}
+		// Annotate
+		pFlag := ctx.targetF.Lookup(name)
+		if pFlag != nil {
+			if len(envs) > 0 {
+				_ = ctx.targetF.SetAnnotation(name, FlagEnvsAnnotation, envs)
+			}
 
-		// Set the group annotation on the current flag
-		if group != "" {
-			_ = c.Flags().SetAnnotation(name, FlagGroupAnnotation, []string{group})
+			if group != "" {
+				_ = ctx.targetF.SetAnnotation(name, FlagGroupAnnotation, []string{group})
+			}
 		}
 	}
 }
@@ -391,6 +450,8 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		if err := validateBooleanTag(fieldName, "flagrequired", fieldType.Tag.Get("flagrequired")); err != nil {
 			return err
 		}
+
+		// TODO: check is an integer type when "flagtype" is "count"
 
 		// Recursively validate children structs
 		if fieldType.Type.Kind() == reflect.Struct {
