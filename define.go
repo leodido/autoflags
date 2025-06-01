@@ -36,7 +36,7 @@ func WithExclusions(exclusions ...string) DefineOption {
 		}
 		// Map exclusions to the command name
 		for _, flag := range exclusions {
-			cfg.exclusions[strings.ToLower(flag)] = cfg.comm.Name()
+			cfg.exclusions[strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(flag), "-"), "-")] = cfg.comm.Name()
 		}
 	}
 }
@@ -44,7 +44,6 @@ func WithExclusions(exclusions ...string) DefineOption {
 // Define creates flags from struct tags
 func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	ctx := &defineContext{
-		exclusions: make(map[string]string),
 		comm:       c,
 	}
 
@@ -96,9 +95,17 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			path = fmt.Sprintf("%s.%s", strings.ToLower(structPath), strings.ToLower(f.Name))
 		}
 
-		// Check exclusions with command name validation (case-insensitive)
-		if cname, ok := exclusions[strings.TrimPrefix(strings.TrimPrefix(path, "-"), "-")]; ok && c.Name() == cname {
+		// Check exclusions for struct path with command name validation (case-insensitive)
+		if cname, ok := exclusions[path]; ok && c.Name() == cname {
 			continue
+		}
+
+		// Check exclusions for alias with command name validation (case-insensitive)
+		alias := f.Tag.Get("flag")
+		if alias != "" {
+			if cname, ok := exclusions[strings.ToLower(alias)]; ok && c.Name() == cname {
+				continue
+			}
 		}
 
 		ignore, _ := strconv.ParseBool(f.Tag.Get("flagignore"))
@@ -107,14 +114,6 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		}
 
 		short := f.Tag.Get("flagshort")
-		alias := f.Tag.Get("flag")
-
-		// Check exclusions for alias with command name validation (case-insensitive)
-		if alias != "" {
-			if cname, ok := exclusions[strings.ToLower(alias)]; ok && c.Name() == cname {
-				continue
-			}
-		}
 
 		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
