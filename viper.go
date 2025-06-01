@@ -94,13 +94,10 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	// Automatically run options validation if feasible
 	if o, ok := opts.(ValidatableOptions); ok {
 		if validationErrors := o.Validate(); validationErrors != nil {
-			ret := "invalid options" // FIXME: get name of the options
-			for _, e := range validationErrors {
-				ret += "\n       "
-				ret += e.Error()
+			return &ValidationError{
+				ContextName: c.Name(),
+				Errors:      validationErrors,
 			}
-
-			return fmt.Errorf("%s", ret)
 		}
 	}
 
