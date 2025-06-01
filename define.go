@@ -12,37 +12,49 @@ import (
 )
 
 // DefineOption configures the Define function behavior
-type DefineOption func(*defineConfig)
+type DefineOption func(*defineContext)
 
-// defineConfig holds configuration for the Define function
-type defineConfig struct {
+// defineContext holds context for the definition of the options
+type defineContext struct {
 	validation bool
-	exclusions []string
+	exclusions map[string]string
+	comm       *cobra.Command
 }
 
 // WithValidation enables strict validation of struct tags
 func WithValidation() DefineOption {
-	return func(cfg *defineConfig) {
+	return func(cfg *defineContext) {
 		cfg.validation = true
 	}
 }
 
 // WithExclusions sets flags to exclude from definition
 func WithExclusions(exclusions ...string) DefineOption {
-	return func(cfg *defineConfig) {
-		cfg.exclusions = append(cfg.exclusions, exclusions...)
+	return func(cfg *defineContext) {
+		if cfg.exclusions == nil {
+			cfg.exclusions = make(map[string]string)
+		}
+		// Map exclusions to the command name
+		for _, flag := range exclusions {
+			cfg.exclusions[strings.ToLower(flag)] = cfg.comm.Name()
+		}
 	}
 }
 
 // Define creates flags from struct tags
 func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
-	cfg := &defineConfig{}
+	ctx := &defineContext{
+		exclusions: make(map[string]string),
+		comm:       c,
+	}
+
+	// Apply configuration options
 	for _, opt := range defineOpts {
-		opt(cfg)
+		opt(ctx)
 	}
 
 	// Run validation if requested
-	if cfg.validation {
+	if ctx.validation {
 		if err := validateStructTags(o); err != nil {
 			return err
 		}
@@ -50,14 +62,8 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 
 	v := GetViper(c)
 
-	// Map flags to exclude to the current command
-	ignores := map[string]string{}
-	for _, flag := range cfg.exclusions {
-		ignores[strings.ToLower(flag)] = c.Name()
-	}
-
 	// Define the flags from struct
-	define(c, o, "", "", ignores, false, false)
+	define(c, o, "", "", ctx.exclusions, false, false)
 	// Bind flag values to struct field values
 	v.BindPFlags(c.Flags())
 	// Bind environment
@@ -68,6 +74,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	return nil
 }
 
+// TODO: make it a method?
 func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
 	val := getValue(o)
 	if !val.IsValid() {
@@ -89,6 +96,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			path = fmt.Sprintf("%s.%s", strings.ToLower(structPath), strings.ToLower(f.Name))
 		}
 
+		// Check exclusions with command name validation (case-insensitive)
 		if cname, ok := exclusions[strings.TrimPrefix(strings.TrimPrefix(path, "-"), "-")]; ok && c.Name() == cname {
 			continue
 		}
@@ -100,9 +108,14 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 
 		short := f.Tag.Get("flagshort")
 		alias := f.Tag.Get("flag")
-		if cname, ok := exclusions[alias]; ok && c.Name() == cname {
-			continue
+
+		// Check exclusions for alias with command name validation (case-insensitive)
+		if alias != "" {
+			if cname, ok := exclusions[strings.ToLower(alias)]; ok && c.Name() == cname {
+				continue
+			}
 		}
+
 		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
 		group := f.Tag.Get("flaggroup")
