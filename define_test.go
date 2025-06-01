@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type configFlags struct {
@@ -1870,4 +1871,301 @@ func (suite *autoflagsSuite) TestFlagrequired_ErrorMessages_ContainExpectedConte
 	assert.Contains(suite.T(), errorMsg, "flagrequired", "Error should contain tag name")
 	assert.Contains(suite.T(), errorMsg, "maybe", "Error should contain tag value")
 	assert.Contains(suite.T(), errorMsg, "invalid boolean value", "Error should contain message")
+}
+
+type exclusionsTestOptions struct {
+	NormalFlag   string `flag:"normal-flag" flagdescr:"should be created"`
+	ExcludedFlag string `flag:"excluded-flag" flagdescr:"should be excluded"`
+	AliasFlag    string `flag:"alias-flag" flagdescr:"has alias"`
+	CaseFlag     string `flag:"Case-Flag" flagdescr:"mixed case flag"`
+	NoAlias      string `flagdescr:"no alias"`
+	NestedStruct exclusionsNestedStruct
+}
+
+func (o *exclusionsTestOptions) Attach(c *cobra.Command) {}
+
+type exclusionsNestedStruct struct {
+	NestedFlag     string `flag:"nested-flag" flagdescr:"nested flag"`
+	ExcludedNested string `flag:"excluded-nested" flagdescr:"should be excluded"`
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_BasicExclusion() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts, WithExclusions("excluded-flag"))
+
+	flags := cmd.Flags()
+
+	// Normal flag should be created
+	normalFlag := flags.Lookup("normal-flag")
+	require.NotNil(suite.T(), normalFlag, "--normal-flag should be created")
+
+	// Excluded flag should not be created
+	excludedFlag := flags.Lookup("excluded-flag")
+	require.Nil(suite.T(), excludedFlag, "--excluded-flag should not be created")
+
+	// Other flags should be created
+	aliasFlag := flags.Lookup("alias-flag")
+	require.NotNil(suite.T(), aliasFlag, "--alias-flag should be created")
+
+	// The aliases are not case insensitive
+	caseFlag := flags.Lookup("Case-Flag")
+	require.NotNil(suite.T(), caseFlag, "--case-flag should be created")
+
+	noAlias := flags.Lookup("noalias")
+	require.NotNil(suite.T(), noAlias, "--noalias should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_MultipleExclusions() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts, WithExclusions("excluded-flag", "--noalias"))
+
+	flags := cmd.Flags()
+
+	// Normal flags should be created
+	normalFlag := flags.Lookup("normal-flag")
+	assert.NotNil(suite.T(), normalFlag, "--normal-flag should be created")
+
+	caseFlag := flags.Lookup("Case-Flag")
+	assert.NotNil(suite.T(), caseFlag, "--case-flag should be created")
+
+	// Both excluded flags should not be created
+	excludedFlag := flags.Lookup("excluded-flag")
+	assert.Nil(suite.T(), excludedFlag, "--excluded-flag should not be created")
+
+	noAlias := flags.Lookup("noalias")
+	assert.Nil(suite.T(), noAlias, "--alias-flag should not be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_CaseInsensitive() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Exclude using different case than the flag definition
+	Define(cmd, opts, WithExclusions("CASE-FLAG"))
+
+	flags := cmd.Flags()
+
+	// Case flag should be excluded despite case difference
+	caseFlag := flags.Lookup("case-flag")
+	assert.Nil(suite.T(), caseFlag, "case-flag should be excluded (case insensitive)")
+
+	// Other flags should be created
+	normalFlag := flags.Lookup("normal-flag")
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_NestedStructFlags() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts, WithExclusions("excluded-nested"))
+
+	flags := cmd.Flags()
+
+	// Normal nested flag should be created
+	nestedFlag := flags.Lookup("nested-flag")
+	assert.NotNil(suite.T(), nestedFlag, "nested-flag should be created")
+
+	// Excluded nested flag should not be created
+	excludedNested := flags.Lookup("excluded-nested")
+	assert.Nil(suite.T(), excludedNested, "excluded-nested should not be created")
+
+	// Top-level flags should be created
+	normalFlag := flags.Lookup("normal-flag")
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_NestedPath() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Test excluding using the full nested path (<field_name>.<field_name>)
+	Define(cmd, opts, WithExclusions("nestedstruct.excludednested"))
+
+	flags := cmd.Flags()
+
+	// Should exclude the nested flag using its full path
+	excludedNested := flags.Lookup("excluded-nested")
+	assert.Nil(suite.T(), excludedNested, "excluded-nested should be excluded using full path")
+
+	// Other flags should be created
+	nestedFlag := flags.Lookup("nested-flag")
+	assert.NotNil(suite.T(), nestedFlag, "nested-flag should be created")
+}
+
+type exclusionsAliasTestOptions struct {
+	FlagWithAlias string `flag:"custom-name" flagdescr:"flag with custom name"`
+	NormalFlag    string `flagdescr:"auto-named flag"`
+}
+
+func (o *exclusionsAliasTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestWithExclusions_AliasExclusion() {
+	opts := &exclusionsAliasTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Exclude using the alias name
+	Define(cmd, opts, WithExclusions("custom-name"))
+
+	flags := cmd.Flags()
+
+	// Flag with alias should be excluded when excluded by alias
+	aliasedFlag := flags.Lookup("custom-name")
+	assert.Nil(suite.T(), aliasedFlag, "flag should be excluded when alias is excluded")
+
+	// Normal flag should be created
+	normalFlag := flags.Lookup("normalflag")
+	assert.NotNil(suite.T(), normalFlag, "normalflag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_PathVsAlias() {
+	opts := &exclusionsAliasTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Exclude using the path name (not the alias)
+	Define(cmd, opts, WithExclusions("flagwithalias"))
+
+	flags := cmd.Flags()
+
+	// Flag should be excluded when excluded by path
+	aliasedFlag := flags.Lookup("custom-name")
+	assert.Nil(suite.T(), aliasedFlag, "flag should be excluded when path is excluded")
+
+	// Normal flag should be created
+	normalFlag := flags.Lookup("normalflag")
+	assert.NotNil(suite.T(), normalFlag, "normalflag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_CommandSpecific() {
+	opts := &exclusionsTestOptions{}
+	cmd1 := &cobra.Command{Use: "command1"}
+	cmd2 := &cobra.Command{Use: "command2"}
+
+	// Apply exclusions to command1 only
+	Define(cmd1, opts, WithExclusions("excluded-flag"))
+	Define(cmd2, opts) // No exclusions
+
+	flags1 := cmd1.Flags()
+	flags2 := cmd2.Flags()
+
+	// command1 should have the flag excluded
+	excludedFlag1 := flags1.Lookup("excluded-flag")
+	assert.Nil(suite.T(), excludedFlag1, "excluded-flag should not be created in command1")
+
+	// command2 should have the flag created
+	excludedFlag2 := flags2.Lookup("excluded-flag")
+	assert.NotNil(suite.T(), excludedFlag2, "excluded-flag should be created in command2")
+
+	// Both commands should have normal flags
+	normalFlag1 := flags1.Lookup("normal-flag")
+	normalFlag2 := flags2.Lookup("normal-flag")
+	assert.NotNil(suite.T(), normalFlag1, "normal-flag should be created in command1")
+	assert.NotNil(suite.T(), normalFlag2, "normal-flag should be created in command2")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_EmptyExclusions() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Test with empty exclusions list
+	Define(cmd, opts, WithExclusions())
+
+	flags := cmd.Flags()
+
+	// All flags should be created
+	normalFlag := flags.Lookup("normal-flag")
+	excludedFlag := flags.Lookup("excluded-flag")
+	aliasFlag := flags.Lookup("alias-flag")
+
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+	assert.NotNil(suite.T(), excludedFlag, "excluded-flag should be created when not excluded")
+	assert.NotNil(suite.T(), aliasFlag, "alias-flag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_NoExclusionsOption() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Test without any exclusions option
+	Define(cmd, opts)
+
+	flags := cmd.Flags()
+
+	// All flags should be created
+	normalFlag := flags.Lookup("normal-flag")
+	excludedFlag := flags.Lookup("excluded-flag")
+	aliasFlag := flags.Lookup("alias-flag")
+
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+	assert.NotNil(suite.T(), excludedFlag, "excluded-flag should be created when no exclusions")
+	assert.NotNil(suite.T(), aliasFlag, "alias-flag should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_CombinedWithOtherOptions() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Test exclusions combined with validation
+	Define(cmd, opts, WithValidation(), WithExclusions("excluded-flag"))
+
+	flags := cmd.Flags()
+
+	// Should work normally - excluded flag not created, others created
+	normalFlag := flags.Lookup("normal-flag")
+	excludedFlag := flags.Lookup("excluded-flag")
+
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+	assert.Nil(suite.T(), excludedFlag, "excluded-flag should not be created")
+}
+
+type exclusionsSpecialCasesOptions struct {
+	DashedFlag     string `flag:"flag-with-dashes" flagdescr:"flag with dashes"`
+	UnderscoreFlag string `flag:"flag_with_underscores" flagdescr:"flag with underscores"`
+	CamelCaseFlag  string `flag:"CamelCase"`
+	NumberFlag     string `flag:"flag123" flagdescr:"flag with numbers"`
+}
+
+func (o *exclusionsSpecialCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestWithExclusions_SpecialCharacters() {
+	opts := &exclusionsSpecialCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	Define(cmd, opts, WithExclusions("flag-with-dashes", "flag_with_underscores", "camelcase"))
+
+	flags := cmd.Flags()
+
+	// Flags with special characters should be properly excluded
+	dashedFlag := flags.Lookup("flag-with-dashes")
+	underscoreFlag := flags.Lookup("flag_with_underscores")
+	camelcaseFlag := flags.Lookup("CamelCase")
+	numberFlag := flags.Lookup("flag123")
+
+	require.Nil(suite.T(), dashedFlag, "--flag-with-dashes should be excluded")
+	require.Nil(suite.T(), underscoreFlag, "--flag_with_underscores should be excluded")
+	require.Nil(suite.T(), camelcaseFlag, "--CamelCase should be excluded")
+	require.NotNil(suite.T(), numberFlag, "flag123 should be created")
+}
+
+func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
+	opts := &exclusionsTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Test with duplicate exclusions (should be handled gracefully)
+	Define(cmd, opts, WithExclusions("excluded-flag", "excluded-flag", "alias-flag"))
+
+	flags := cmd.Flags()
+
+	// Should work the same as without duplicates
+	excludedFlag := flags.Lookup("excluded-flag")
+	aliasFlag := flags.Lookup("alias-flag")
+	normalFlag := flags.Lookup("normal-flag")
+
+	assert.Nil(suite.T(), excludedFlag, "excluded-flag should not be created")
+	assert.Nil(suite.T(), aliasFlag, "alias-flag should not be created")
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 }
