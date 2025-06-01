@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
@@ -109,26 +108,6 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		assert.Contains(t, err.Error(), "simulated pre-mold transformation error")
 	})
 
-	t.Run("ValidationFails_InvalidEmail_AfterMold", func(t *testing.T) {
-		setupTest()
-		cmd := &cobra.Command{Use: "testcmd-emailfail"}
-		opts := &unmarshalIntegrationOptions{}
-
-		errDefine := autoflags.Define(cmd, opts)
-		require.NoError(t, errDefine)
-
-		viper.Set("email", "  NOTANEMAIL@domain  ")
-		viper.Set("age", 25)
-
-		err := autoflags.Unmarshal(cmd, opts)
-
-		assert.Error(t, err, "Unmarshal should return an error for invalid email format")
-		assert.Contains(t, err.Error(), "invalid options")
-		assert.Contains(t, err.Error(), "Error:Field validation for 'Email' failed on the 'email' tag")
-		assert.Equal(t, "notanemail@domain", opts.Email)
-		assert.Equal(t, "active", opts.Status)
-	})
-
 	t.Run("ValidationFails_InvalidAge", func(t *testing.T) {
 		setupTest()
 		cmd := &cobra.Command{Use: "testcmd-agefail"}
@@ -138,12 +117,28 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		require.NoError(t, errDefine)
 
 		viper.Set("email", "valid@example.com")
-		viper.Set("age", 5)
+		viper.Set("age", 5) // Invalid age
 
 		err := autoflags.Unmarshal(cmd, opts)
 
-		assert.Error(t, err, "Unmarshal should return an error for invalid age")
-		assert.Contains(t, err.Error(), "invalid options")
+		require.Error(t, err, "Unmarshal should return an error for invalid age")
+		var valErr *autoflags.ValidationError
+		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
+
+		assert.Equal(t, cmd.Name(), valErr.ContextName)
+
+		foundAgeError := false
+		for _, specificErr := range valErr.UnderlyingErrors() {
+			var fieldErr validator.FieldError
+			if errors.As(specificErr, &fieldErr) {
+				if fieldErr.Field() == "Age" && fieldErr.Tag() == "min" {
+					foundAgeError = true
+				}
+			}
+		}
+		assert.True(t, foundAgeError, "Expected validator.FieldError for Age with 'min' tag")
+
+		assert.Contains(t, err.Error(), "invalid options for "+cmd.Name()+":")
 		assert.Contains(t, err.Error(), "Error:Field validation for 'Age' failed on the 'min' tag")
 	})
 
@@ -198,7 +193,6 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		}
 		assert.True(t, foundEmailError, "Expected a validator.FieldError for 'Email' field with 'email' tag")
 
-		spew.Dump(err.Error())
 		assert.Contains(t, err.Error(), "invalid options for "+cmd.Name()+":")
 		assert.Contains(t, err.Error(), "Error:Field validation for 'Email' failed on the 'email' tag")
 
