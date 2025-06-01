@@ -1,4 +1,4 @@
-package options
+package autoflags
 
 import (
 	"context"
@@ -26,5 +26,5 @@ type CommonOptions interface {
 
 type DebuggableOptions interface {
 	Options
-	Debuggable() bool
+	Debuggable() bool // FIXME: rename this?
 }

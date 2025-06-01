@@ -8,7 +8,6 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/leodido/autoflags/options"
 	"github.com/spf13/cobra"
 )
 
@@ -36,7 +35,7 @@ func WithExclusions(exclusions ...string) DefineOption {
 }
 
 // Define creates flags from struct tags
-func Define(c *cobra.Command, o options.Options, defineOpts ...DefineOption) error {
+func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	cfg := &defineConfig{}
 	for _, opt := range defineOpts {
 		opt(cfg)
@@ -115,7 +114,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		// Determine whether to represent hierarchy with the command name
 		// We assume that options that are not common options are subcommand-specific options
 		cName := ""
-		if _, isCommonOptions := o.(options.CommonOptions); !isCommonOptions {
+		if _, isCommonOptions := o.(CommonOptions); !isCommonOptions {
 			cName = c.Name()
 		}
 
