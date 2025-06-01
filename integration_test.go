@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
@@ -186,4 +187,113 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		assert.Equal(t, 42, opts.Age)
 		assert.Equal(t, "inactive", opts.Status)
 	})
+}
+
+type TestDefineConfigFlags struct {
+	LogLevel string `default:"info" flag:"log-level" flagdescr:"set the logging level" flaggroup:"Config"`
+	Timeout  int    `flagdescr:"set the timeout, in seconds"`
+	Endpoint string `flagdescr:"the endpoint emitting the verdicts" flaggroup:"Config" flagrequired:"true"`
+}
+
+type TestDefineDeepFlags struct {
+	Deep time.Duration `default:"deepdown" flagdescr:"deep flag" flag:"deep" flagshort:"d" flaggroup:"Deep"`
+}
+
+type TestDefineJSONFlags struct {
+	JSON bool                `flagdescr:"output the verdicts (if any) in JSON form"`
+	JQ   string              `flagshort:"q" flagdescr:"filter the output using a jq expression"`
+	Deep TestDefineDeepFlags `flagrequired:"true"`
+}
+
+type TestDefineOptions struct {
+	TestDefineConfigFlags `flaggroup:"Configuration"`
+	Nest                  TestDefineJSONFlags
+}
+
+func (o TestDefineOptions) Attach(c *cobra.Command)             {}
+func (o TestDefineOptions) Transform(ctx context.Context) error { return nil }
+func (o TestDefineOptions) Validate() []error                   { return nil }
+
+func TestDefine_Integration(t *testing.T) {
+	setupTest := func() {
+		viper.Reset()
+	}
+
+	cases := []struct {
+		desc  string
+		input autoflags.Options
+	}{
+		{
+			"flags definition from struct reference",
+			&TestDefineOptions{},
+		},
+		{
+			"flags definition from struct",
+			TestDefineOptions{},
+		},
+	}
+
+	confAnnotation := []string{"Configuration"}
+	requiredAnnotation := []string{"true"}
+	deepAnnotation := []string{"Deep"}
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			setupTest()
+			c := &cobra.Command{}
+			autoflags.Define(c, tc.input)
+			f := c.Flags()
+			vip := autoflags.GetViper(c)
+
+			// LogLevel
+			logLevelFlag := f.Lookup("log-level")
+			require.NotNil(t, logLevelFlag, "Pflag 'log-level' should be defined")
+			require.Equal(t, "info", vip.Get("log-level"), "Viper default for 'log-level' should be 'info'")
+			require.Equal(t, vip.Get("testdefineconfigflags.loglevel"), vip.Get("log-level"), "Viper should resolve path 'testdefineconfigflags.loglevel' same as 'log-level'")
+			require.NotNil(t, logLevelFlag.Annotations, "'log-level' flag annotations should exist")
+			require.Equal(t, confAnnotation, logLevelFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'log-level' should be 'Configuration' (override)")
+			require.Equal(t, "set the logging level", logLevelFlag.Usage, "Usage string for 'log-level'")
+
+			// Endpoint
+			endpointFlag := f.Lookup("testdefineconfigflags.endpoint")
+			require.NotNil(t, endpointFlag, "Pflag 'testdefineconfigflags.endpoint' should be defined")
+			require.NotNil(t, endpointFlag.Annotations, "'testdefineconfigflags.endpoint' flag annotations should exist")
+			require.Equal(t, confAnnotation, endpointFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'testdefineconfigflags.endpoint' should be 'Configuration' (override)")
+			require.NotNil(t, endpointFlag.Annotations[cobra.BashCompOneRequiredFlag], "'testdefineconfigflags.endpoint' should have required annotation")
+			require.Equal(t, requiredAnnotation, endpointFlag.Annotations[cobra.BashCompOneRequiredFlag], "Required annotation for 'testdefineconfigflags.endpoint'")
+			require.Equal(t, "the endpoint emitting the verdicts", endpointFlag.Usage, "Usage string for 'testdefineconfigflags.endpoint'")
+
+			// Timeout
+			timeoutFlag := f.Lookup("testdefineconfigflags.timeout")
+			require.NotNil(t, timeoutFlag, "Pflag 'testdefineconfigflags.timeout' should be defined")
+			require.NotNil(t, timeoutFlag.Annotations, "'testdefineconfigflags.timeout' flag annotations should exist (or be nil if no annotations are expected)")
+			require.Equal(t, confAnnotation, timeoutFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'testdefineconfigflags.timeout' should be 'Configuration'")
+			require.Equal(t, "set the timeout, in seconds", timeoutFlag.Usage, "Usage string for 'testdefineconfigflags.timeout'")
+
+			// Nest.JSON
+			nestJSONFlag := f.Lookup("nest.json")
+			require.NotNil(t, nestJSONFlag, "Pflag 'nest.json' should be defined")
+			require.Nil(t, nestJSONFlag.Annotations[autoflags.FlagGroupAnnotation], "'nest.json' should have no group annotation unless specified")
+			require.Equal(t, "output the verdicts (if any) in JSON form", nestJSONFlag.Usage, "Usage string for 'nest.json'")
+
+			// Nest.JQ (flag name "nest.jq", shorthand "q")
+			nestJQFlag := f.Lookup("nest.jq")
+			require.NotNil(t, nestJQFlag, "Pflag 'nest.jq' should be defined")
+			require.Nil(t, nestJQFlag.Annotations[autoflags.FlagGroupAnnotation], "'nest.jq' should have no group annotation unless specified")
+			require.NotNil(t, f.ShorthandLookup("q"), "Shorthand 'q' for 'nest.jq' should exist")
+			require.Equal(t, "filter the output using a jq expression", nestJQFlag.Usage, "Usage string for 'nest.jq'")
+
+			// Nest.Deep.Deep (flag name "deep", shorthand "d")
+			deepFlag := f.Lookup("deep")
+			require.NotNil(t, deepFlag, "Pflag 'deep' should be defined")
+			require.NotNil(t, f.ShorthandLookup("d"), "Shorthand 'd' for 'deep' should exist")
+			require.Equal(t, "deepdown", vip.Get("nest.deep.deep"), "Viper default for path 'nest.deep.deep'")                             // Path
+			require.Equal(t, vip.Get("nest.deep.deep"), vip.Get("deep"), "Viper should resolve path 'nest.deep.deep' same as flag 'deep'") // Path vs Alias
+			require.NotNil(t, deepFlag.Annotations, "'deep' flag annotations should exist")
+			require.Equal(t, deepAnnotation, deepFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'deep'")
+			require.NotNil(t, deepFlag.Annotations[cobra.BashCompOneRequiredFlag], "'deep' flag should have required annotation")
+			require.Equal(t, requiredAnnotation, deepFlag.Annotations[cobra.BashCompOneRequiredFlag], "Required annotation for 'deep'")
+			require.Equal(t, "deep flag", deepFlag.Usage, "Usage string for 'deep'")
+		})
+	}
 }
