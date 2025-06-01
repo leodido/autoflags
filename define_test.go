@@ -168,7 +168,7 @@ func (suite *autoflagsSuite) TestDefine_IntTypesSupport() {
 }
 
 type countTestOptions struct {
-	Verbose int `flag:"verbose" flagshort:"v" type:"count" flagdescr:"verbosity level"`
+	Verbose int `flag:"verbose" flagshort:"v" flagtype:"count" flagdescr:"verbosity level"`
 }
 
 func (o countTestOptions) Attach(c *cobra.Command)             {}

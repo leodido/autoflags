@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
@@ -330,4 +332,204 @@ func TestDefine_Integration(t *testing.T) {
 			require.Equal(t, "deep flag", deepFlag.Usage, "Usage string for 'deep'")
 		})
 	}
+}
+
+type RootGlobalOptions struct {
+	Config     string `flag:"config" mod:"trim" validate:"omitempty,filepath"`
+	LogLevel   string `flag:"log-level" mod:"default=info,lcase" validate:"oneof=debug info warn error fatal panic"`
+	GlobalOnly string `flag:"global-only" mod:"default=global_default"`
+}
+
+func (opts *RootGlobalOptions) Attach(c *cobra.Command) {}
+func (opts *RootGlobalOptions) Transform(ctx context.Context) error {
+	return testMolder.Struct(ctx, opts)
+}
+func (opts *RootGlobalOptions) Validate() []error {
+	err := testValidator.Struct(opts)
+	if err == nil {
+		return nil
+	}
+	if vErrs, ok := err.(validator.ValidationErrors); ok {
+		var errs []error
+		for _, fe := range vErrs {
+			errs = append(errs, fe)
+		}
+		return errs
+	}
+	return []error{fmt.Errorf("non-validator error during RootGlobalOptions validation: %w", err)}
+}
+
+type ChildCommandOptions struct {
+	LocalSetting string `flag:"local-setting" validate:"required"`
+	// This is gonna shadow the global one
+	LogLevel         string `flag:"log-level" mod:"default=child_info,lcase" validate:"oneof=debug info warn error fatal panic"`
+	TransformedLocal string // To check local transformation
+}
+
+func (opts *ChildCommandOptions) Attach(c *cobra.Command) {}
+func (opts *ChildCommandOptions) Transform(ctx context.Context) error {
+	if err := testMolder.Struct(ctx, opts); err != nil {
+		return err
+	}
+	opts.TransformedLocal = strings.ToUpper(opts.LocalSetting)
+	return nil
+}
+func (opts *ChildCommandOptions) Validate() []error {
+	err := testValidator.Struct(opts)
+	if err == nil {
+		return nil
+	}
+	if vErrs, ok := err.(validator.ValidationErrors); ok {
+		var errs []error
+		for _, fe := range vErrs {
+			errs = append(errs, fe)
+		}
+		return errs
+	}
+	return []error{fmt.Errorf("non-validator error during ChildCommandOptions validation: %w", err)}
+}
+
+func TestComplexHierarchy_GlobalAndLocalFlags(t *testing.T) {
+	setupCommandsAndOptions := func(t *testing.T) (rootCmd *cobra.Command, childCmd *cobra.Command, globalOpts *RootGlobalOptions, childOpts *ChildCommandOptions, rootCmdRan *bool, childCmdRan *bool) {
+		viper.Reset()
+
+		markRootCmdRan := false
+		markChildCmdRan := false
+		rootCmdRan = &markRootCmdRan
+		childCmdRan = &markChildCmdRan
+
+		globalOpts = &RootGlobalOptions{}
+		childOpts = &ChildCommandOptions{}
+
+		rootCmd = &cobra.Command{
+			Use: "root",
+			PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+				t.Logf("RootCmd/PersistentPreRunE: unmarshalling globalOptions for command %q", cmd.Name())
+
+				return autoflags.Unmarshal(cmd, globalOpts)
+			},
+			RunE: func(cmd *cobra.Command, args []string) error {
+				*rootCmdRan = true
+				t.Logf("RootCmd/RunE exec: globalOpts: %+v", globalOpts)
+
+				return nil
+			},
+		}
+
+		childCmd = &cobra.Command{
+			Use: "child",
+			RunE: func(cmd *cobra.Command, args []string) error {
+				*childCmdRan = true
+				if err := autoflags.Unmarshal(cmd, childOpts); err != nil {
+					return fmt.Errorf("childCmd failed to unmarshal its local options: %w", err)
+				}
+				t.Logf("ChildCmd/RunE executed. GlobalOpts (via test variable): %+v, ChildOpts: %+v", globalOpts, childOpts)
+
+				return nil
+			},
+		}
+		rootCmd.AddCommand(childCmd)
+
+		// Definisci le flag QUI, DOPO viper.Reset() e la creazione dei comandi per questo scenario
+		errDefineGlobal := autoflags.Define(rootCmd, globalOpts, autoflags.WithPersistentFlags(), autoflags.WithValidation())
+		require.NoError(t, errDefineGlobal, "Define for global options should succeed")
+
+		errDefineLocal := autoflags.Define(childCmd, childOpts, autoflags.WithValidation())
+		require.NoError(t, errDefineLocal, "Define for child options should succeed")
+
+		return // Restituisce i comandi e le opzioni configurati
+	}
+
+	t.Run("ValuesFromCLI", func(t *testing.T) {
+		rootCmd, childCmd, globalOpts, childOpts, rootCmdRan, childCmdRan := setupCommandsAndOptions(t)
+
+		spew.Dump(rootCmdRan)
+
+		rootCmd.SetArgs([]string{
+			"child",
+			"--config=cli_config.yaml",
+			"--log-level=DEBUG",
+			"--global-only=cli_global",
+			"--local-setting=cli_local",
+		})
+
+		t.Log("Executing rootCmd for CLI test...")
+		errExecute := rootCmd.Execute()
+		require.NoError(t, errExecute, "rootCmd.Execute() should succeed for CLI test")
+		require.True(t, *childCmdRan, "childCmd.RunE should have been executed")
+
+		assert.Equal(t, "cli_config.yaml", globalOpts.Config, "Global 'config' should be from CLI")
+		assert.Equal(t, "debug", globalOpts.LogLevel, "Global 'log-level' should be 'debug' from CLI (after lcase transform)")
+		assert.Equal(t, "cli_global", globalOpts.GlobalOnly, "Global 'global-only' should be from CLI")
+
+		assert.Equal(t, "cli_local", childOpts.LocalSetting, "Child 'local-setting' should be from CLI")
+		assert.Equal(t, "CLI_LOCAL", childOpts.TransformedLocal, "Child 'TransformedLocal' should be uppercased CLI input")
+		assert.Equal(t, "debug", childOpts.LogLevel, "Child 'log-level' (shadowing global) should be 'debug' from CLI (after lcase transform)")
+
+		childCmdViper := autoflags.GetViper(childCmd)
+		assert.Equal(t, "cli_global", childCmdViper.GetString("global-only"), "Child's viper should have 'global-only' from merged global settings after CLI parse")
+		assert.Equal(t, "debug", childCmdViper.GetString("log-level"), "Child's viper 'log-level' should be 'debug' from CLI")
+	})
+
+	t.Run("ValuesFromConfigFileWithCLIShadowing", func(t *testing.T) {
+		rootCmd, childCmd, globalOpts, childOpts, rootCmdRan, childCmdRan := setupCommandsAndOptions(t)
+
+		spew.Dump(rootCmdRan)
+
+		configFileContent := `
+loglevel: "warn"
+global-only: "config_global"
+child:
+  local-setting: "config_local_from_section"
+  log-level: "error"
+`
+		tmpFile, err := os.CreateTemp("", "autoflags_*.yaml")
+		require.NoError(t, err)
+		defer os.Remove(tmpFile.Name())
+		_, err = tmpFile.WriteString(configFileContent)
+		require.NoError(t, err)
+		err = tmpFile.Close()
+		require.NoError(t, err)
+
+		// Qui non usiamo viper.SetConfigFile() direttamente nel test,
+		// ma passiamo --config al comando, che dovrebbe essere gestito da RootGlobalOptions.Config
+		// e poi usato da Viper nel PersistentPreRunE o globalmente.
+		// Per far sì che Viper legga il file:
+		viper.SetConfigFile(tmpFile.Name()) // Imposta il file di config per il Viper globale
+		errRead := viper.ReadInConfig()     // Leggi nel Viper globale
+		require.NoError(t, errRead, "Error reading viper config file in test setup")
+
+		rootCmd.SetArgs([]string{
+			"child",
+			// Non passiamo --config qui, ci aspettiamo che Viper globale sia già configurato
+			"--log-level=debug", // CLI per global log-level (influenza RootGlobalOptions.LogLevel e la flag locale child.LogLevel)
+		})
+
+		t.Log("Executing rootCmd for ConfigFile test...")
+		errExecute := rootCmd.Execute()
+		require.NoError(t, errExecute)
+		require.True(t, *childCmdRan)
+
+		// Asserzioni su globalOpts
+		// Config non è impostato da CLI, quindi dovrebbe essere il valore zero o default se presente
+		assert.Equal(t, "", globalOpts.Config) // A meno che non abbia un default o venga letto dall'ambiente
+		// Precedenza: CLI ("debug") > Config ("warn") per la flag globale
+		assert.Equal(t, "debug", globalOpts.LogLevel)           // Trasformato da lcase
+		assert.Equal(t, "config_global", globalOpts.GlobalOnly) // Da file di config (Viper globale)
+
+		// Asserzioni su childOpts
+		assert.Equal(t, "config_local_from_section", childOpts.LocalSetting) // Da sezione 'child' del config
+		assert.Equal(t, "CONFIG_LOCAL_FROM_SECTION", childOpts.TransformedLocal)
+		// Per childOpts.LogLevel:
+		// Flag locale "--log-level" su childCmd.
+		// Valore CLI per "--log-level" (persistente) è "debug". Questo vince su tutto.
+		// La flag locale del figlio prenderà questo valore.
+		assert.Equal(t, "debug", childOpts.LogLevel) // Trasformato da lcase
+
+		// Verifica childViper
+		childViper := autoflags.GetViper(childCmd)
+		assert.Equal(t, "config_global", childViper.GetString("global-only"))               // Da config, non sovrascritto da CLI in questo scenario
+		assert.Equal(t, "debug", childViper.GetString("log-level"))                         // Valore CLI della flag (sia essa globale o locale)
+		assert.Equal(t, "config_local_from_section", childViper.GetString("local-setting")) // Da sezione config per il figlio
+	})
 }

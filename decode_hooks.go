@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
-	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -22,16 +21,16 @@ var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
 	"StringToIntSliceHookFunc":     StringToIntSliceHookFunc(","),
 }
 
-func inferDecodeHooks(c *cobra.Command, name, typename string) {
+func (ctx *defineContext) decodeHookFromRegistry(name, typename string) {
 	switch typename {
 	case "time.Duration":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
+		_ = ctx.targetF.SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
 	case "zapcore.Level":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
+		_ = ctx.targetF.SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
 	case "[]string":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
+		_ = ctx.targetF.SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
 	case "[]int":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
+		_ = ctx.targetF.SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
 	}
 }
 

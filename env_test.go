@@ -1,116 +1,99 @@
 package autoflags
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
-	cmd := suite.createTestC("dns", map[string][]string{
-		"freeze": {"S4SONIC_DNS_FREEZE"},
-		"cgroup": {"S4SONIC_DNS_CGROUP"},
-	})
+func (suite *autoflagsSuite) TestBindEnvironmentVariables_PersistentRootFlags_GlobalViper() {
+	originalPrefix := prefix
+	SetEnvPrefix("S4SONIC")
+	defer SetEnvPrefix(originalPrefix)
 
-	v := GetViper(cmd)
-	bindEnv(v, cmd)
+	cmdName := "rootapp"
+	flagName := "global-freeze"
+	expectedEnvVar := "S4SONIC_GLOBAL_FREEZE"
 
-	// Get the scope and check bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
+	cmd := suite.createTestC(cmdName, map[string][]string{
+		flagName: {expectedEnvVar},
+	}, true) // true for global flags
 
-	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should be marked as bound")
-	assert.True(suite.T(), boundEnvs["cgroup"], "cgroup flag should be marked as bound")
+	runCtx := suite.getDefineContextForEnvTest(cmd, true)
+
+	require.True(suite.T(), runCtx.isGlobalV, "Viper instance for registration should be global")
+	require.Equal(suite.T(), viper.GetViper(), runCtx.targetV, "targetV should be the global Viper instance")
+
+	runCtx.bindEnvironmentVariables()
+
+	require.True(suite.T(), runCtx.scope.isEnvBound(flagName), "Persistent flag '%s' should be marked as bound in scope", flagName)
+
+	err := os.Setenv(expectedEnvVar, "global_value_from_env")
+	require.NoError(suite.T(), err)
+	defer os.Unsetenv(expectedEnvVar)
+
+	require.Equal(suite.T(), "global_value_from_env", runCtx.targetV.GetString(flagName),
+		"Global viper should resolve persistent flag '%s' from its bound environment variable '%s'", flagName, expectedEnvVar)
 }
 
-func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
-	cmd := suite.createTestC("dns", map[string][]string{
-		"freeze": {"S4SONIC_DNS_FREEZE"},
-		"cgroup": {"S4SONIC_DNS_CGROUP"},
-	})
+func (suite *autoflagsSuite) TestBindEnvironmentVariables_LocalFlags_FirstCall() {
+	originalPrefix := prefix
+	SetEnvPrefix("S4SONIC")
+	defer SetEnvPrefix(originalPrefix)
 
-	v := GetViper(cmd)
+	cmdName := "dns"
+	flagName := "freeze"
+	expectedEnvVar := "S4SONIC_DNS_FREEZE"
 
-	// First call
-	bindEnv(v, cmd)
+	cmd := suite.createTestC(cmdName, map[string][]string{
+		flagName: {expectedEnvVar},
+	}, false)
 
-	// Add a new flag to simulate second call (like dnsOpts.Attach after commonOpts.Attach)
-	cmd.Flags().String("new-flag", "", "new test flag")
-	_ = cmd.Flags().SetAnnotation("new-flag", FlagEnvsAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
+	runCtx := suite.getDefineContextForEnvTest(cmd, false) // false for local flags
+
+	runCtx.bindEnvironmentVariables()
+
+	require.True(suite.T(), runCtx.scope.isEnvBound(flagName), "Flag '%s' should be marked as bound in scope", flagName)
+
+	err := os.Setenv(expectedEnvVar, "value_from_env")
+	require.NoError(suite.T(), err)
+	defer os.Unsetenv(expectedEnvVar)
+
+	require.Equal(suite.T(), "value_from_env", runCtx.targetV.GetString(flagName),
+		"Scoped viper for command '%s' should resolve flag '%s' from its bound environment variable '%s'", cmdName, flagName, expectedEnvVar)
+}
+
+func (suite *autoflagsSuite) TestBindEnvironmentVariables_Idempotency() {
+	cmd := suite.createTestC("idempotencycmd", map[string][]string{
+		"myflag": {"MYAPP_IDEM_FLAG"},
+	}, false)
+	runCtx := suite.getDefineContextForEnvTest(cmd, false)
+
+	runCtx.bindEnvironmentVariables()
+	require.True(suite.T(), runCtx.scope.isEnvBound("myflag"), "Flag should be bound after first call")
+	// Count the numer of bound env vars into scope
+	countBefore := len(runCtx.scope.getBoundEnvs())
 
 	// Second call should not bind existing flags again, but should bind new flag
-	bindEnv(v, cmd)
+	runCtx.bindEnvironmentVariables()
+	countAfter := len(runCtx.scope.getBoundEnvs())
 
-	// Check bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
-
-	// Check that existing flags are still marked as bound (no duplicates)
-	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should remain bound")
-	assert.True(suite.T(), boundEnvs["cgroup"], "cgroup flag should remain bound")
-	// New flag should be bound
-	assert.True(suite.T(), boundEnvs["new-flag"], "new-flag should be bound")
+	require.Equal(suite.T(), countBefore, countAfter, "Number of uniquely bound envs in scope should not change on second call")
+	assert.True(suite.T(), runCtx.scope.isEnvBound("myflag"), "Flag should still be marked as bound after second call")
 }
 
-func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
-	dnsCmd := suite.createTestC("dns", map[string][]string{
-		"freeze": {"S4SONIC_DNS_FREEZE"},
-	})
+func (suite *autoflagsSuite) TestBindEnvironmentVariables_EmptyFlagSet() {
+	cmd := &cobra.Command{Use: "emptyflags"}
 
-	ttyCmd := suite.createTestC("tty", map[string][]string{
-		"freeze": {"S4SONIC_TTY_FREEZE"}, // Same flag name, different command
-	})
+	runCtx := suite.getDefineContextForEnvTest(cmd, false)
+	runCtx.targetF = cmd.Flags()
 
-	// Bind for both commands
-	v1 := GetViper(dnsCmd)
-	bindEnv(v1, dnsCmd)
+	require.NotPanics(suite.T(), func() {
+		runCtx.bindEnvironmentVariables()
+	}, "bindEnvironmentVariables should not panic with an empty FlagSet")
 
-	v2 := GetViper(ttyCmd)
-	bindEnv(v2, ttyCmd)
-
-	// Both commands should have their flags bound independently
-	dnsScope := getScope(dnsCmd)
-	dnsBoundEnvs := dnsScope.getBoundEnvs()
-	assert.True(suite.T(), dnsBoundEnvs["freeze"], "dns freeze flag should be bound")
-
-	ttyScope := getScope(ttyCmd)
-	ttyBoundEnvs := ttyScope.getBoundEnvs()
-	assert.True(suite.T(), ttyBoundEnvs["freeze"], "tty freeze flag should be bound")
-
-	// Commands should be isolated - verify they have separate scopes
-	assert.NotSame(suite.T(), dnsScope, ttyScope, "commands should have separate scopes")
-	assert.Len(suite.T(), dnsBoundEnvs, 1, "dns should have exactly 1 bound env")
-	assert.Len(suite.T(), ttyBoundEnvs, 1, "tty should have exactly 1 bound env")
-}
-
-func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
-	cmd := suite.createTestC("dns", map[string][]string{
-		"freeze": {"S4SONIC_DNS_FREEZE"}, // Has env annotation
-		"no-env": {},                     // No env annotation
-	})
-
-	v := GetViper(cmd)
-	bindEnv(v, cmd)
-
-	// Only flags with env annotations should be tracked
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
-
-	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should be bound")
-	assert.False(suite.T(), boundEnvs["no-env"], "no-env flag should not be bound")
-}
-
-func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
-	cmd := &cobra.Command{Use: "empty"}
-
-	v := GetViper(cmd)
-
-	// Should not panic with empty command
-	bindEnv(v, cmd)
-
-	// Should have scope but no bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
-
-	assert.NotNil(suite.T(), scope, "empty command should have a scope")
-	assert.Empty(suite.T(), boundEnvs, "empty command should have no bound flags")
+	require.Empty(suite.T(), runCtx.scope.getBoundEnvs(), "No envs should be bound in scope for an empty FlagSet")
 }
