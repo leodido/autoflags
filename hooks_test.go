@@ -765,7 +765,7 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvConfigFile() {
 }
 
 func (suite *autoflagsSuite) TestHooks_ZapcoreLevelFromYAML_InvalidLevel() {
-	configContent := `loglevel: "invalidlevelstring"` // Livello non valido
+	configContent := `loglevel: "invalidlevelstring"`
 	configFile := suite.createTempYAMLFile(configContent)
 	defer os.Remove(configFile)
 
