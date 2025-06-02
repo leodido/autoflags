@@ -27,39 +27,14 @@ const (
 	SearchPathCustom
 )
 
-// ConfigType represents supported configuration file types
-type ConfigType string
-
-const (
-	ConfigTypeYAML ConfigType = "yaml"
-	ConfigTypeJSON ConfigType = "json"
-	ConfigTypeTOML ConfigType = "toml"
-)
-
-// getConfigExtensions returns file extensions for config completion based on type
-func getConfigExtensions(configType ConfigType) []string {
-	switch configType {
-	case ConfigTypeYAML:
-		return []string{"yaml", "yml"}
-	case ConfigTypeJSON:
-		return []string{"json"}
-	case ConfigTypeTOML:
-		return []string{"toml"}
-	default:
-		return []string{"yaml", "yml", "json", "toml"}
-	}
-}
-
 // ConfigOptions defines configuration file behavior
 type ConfigOptions struct {
-	AppName     string           // For default paths and env var name // FIXME: use prefix from SetEnvPrefix? use rootC name?
+	AppName     string           // For default paths and env var name (defaults to the name of the root command)
 	FlagName    string           // Name of config flag (defaults to "config")
-	FileName    string           // Config file name without extension (defaults to "config")
-	ConfigType  ConfigType       // Config file type (defaults to yaml) // FIXME: should this be an array? does viper support config file that can be either yaml or json?
+	ConfigName  string           // Config file name without extension (defaults to "config")
 	EnvVar      string           // Environment variable (defaults to {APPNAME}_CONFIG)
 	SearchPaths []SearchPathType // Search path strategies (defaults to common paths)
 	CustomPaths []string         // Custom search paths (used with SearchPathCustom)
-	Description string           // Flag description (if empty, uses default) // FIXME: not sure we need this (we could always generate it)
 }
 
 var defaultSearchPaths = []SearchPathType{
@@ -76,14 +51,14 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	}
 
 	// Apply defaults
+	if cfgOpts.AppName == "" {
+		cfgOpts.AppName = rootC.Name()
+	}
 	if cfgOpts.FlagName == "" {
 		cfgOpts.FlagName = "config"
 	}
-	if cfgOpts.FileName == "" {
-		cfgOpts.FileName = "config"
-	}
-	if cfgOpts.ConfigType == "" {
-		cfgOpts.ConfigType = ConfigTypeYAML
+	if cfgOpts.ConfigName == "" {
+		cfgOpts.ConfigName = "config"
 	}
 	if cfgOpts.EnvVar == "" && cfgOpts.AppName != "" {
 		cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", strings.ToUpper(cfgOpts.AppName))
@@ -91,23 +66,15 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if len(cfgOpts.SearchPaths) == 0 {
 		cfgOpts.SearchPaths = defaultSearchPaths
 	}
-	if cfgOpts.Description == "" {
-		if cfgOpts.AppName != "" {
-			// FIXME: generate fallbacks to from SearchPaths
-			cfgOpts.Description = fmt.Sprintf("config file (fallbacks to {/etc/%[1]s,$PWD/.%[1]s,$HOME/.%[1]s}/%s.%s))", cfgOpts.AppName, cfgOpts.FileName, cfgOpts.ConfigType)
-		} else {
-			cfgOpts.Description = "config file (searches in default locations if not specified)"
-		}
-	}
 
-	// Create the config file variable
+	descr := genDescription(cfgOpts)
 	configFile := ""
 
 	// Add persistent flag to root command
-	rootC.PersistentFlags().StringVar(&configFile, cfgOpts.FlagName, configFile, cfgOpts.Description)
+	rootC.PersistentFlags().StringVar(&configFile, cfgOpts.FlagName, configFile, descr)
 
 	// Add filename completion
-	extensions := getConfigExtensions(cfgOpts.ConfigType)
+	extensions := []string{"yaml", "yml", "json", "toml"}
 	if err := rootC.MarkPersistentFlagFilename(cfgOpts.FlagName, extensions...); err != nil {
 		return fmt.Errorf("couldn't set filename completion: %w", err)
 	}
@@ -132,6 +99,29 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	return nil
 }
 
+// genDescription creates a description based on the search paths
+func genDescription(opts ConfigOptions) string {
+	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, opts.AppName)
+
+	// Create examples of where config files would be searched
+	var examples []string
+	for _, searchPath := range searchPaths {
+		examples = append(examples, path.Join(searchPath, opts.ConfigName+".{yaml,json,toml}"))
+	}
+
+	if len(examples) == 0 {
+		return "config file"
+	}
+
+	// Limit to first 3 examples to keep description reasonable
+	if len(examples) > 3 {
+		examples = examples[:3]
+		return fmt.Sprintf("config file (fallbacks to: %s, ...)", strings.Join(examples, ", "))
+	}
+
+	return fmt.Sprintf("config file (fallbacks to: %s)", strings.Join(examples, ", "))
+}
+
 // setupConfig handles the viper initialization
 func setupConfig(configFile string, opts ConfigOptions) {
 	if configFile != "" {
@@ -146,8 +136,8 @@ func setupConfig(configFile string, opts ConfigOptions) {
 		viper.AddConfigPath(searchPath)
 	}
 
-	viper.SetConfigName(opts.FileName)
-	viper.SetConfigType(string(opts.ConfigType))
+	// Viper will automatically try different extensions
+	viper.SetConfigName(opts.ConfigName)
 }
 
 // resolveSearchPaths converts SearchPathType strategies to actual paths
