@@ -44,7 +44,7 @@ func WithExclusions(exclusions ...string) DefineOption {
 // Define creates flags from struct tags
 func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	ctx := &defineContext{
-		comm:       c,
+		comm: c,
 	}
 
 	// Apply configuration options
@@ -66,7 +66,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	// Bind flag values to struct field values
 	v.BindPFlags(c.Flags())
 	// Bind environment
-	bindEnv(v, c)
+	bindEnv(c)
 	// Generate the usage message
 	setUsage(c)
 

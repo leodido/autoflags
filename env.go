@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -22,20 +21,30 @@ const (
 )
 
 func SetEnvPrefix(str string) {
-	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(str, envSep), envSep)
+	if str == "" {
+		prefix = ""
+		return
+	}
+
+	norm := envRep.Replace(strings.ToUpper(str))
+	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(norm, envSep), envSep)
 }
 
-func bindEnv(v *viper.Viper, c *cobra.Command) {
+func EnvPrefix() string {
+	return strings.TrimSuffix(prefix, envSep)
+}
+
+func bindEnv(c *cobra.Command) {
 	s := getScope(c)
 
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if envs, defineEnv := f.Annotations[FlagEnvsAnnotation]; defineEnv {
 			// Only bind if we haven't already bound this env var for this command
 			if !s.isEnvBound(f.Name) {
-				s.bindEnv(f.Name)
+				s.setBound(f.Name)
 				input := []string{f.Name}
 				input = append(input, envs...)
-				v.BindEnv(input...)
+				s.viper().BindEnv(input...)
 			}
 		}
 	})

@@ -106,7 +106,7 @@ func TestCommandIsolation(t *testing.T) {
 		initialBoundEnvs2 := scope2.getBoundEnvs()
 
 		// Modify one scope's boundEnvs
-		scope1.bindEnv("test-flag")
+		scope1.setBound("test-flag")
 
 		// Verify isolation
 		updatedBoundEnvs1 := scope1.getBoundEnvs()
@@ -195,7 +195,7 @@ func TestMemoryCleanup(t *testing.T) {
 		assert.NotNil(t, scope.viper())
 
 		// Verify scope isolation by adding some data
-		scope.bindEnv(fmt.Sprintf("test-env-%d", i))
+		scope.setBound(fmt.Sprintf("test-env-%d", i))
 		boundEnvs := scope.getBoundEnvs()
 		assert.True(t, boundEnvs[fmt.Sprintf("test-env-%d", i)])
 

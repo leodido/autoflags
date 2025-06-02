@@ -44,15 +44,21 @@ var defaultSearchPaths = []SearchPathType{
 	SearchPathWorkingDirHidden,
 }
 
+type configEnvVarKey struct{}
+
 // SetupConfig creates the --config persistent flag and sets up viper search paths
 func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if rootC.Parent() != nil {
 		return fmt.Errorf("SetupConfig must be called on the root command")
 	}
 
+	appName := cfgOpts.AppName
+
 	// Apply defaults
-	if cfgOpts.AppName == "" {
-		cfgOpts.AppName = rootC.Name()
+	if appName == "" {
+		appName = rootC.Name()
+		// Automatically set app name as the environment prefix
+		SetEnvPrefix(appName)
 	}
 	if cfgOpts.FlagName == "" {
 		cfgOpts.FlagName = "config"
@@ -60,8 +66,10 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if cfgOpts.ConfigName == "" {
 		cfgOpts.ConfigName = "config"
 	}
-	if cfgOpts.EnvVar == "" && cfgOpts.AppName != "" {
-		cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", strings.ToUpper(cfgOpts.AppName))
+	if cfgOpts.EnvVar == "" {
+		if currentPrefix := EnvPrefix(); currentPrefix != "" {
+			cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", strings.ToUpper(cfgOpts.AppName))
+		}
 	}
 	if len(cfgOpts.SearchPaths) == 0 {
 		cfgOpts.SearchPaths = defaultSearchPaths
