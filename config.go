@@ -79,6 +79,8 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 		} else {
 			cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", normEnv(appName))
 		}
+	} else {
+		cfgOpts.EnvVar = normEnv(cfgOpts.EnvVar)
 	}
 	if len(cfgOpts.SearchPaths) == 0 {
 		cfgOpts.SearchPaths = defaultSearchPaths
