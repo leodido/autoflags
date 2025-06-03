@@ -331,3 +331,306 @@ func TestDefine_Integration(t *testing.T) {
 		})
 	}
 }
+
+func TestSetupConfig_Integration(t *testing.T) {
+	// Setup and cleanup for each test
+	setupTest := func() {
+		viper.Reset()
+		// Clear any environment variables that might interfere
+		os.Unsetenv("TESTAPP_CONFIG")
+		os.Unsetenv("MYAPP_CONFIG")
+		os.Unsetenv("MY-CLI-TOOL_CONFIG")
+		os.Unsetenv("CUSTOM_CONFIG_VAR")
+		os.Unsetenv("MYAPP_SETTINGS")
+	}
+
+	teardownTest := func() {
+		viper.Reset()
+	}
+
+	t.Run("RootCommandValidation_Success", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "testapp"}
+		opts := autoflags.ConfigOptions{}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		assert.NoError(t, err, "SetupConfig should succeed on root command")
+	})
+
+	t.Run("RootCommandValidation_ErrorOnChildCommand", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "root"}
+		childCmd := &cobra.Command{Use: "child"}
+		rootCmd.AddCommand(childCmd)
+
+		opts := autoflags.ConfigOptions{}
+
+		err := autoflags.SetupConfig(childCmd, opts)
+		assert.Error(t, err, "SetupConfig should error on child command")
+		assert.Contains(t, err.Error(), "must be called on the root command")
+	})
+
+	t.Run("DefaultApplication_AllDefaults", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "myapp"}
+		opts := autoflags.ConfigOptions{} // All defaults
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		// Verify flag was created with defaults
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag, "config flag should be created")
+		assert.Equal(t, "", configFlag.DefValue, "default value should be empty")
+		assert.Contains(t, configFlag.Usage, "config file", "usage should mention config file")
+		assert.Contains(t, configFlag.Usage, "myapp", "usage should contain app name")
+
+		// Verify environment variable annotation
+		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
+		require.NotNil(t, envAnnotation, "environment annotation should be set")
+		require.Contains(t, envAnnotation, "MYAPP_CONFIG", "should contain expected env var")
+	})
+
+	t.Run("DefaultApplication_PartialDefaults", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "testapp"}
+		opts := autoflags.ConfigOptions{
+			FlagName:   "settings",
+			ConfigName: "app-config",
+			EnvVar:     "CUSTOM_CONFIG_VAR",
+		}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		// Verify custom flag name
+		configFlag := rootCmd.PersistentFlags().Lookup("settings")
+		require.NotNil(t, configFlag, "custom flag name should be used")
+
+		// Verify no flag with default name
+		defaultFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.Nil(t, defaultFlag, "default config flag should not exist")
+
+		// Verify custom env var
+		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
+		require.NotNil(t, envAnnotation)
+		assert.Contains(t, envAnnotation, "CUSTOM_CONFIG_VAR", "should use custom env var")
+
+		// Verify description includes custom config name
+		assert.Contains(t, configFlag.Usage, "app-config", "usage should contain custom config name")
+	})
+
+	t.Run("DefaultApplication_AppNameFromRootCommand", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "my-cli-tool"}
+		opts := autoflags.ConfigOptions{} // AppName should default to root command name
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag)
+
+		// Should use root command name for env var
+		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
+		require.NotNil(t, envAnnotation)
+		assert.Contains(t, envAnnotation, "MY_CLI_TOOL_CONFIG", "should use root command name for env var")
+
+		// Should use root command name in paths
+		assert.Contains(t, configFlag.Usage, "my-cli-tool", "should use root command name in paths")
+	})
+
+	t.Run("FlagCreation_PersistentFlagProperties", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "testapp"}
+		childCmd := &cobra.Command{Use: "subcmd"}
+		rootCmd.AddCommand(childCmd)
+		opts := autoflags.ConfigOptions{}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag)
+
+		// Verify it's a string flag
+		assert.Equal(t, "string", configFlag.Value.Type(), "should be string flag")
+
+		// Verify it's persistent (should be available on child commands through inherited flags)
+		childConfigFlag := childCmd.InheritedFlags().Lookup("config")
+		assert.NotNil(t, childConfigFlag, "config flag should be inherited by child commands")
+
+		// This simulates actual usage where child commands can access parent persistent flags
+		childCmd.SetArgs([]string{"--config", "test.yaml"})
+		err = childCmd.ParseFlags([]string{"--config", "test.yaml"})
+		assert.NoError(t, err, "child command should be able to parse parent's persistent flag")
+	})
+
+	t.Run("FlagCreation_EnvironmentVariableAnnotation", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmdName := "testcmd"
+		testCases := []struct {
+			name        string
+			appName     string
+			envVar      string
+			expectedEnv string
+		}{
+			{
+				name:        "default_env_var_from_app_name",
+				appName:     "myapp",
+				envVar:      "",
+				expectedEnv: "MYAPP_CONFIG",
+			},
+			{
+				name:        "default_env_var_from_app_name_dash",
+				appName:     "my-app",
+				envVar:      "",
+				expectedEnv: "MY_APP_CONFIG",
+			},
+			{
+				name:        "default_env_var_from_app_name_dot",
+				appName:     "my.app",
+				envVar:      "",
+				expectedEnv: "MY_APP_CONFIG",
+			},
+			{
+				name:        "custom_env_var",
+				appName:     "myapp",
+				envVar:      "CUSTOM_CONFIG",
+				expectedEnv: "CUSTOM_CONFIG",
+			},
+			{
+				name:        "custom_env_var_with_dast",
+				appName:     "myapp",
+				envVar:      "CUSTOM-CONFIG",
+				expectedEnv: "CUSTOM_CONFIG",
+			},
+			{
+				name:        "no_app_name_no_env_var",
+				appName:     "",
+				envVar:      "",
+				expectedEnv: "TESTCMD_CONFIG",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				rootCmd := &cobra.Command{Use: rootCmdName}
+				opts := autoflags.ConfigOptions{
+					AppName: tc.appName,
+					EnvVar:  tc.envVar,
+				}
+
+				err := autoflags.SetupConfig(rootCmd, opts)
+				require.NoError(t, err)
+
+				configFlag := rootCmd.PersistentFlags().Lookup("config")
+				require.NotNil(t, configFlag)
+
+				envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
+				if tc.expectedEnv == "" {
+					assert.Nil(t, envAnnotation, "no env annotation should be set")
+				} else {
+					require.NotNil(t, envAnnotation, "env annotation should be set")
+					assert.Contains(t, envAnnotation, tc.expectedEnv, "should contain expected env var")
+				}
+			})
+		}
+	})
+
+	t.Run("CompleteWorkflow_WithCustomPaths", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "myapp"}
+		opts := autoflags.ConfigOptions{
+			AppName:     "myapp",
+			FlagName:    "config",
+			ConfigName:  "settings",
+			EnvVar:      "MYAPP_SETTINGS",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathHomeHidden, autoflags.SearchPathCustom},
+			CustomPaths: []string{"/opt/myapp"},
+		}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		// Verify all components are set up correctly
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag)
+
+		// Check environment variable
+		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
+		require.NotNil(t, envAnnotation)
+		assert.Contains(t, envAnnotation, "MYAPP_SETTINGS", "should use custom env var")
+
+		// Check description includes custom config name and paths
+		assert.Contains(t, configFlag.Usage, "settings", "should mention custom config name")
+		assert.Contains(t, configFlag.Usage, "config file", "should be identified as config file")
+		assert.Contains(t, configFlag.Usage, "$HOME", "should mask $HOME actual path")
+	})
+
+	t.Run("SearchPaths_DefaultPaths", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "myapp"}
+		opts := autoflags.ConfigOptions{
+			AppName: "myapp",
+		}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag)
+
+		// Description should mention the default search paths
+		usage := configFlag.Usage
+		assert.Contains(t, usage, "config file", "should mention config file")
+
+		// Should contain examples of search paths
+		assert.Contains(t, usage, "myapp", "should contain app name in paths")
+		assert.Contains(t, usage, "{executable_dir}", "should mask the executable directory in paths")
+		assert.Contains(t, usage, "$HOME", "should mask the home directory in paths")
+	})
+
+	t.Run("SearchPaths_CustomSearchPaths", func(t *testing.T) {
+		setupTest()
+		defer teardownTest()
+
+		rootCmd := &cobra.Command{Use: "myapp"}
+		opts := autoflags.ConfigOptions{
+			AppName:     "myapp",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom, autoflags.SearchPathHomeHidden},
+			CustomPaths: []string{"/custom/path1", "/custom/path2"},
+		}
+
+		err := autoflags.SetupConfig(rootCmd, opts)
+		require.NoError(t, err)
+
+		configFlag := rootCmd.PersistentFlags().Lookup("config")
+		require.NotNil(t, configFlag)
+
+		// Description should reflect the custom search behavior
+		usage := configFlag.Usage
+		require.Contains(t, usage, "config file", "should mention config file")
+		require.Contains(t, usage, "/custom/path1", "should mention fallback to custom path")
+		require.Contains(t, usage, ".myapp", "should mention fallback to home dot directory")
+		require.Contains(t, usage, "$HOME", "should mention $HOME directory")
+	})
+}
