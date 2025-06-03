@@ -26,12 +26,15 @@ func SetEnvPrefix(str string) {
 		return
 	}
 
-	norm := envRep.Replace(strings.ToUpper(str))
-	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(norm, envSep), envSep)
+	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(normEnv(str), envSep), envSep)
 }
 
 func EnvPrefix() string {
 	return strings.TrimSuffix(prefix, envSep)
+}
+
+func normEnv(str string) string {
+	return envRep.Replace(strings.ToUpper(str))
 }
 
 func bindEnv(c *cobra.Command) {
@@ -74,9 +77,9 @@ func getEnv(f reflect.StructField, inherit bool, path, alias, envPrefix string) 
 				}
 			}
 
-			ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envPath)))
+			ret = append(ret, prefix+normEnv(envPath))
 			if alias != "" && path != alias {
-				ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envAlias)))
+				ret = append(ret, prefix+normEnv(envAlias))
 			}
 		}
 	}

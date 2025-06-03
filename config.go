@@ -44,22 +44,27 @@ var defaultSearchPaths = []SearchPathType{
 	SearchPathWorkingDirHidden,
 }
 
-type configEnvVarKey struct{}
-
 // SetupConfig creates the --config persistent flag and sets up viper search paths
 func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if rootC.Parent() != nil {
 		return fmt.Errorf("SetupConfig must be called on the root command")
 	}
 
+	// Determine the app name
 	appName := cfgOpts.AppName
-
-	// Apply defaults
 	if appName == "" {
 		appName = rootC.Name()
-		// Automatically set app name as the environment prefix
+	}
+	if appName == "" {
+		return fmt.Errorf("couldn't deteinfrmine the app name")
+	}
+
+	// Automatically set app name as the environment prefix
+	if cfgOpts.AppName == "" {
 		SetEnvPrefix(appName)
 	}
+
+	// Apply defaults
 	if cfgOpts.FlagName == "" {
 		cfgOpts.FlagName = "config"
 	}
@@ -67,15 +72,19 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 		cfgOpts.ConfigName = "config"
 	}
 	if cfgOpts.EnvVar == "" {
-		if currentPrefix := EnvPrefix(); currentPrefix != "" {
-			cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", strings.ToUpper(cfgOpts.AppName))
+		if cfgOpts.AppName == "" {
+			if currentPrefix := EnvPrefix(); currentPrefix != "" {
+				cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", currentPrefix)
+			}
+		} else {
+			cfgOpts.EnvVar = fmt.Sprintf("%s_CONFIG", normEnv(appName))
 		}
 	}
 	if len(cfgOpts.SearchPaths) == 0 {
 		cfgOpts.SearchPaths = defaultSearchPaths
 	}
 
-	descr := genDescription(cfgOpts)
+	descr := genDescription(appName, cfgOpts)
 	configFile := ""
 
 	// Add persistent flag to root command
@@ -108,26 +117,20 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 }
 
 // genDescription creates a description based on the search paths
-func genDescription(opts ConfigOptions) string {
-	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, opts.AppName)
+func genDescription(appName string, opts ConfigOptions) string {
+	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName)
 
-	// Create examples of where config files would be searched
-	var examples []string
-	for _, searchPath := range searchPaths {
-		examples = append(examples, path.Join(searchPath, opts.ConfigName+".{yaml,json,toml}"))
-	}
-
-	if len(examples) == 0 {
+	if len(searchPaths) == 0 {
 		return "config file"
 	}
 
 	// Limit to first 3 examples to keep description reasonable
-	if len(examples) > 3 {
-		examples = examples[:3]
-		return fmt.Sprintf("config file (fallbacks to: %s, ...)", strings.Join(examples, ", "))
+	if len(searchPaths) > 3 {
+		searchPaths = searchPaths[:3]
+		return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(searchPaths, ","), opts.ConfigName)
 	}
 
-	return fmt.Sprintf("config file (fallbacks to: %s)", strings.Join(examples, ", "))
+	return fmt.Sprintf("config file (fallbacks to: {%s})", strings.Join(searchPaths, ","))
 }
 
 // setupConfig handles the viper initialization
