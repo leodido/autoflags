@@ -107,7 +107,7 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 
 	// Set up viper configuration
 	cobra.OnInitialize(func() {
-		setupConfig(configFile, cfgOpts)
+		setupConfig(configFile, appName, cfgOpts)
 	})
 
 	// Store cleanup function
@@ -136,7 +136,7 @@ func genDescription(appName string, opts ConfigOptions) string {
 }
 
 // setupConfig handles the viper initialization
-func setupConfig(configFile string, opts ConfigOptions) {
+func setupConfig(configFile, appName string, opts ConfigOptions) {
 	if configFile != "" {
 		// Use explicit config file
 		viper.SetConfigFile(configFile)
@@ -144,7 +144,7 @@ func setupConfig(configFile string, opts ConfigOptions) {
 		return
 	}
 
-	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, opts.AppName)
+	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName)
 	for _, searchPath := range searchPaths {
 		viper.AddConfigPath(searchPath)
 	}
