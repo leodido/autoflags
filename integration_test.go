@@ -1066,4 +1066,69 @@ jsonlogging: true`
 		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
 		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
 	})
+
+	t.Run("FlagSetupWithDefaults", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config file in default location
+		defaultConfigPath := "/home/testuser/.testapp/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(defaultConfigPath), 0755)
+		require.NoError(t, err)
+
+		defaultConfigContent := `loglevel: info
+jsonlogging: false
+timeout: 30`
+		err = afero.WriteFile(fs, defaultConfigPath, []byte(defaultConfigContent), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":TIMEOUT:")
+					buf.WriteString(viper.GetString("timeout"))
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		// Use minimal configuration options to test defaults
+		configOpts := autoflags.ConfigOptions{}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command with default setup
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify default config setup works
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded with default setup")
+		assert.Contains(t, output, defaultConfigPath, "Should use default config location")
+		assert.Contains(t, output, ":LOGLEVEL:info", "Should load default config values")
+		assert.Contains(t, output, ":TIMEOUT:30", "Should load additional config values")
+	})
 }
