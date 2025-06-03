@@ -710,16 +710,88 @@ tty:
 	}
 
 	t.Run("ConfigFromExplicitFlag", func(t *testing.T) {
+		for _, format := range []string{"yaml", "json"} {
+			t.Run(format, func(t *testing.T) {
+				setupTest()
+				fs, cleanup := setupMockEnvironment(t)
+				defer cleanup()
+
+				// Create explicit config file
+				explicitConfigPath := "/custom/path/myconfig." + format
+				err := fs.MkdirAll(filepath.Dir(explicitConfigPath), 0755)
+				require.NoError(t, err)
+
+				err = afero.WriteFile(fs, explicitConfigPath, []byte(createConfigContent(format)), 0644)
+				require.NoError(t, err)
+
+				// Create a buffer to capture command output
+				var buf bytes.Buffer
+
+				// Set up command with a proper run function
+				rootCmd := &cobra.Command{
+					Use: "testapp",
+					Run: func(cmd *cobra.Command, args []string) {
+						// Test config discovery inside the command execution
+						inUse, message, err := autoflags.UseConfig(func() bool { return true })
+						require.NoError(t, err)
+
+						// Write results to buffer so we can check them
+						if inUse {
+							buf.WriteString("CONFIG_LOADED:")
+							buf.WriteString(message)
+							buf.WriteString(":LOGLEVEL:")
+							buf.WriteString(viper.GetString("loglevel"))
+							buf.WriteString(":JSONLOGGING:")
+							if viper.GetBool("jsonlogging") {
+								buf.WriteString("true")
+							} else {
+								buf.WriteString("false")
+							}
+						} else {
+							buf.WriteString("NO_CONFIG:")
+							buf.WriteString(message)
+						}
+					},
+				}
+
+				// Redirect output to our buffer
+				rootCmd.SetOut(&buf)
+				rootCmd.SetErr(&buf)
+
+				configOpts := autoflags.ConfigOptions{
+					AppName: "testapp",
+				}
+
+				err = autoflags.SetupConfig(rootCmd, configOpts)
+				require.NoError(t, err)
+
+				// Execute the command with the --config flag
+				rootCmd.SetArgs([]string{"--config", explicitConfigPath})
+				err = rootCmd.Execute()
+				require.NoError(t, err)
+
+				// Verify the results from the command execution
+				output := buf.String()
+				assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded")
+				assert.Contains(t, output, explicitConfigPath, "Output should contain the config file path")
+				assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+				assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+				assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+			})
+		}
+	})
+
+	t.Run("ConfigFromSearchPaths", func(t *testing.T) {
 		setupTest()
 		fs, cleanup := setupMockEnvironment(t)
 		defer cleanup()
 
-		// Create explicit config file
-		explicitConfigPath := "/custom/path/myconfig.yaml"
-		err := fs.MkdirAll(filepath.Dir(explicitConfigPath), 0755)
+		// Create config file in one of the default search paths ($HOME/.testapp/)
+		homeConfigPath := "/home/testuser/.testapp/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(homeConfigPath), 0755)
 		require.NoError(t, err)
 
-		err = afero.WriteFile(fs, explicitConfigPath, []byte(createConfigContent("yaml")), 0644)
+		err = afero.WriteFile(fs, homeConfigPath, []byte(createConfigContent("yaml")), 0644)
 		require.NoError(t, err)
 
 		// Create a buffer to capture command output
@@ -763,17 +835,17 @@ tty:
 		err = autoflags.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
-		// Execute the command with the --config flag
-		rootCmd.SetArgs([]string{"--config", explicitConfigPath})
+		// Execute the command WITHOUT --config flag and WITHOUT env var (should discover from search paths)
+		rootCmd.SetArgs([]string{})
 		err = rootCmd.Execute()
 		require.NoError(t, err)
 
 		// Verify the results from the command execution
 		output := buf.String()
-		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded")
-		assert.Contains(t, output, explicitConfigPath, "Output should contain the config file path")
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from search paths")
+		assert.Contains(t, output, homeConfigPath, "Output should contain the search path config file")
 		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
-		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
-		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded from search path")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded from search path")
 	})
 }
