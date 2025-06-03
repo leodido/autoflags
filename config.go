@@ -56,7 +56,7 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 		appName = rootC.Name()
 	}
 	if appName == "" {
-		return fmt.Errorf("couldn't deteinfrmine the app name")
+		return fmt.Errorf("couldn't determine the app name")
 	}
 
 	// Automatically set app name as the environment prefix
@@ -120,31 +120,30 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 
 // genDescription creates a description based on the search paths
 func genDescription(appName string, opts ConfigOptions) string {
-	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName)
+	templatePaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName, true)
 
-	if len(searchPaths) == 0 {
+	if len(templatePaths) == 0 {
 		return "config file"
 	}
 
 	// Limit to first 3 examples to keep description reasonable
-	if len(searchPaths) > 3 {
-		searchPaths = searchPaths[:3]
-		return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(searchPaths, ","), opts.ConfigName)
+	if len(templatePaths) > 3 {
+		templatePaths = templatePaths[:3]
+		return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(templatePaths, ","), opts.ConfigName)
 	}
 
-	return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(searchPaths, ","), opts.ConfigName)
+	return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(templatePaths, ","), opts.ConfigName)
 }
 
 // setupConfig handles the viper initialization
-func setupConfig(configFile, appName string, opts ConfigOptions) {
+func setupConfig(configFile string, appName string, opts ConfigOptions) {
 	if configFile != "" {
 		// Use explicit config file
 		viper.SetConfigFile(configFile)
-
 		return
 	}
 
-	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName)
+	searchPaths := resolveSearchPaths(opts.SearchPaths, opts.CustomPaths, appName, false)
 	for _, searchPath := range searchPaths {
 		viper.AddConfigPath(searchPath)
 	}
@@ -153,34 +152,41 @@ func setupConfig(configFile, appName string, opts ConfigOptions) {
 	viper.SetConfigName(opts.ConfigName)
 }
 
-// resolveSearchPaths converts SearchPathType strategies to actual paths
-func resolveSearchPaths(pathTypes []SearchPathType, customPaths []string, appName string) []string {
+// resolveSearchPaths converts SearchPathType strategies to paths
+// When mask=true, returns template paths for descriptions (e.g., $HOME, $PWD)
+// When mask=false, returns actual resolved paths for viper
+// appName is guaranteed to be non-empty by SetupConfig
+func resolveSearchPaths(pathTypes []SearchPathType, customPaths []string, appName string, mask bool) []string {
 	var paths []string
 	customIndex := 0
 
 	for _, pathType := range pathTypes {
 		switch pathType {
 		case SearchPathEtc:
-			if appName != "" {
-				paths = append(paths, path.Join("/etc", appName))
-			}
+			paths = append(paths, path.Join("/etc", appName))
 
 		case SearchPathHomeHidden:
-			if appName != "" {
+			if mask {
+				paths = append(paths, path.Join("$HOME", fmt.Sprintf(".%s", appName)))
+			} else {
 				if home, _ := os.UserHomeDir(); home != "" {
 					paths = append(paths, path.Join(home, fmt.Sprintf(".%s", appName)))
 				}
 			}
 
 		case SearchPathWorkingDirHidden:
-			if appName != "" {
+			if mask {
+				paths = append(paths, path.Join("$PWD", fmt.Sprintf(".%s", appName)))
+			} else {
 				if pwd, _ := os.Getwd(); pwd != "" {
 					paths = append(paths, path.Join(pwd, fmt.Sprintf(".%s", appName)))
 				}
 			}
 
 		case SearchPathExecutableDirHidden:
-			if appName != "" {
+			if mask {
+				paths = append(paths, path.Join("{executable_dir}", fmt.Sprintf(".%s", appName)))
+			} else {
 				if exec, _ := os.Executable(); exec != "" {
 					execDir := filepath.Dir(exec)
 					paths = append(paths, path.Join(execDir, fmt.Sprintf(".%s", appName)))
@@ -189,8 +195,16 @@ func resolveSearchPaths(pathTypes []SearchPathType, customPaths []string, appNam
 
 		case SearchPathCustom:
 			if customIndex < len(customPaths) {
-				expandedPath := resolveSearchPath(customPaths[customIndex], appName)
-				paths = append(paths, expandedPath)
+				customPath := customPaths[customIndex]
+				if mask {
+					// For masked paths, show template with {APP} replaced but don't resolve env vars
+					templatePath := strings.ReplaceAll(customPath, "{APP}", appName)
+					paths = append(paths, templatePath)
+				} else {
+					// For actual paths, fully resolve environment variables and placeholders
+					expandedPath := resolveSearchPath(customPath, appName)
+					paths = append(paths, expandedPath)
+				}
 				customIndex++
 			}
 		}
