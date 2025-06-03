@@ -1,10 +1,12 @@
 package autoflags_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
+	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -337,10 +340,10 @@ func TestSetupConfig_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
 		// Clear any environment variables that might interfere
-		os.Unsetenv("TESTAPP_CONFIG")
 		os.Unsetenv("MYAPP_CONFIG")
-		os.Unsetenv("MY-CLI-TOOL_CONFIG")
 		os.Unsetenv("CUSTOM_CONFIG_VAR")
+		os.Unsetenv("MY_CLI_TOOL_CONFIG")
+		os.Unsetenv("TESTCMD_CONFIG")
 		os.Unsetenv("MYAPP_SETTINGS")
 	}
 
@@ -632,5 +635,145 @@ func TestSetupConfig_Integration(t *testing.T) {
 		require.Contains(t, usage, "/custom/path1", "should mention fallback to custom path")
 		require.Contains(t, usage, ".myapp", "should mention fallback to home dot directory")
 		require.Contains(t, usage, "$HOME", "should mention $HOME directory")
+	})
+}
+
+func TestConfigFlow_FileDiscovery(t *testing.T) {
+	setupTest := func() {
+		viper.Reset()
+	}
+
+	setupMockEnvironment := func(t *testing.T) (fs afero.Fs, cleanup func()) {
+		// Create mock filesystem
+		fs = afero.NewMemMapFs()
+
+		// Store original environment values
+		originalHome := os.Getenv("HOME")
+		originalPwd := os.Getenv("PWD")
+
+		// Set mock environment values
+		mockHome := "/home/testuser"
+		mockPwd := "/current/dir"
+
+		os.Setenv("HOME", mockHome)
+		os.Setenv("PWD", mockPwd)
+
+		// Create mock directories in filesystem
+		err := fs.MkdirAll(mockHome, 0755)
+		require.NoError(t, err)
+		err = fs.MkdirAll(mockPwd, 0755)
+		require.NoError(t, err)
+		err = fs.MkdirAll("/etc", 0755)
+		require.NoError(t, err)
+
+		// Configure viper to use our mock filesystem
+		viper.SetFs(fs)
+
+		return fs, func() {
+			os.Setenv("HOME", originalHome)
+			os.Setenv("PWD", originalPwd)
+			viper.Reset()
+		}
+	}
+
+	createConfigContent := func(configType string) string {
+		switch configType {
+		case "yaml":
+			return `
+loglevel: debug
+jsonlogging: true
+dns:
+  freeze: true
+  cgroups:
+    - test-group1
+    - test-group2
+tty:
+  ignore-comms:
+    - bash
+    - zsh
+`
+		case "json":
+			return `{
+  "loglevel": "debug",
+  "jsonlogging": true,
+  "dns": {
+    "freeze": true,
+    "cgroups": ["test-group1", "test-group2"]
+  },
+  "tty": {
+    "ignore-comms": ["bash", "zsh"]
+  }
+}`
+		default:
+			return ""
+		}
+	}
+
+	t.Run("ConfigFromExplicitFlag", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create explicit config file
+		explicitConfigPath := "/custom/path/myconfig.yaml"
+		err := fs.MkdirAll(filepath.Dir(explicitConfigPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, explicitConfigPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName: "testapp",
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command with the --config flag
+		rootCmd.SetArgs([]string{"--config", explicitConfigPath})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify the results from the command execution
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded")
+		assert.Contains(t, output, explicitConfigPath, "Output should contain the config file path")
+		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
 	})
 }
