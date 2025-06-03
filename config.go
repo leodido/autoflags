@@ -34,7 +34,7 @@ type ConfigOptions struct {
 	ConfigName  string           // Config file name without extension (defaults to "config")
 	EnvVar      string           // Environment variable (defaults to {APPNAME}_CONFIG)
 	SearchPaths []SearchPathType // Search path strategies (defaults to common paths)
-	CustomPaths []string         // Custom search paths (used with SearchPathCustom)
+	CustomPaths []string         // Custom search paths (when SearchPaths contains SearchPathCustom)
 }
 
 var defaultSearchPaths = []SearchPathType{

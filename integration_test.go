@@ -848,4 +848,222 @@ tty:
 		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded from search path")
 		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded from search path")
 	})
+
+	t.Run("ConfigPrecedenceOrder", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config files in multiple locations with different values
+		explicitConfigPath := "/explicit/config.yaml"
+		envConfigPath := "/env/config.yaml"
+		homeConfigPath := "/home/testuser/.testapp/config.yaml"
+
+		err := fs.MkdirAll(filepath.Dir(explicitConfigPath), 0755)
+		require.NoError(t, err)
+		err = fs.MkdirAll(filepath.Dir(envConfigPath), 0755)
+		require.NoError(t, err)
+		err = fs.MkdirAll(filepath.Dir(homeConfigPath), 0755)
+		require.NoError(t, err)
+
+		// Create configs with different loglevel values to test precedence
+		explicitConfig := `loglevel: error
+jsonlogging: false`
+		envConfig := `loglevel: warn
+jsonlogging: false`
+		homeConfig := `loglevel: debug
+jsonlogging: true`
+
+		err = afero.WriteFile(fs, explicitConfigPath, []byte(explicitConfig), 0644)
+		require.NoError(t, err)
+		err = afero.WriteFile(fs, envConfigPath, []byte(envConfig), 0644)
+		require.NoError(t, err)
+		err = afero.WriteFile(fs, homeConfigPath, []byte(homeConfig), 0644)
+		require.NoError(t, err)
+
+		// Set environment variable
+		originalConfigEnv := os.Getenv("TESTAPP_CONFIG")
+		os.Setenv("TESTAPP_CONFIG", envConfigPath)
+		defer func() {
+			if originalConfigEnv != "" {
+				os.Setenv("TESTAPP_CONFIG", originalConfigEnv)
+			} else {
+				os.Unsetenv("TESTAPP_CONFIG")
+			}
+		}()
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName: "testapp",
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute with explicit --config flag (should take precedence over env var and search paths)
+		rootCmd.SetArgs([]string{"--config", explicitConfigPath})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify explicit config takes precedence
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded")
+		assert.Contains(t, output, explicitConfigPath, "Should use explicit config file")
+		assert.Contains(t, output, ":LOGLEVEL:error", "Should use explicit config loglevel (error)")
+		assert.Contains(t, output, ":JSONLOGGING:false", "Should use explicit config jsonlogging (false)")
+	})
+
+	t.Run("ConfigFileNotFound", func(t *testing.T) {
+		setupTest()
+		_, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Don't create any config files - test when none are found
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName: "testapp",
+		}
+
+		err := autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command (should not find any config)
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify no config was found
+		output := buf.String()
+		assert.Contains(t, output, "NO_CONFIG:", "No config should be found")
+		assert.Contains(t, output, "Running without a configuration file", "Should indicate no config file found")
+	})
+
+	t.Run("CustomSearchPaths", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config file in a custom search path location
+		customConfigPath := "/custom/search/path/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(customConfigPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, customConfigPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName:     "testapp",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			CustomPaths: []string{"/custom/search/path"},
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command (should find config in custom search path)
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify config was found in custom search path
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from custom search path")
+		assert.Contains(t, output, customConfigPath, "Output should contain custom config file path")
+		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+	})
 }
