@@ -130,7 +130,7 @@ func genDescription(appName string, opts ConfigOptions) string {
 		return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(searchPaths, ","), opts.ConfigName)
 	}
 
-	return fmt.Sprintf("config file (fallbacks to: {%s})", strings.Join(searchPaths, ","))
+	return fmt.Sprintf("config file (fallbacks to: {%s}/%s.{yaml,json,toml})", strings.Join(searchPaths, ","), opts.ConfigName)
 }
 
 // setupConfig handles the viper initialization
