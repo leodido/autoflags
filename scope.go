@@ -53,7 +53,7 @@ func (s *scope) viper() *spf13viper.Viper {
 	return s.v
 }
 
-// isBound checks if an environment variable is already bound for this command
+// isEnvBound checks if an environment variable is already bound for this command
 func (s *scope) isEnvBound(flagName string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -62,7 +62,7 @@ func (s *scope) isEnvBound(flagName string) bool {
 }
 
 // setBound marks an environment variable as bound for this command
-func (s *scope) bindEnv(flagName string) {
+func (s *scope) setBound(flagName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.boundEnvs[flagName] = true

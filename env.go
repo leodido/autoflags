@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
 )
 
 var (
@@ -22,20 +21,33 @@ const (
 )
 
 func SetEnvPrefix(str string) {
-	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(str, envSep), envSep)
+	if str == "" {
+		prefix = ""
+		return
+	}
+
+	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(normEnv(str), envSep), envSep)
 }
 
-func bindEnv(v *viper.Viper, c *cobra.Command) {
+func EnvPrefix() string {
+	return strings.TrimSuffix(prefix, envSep)
+}
+
+func normEnv(str string) string {
+	return envRep.Replace(strings.ToUpper(str))
+}
+
+func bindEnv(c *cobra.Command) {
 	s := getScope(c)
 
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if envs, defineEnv := f.Annotations[FlagEnvsAnnotation]; defineEnv {
 			// Only bind if we haven't already bound this env var for this command
 			if !s.isEnvBound(f.Name) {
-				s.bindEnv(f.Name)
+				s.setBound(f.Name)
 				input := []string{f.Name}
 				input = append(input, envs...)
-				v.BindEnv(input...)
+				s.viper().BindEnv(input...)
 			}
 		}
 	})
@@ -65,9 +77,9 @@ func getEnv(f reflect.StructField, inherit bool, path, alias, envPrefix string) 
 				}
 			}
 
-			ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envPath)))
+			ret = append(ret, prefix+normEnv(envPath))
 			if alias != "" && path != alias {
-				ret = append(ret, prefix+envRep.Replace(strings.ToUpper(envAlias)))
+				ret = append(ret, prefix+normEnv(envAlias))
 			}
 		}
 	}
