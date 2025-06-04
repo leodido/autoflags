@@ -345,6 +345,8 @@ func TestSetupConfig_Integration(t *testing.T) {
 		os.Unsetenv("MY_CLI_TOOL_CONFIG")
 		os.Unsetenv("TESTCMD_CONFIG")
 		os.Unsetenv("MYAPP_SETTINGS")
+		// Reset the global prefix
+		autoflags.SetEnvPrefix("")
 	}
 
 	teardownTest := func() {
@@ -360,21 +362,6 @@ func TestSetupConfig_Integration(t *testing.T) {
 
 		err := autoflags.SetupConfig(rootCmd, opts)
 		assert.NoError(t, err, "SetupConfig should succeed on root command")
-	})
-
-	t.Run("RootCommandValidation_ErrorOnChildCommand", func(t *testing.T) {
-		setupTest()
-		defer teardownTest()
-
-		rootCmd := &cobra.Command{Use: "root"}
-		childCmd := &cobra.Command{Use: "child"}
-		rootCmd.AddCommand(childCmd)
-
-		opts := autoflags.ConfigOptions{}
-
-		err := autoflags.SetupConfig(childCmd, opts)
-		assert.Error(t, err, "SetupConfig should error on child command")
-		assert.Contains(t, err.Error(), "must be called on the root command")
 	})
 
 	t.Run("DefaultApplication_AllDefaults", func(t *testing.T) {
@@ -532,7 +519,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		opts := autoflags.ConfigOptions{
 			AppName:     "myapp",
 			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom, autoflags.SearchPathHomeHidden},
-			CustomPaths: []string{"/custom/path1", "/custom/path2"},
+			CustomPaths: []string{"/custom/{APP}/path1", "$PWD/path2"},
 		}
 
 		err := autoflags.SetupConfig(rootCmd, opts)
@@ -544,7 +531,8 @@ func TestSetupConfig_Integration(t *testing.T) {
 		// Description should reflect the custom search behavior
 		usage := configFlag.Usage
 		require.Contains(t, usage, "config file", "should mention config file")
-		require.Contains(t, usage, "/custom/path1", "should mention fallback to custom path")
+		require.Contains(t, usage, "/custom/myapp/path1", "should mention fallback to custom path")
+		require.Contains(t, usage, "$PWD/path2", "should mention $PWD custom path without resolving $PWD")
 		require.Contains(t, usage, ".myapp", "should mention fallback to home dot directory")
 		require.Contains(t, usage, "$HOME", "should mention $HOME directory")
 	})
@@ -553,6 +541,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 func TestConfigFlow_FileDiscovery(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
+		autoflags.SetEnvPrefix("")
 	}
 
 	setupMockEnvironment := func(t *testing.T) (fs afero.Fs, cleanup func()) {
@@ -979,6 +968,216 @@ jsonlogging: true`
 		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
 	})
 
+	t.Run("CustomSearchPathsContainingAppPlaceholder", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config file in a custom search path location
+		customConfigPath := "/custom/testapp/path/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(customConfigPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, customConfigPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName:     "testapp",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			CustomPaths: []string{"/custom/{APP}/path"},
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command (should find config in custom search path)
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify config was found in custom search path
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from custom search path")
+		assert.Contains(t, output, customConfigPath, "Output should contain custom config file path")
+		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+	})
+
+	t.Run("CustomSearchPathsContainingHomeVar", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config file in a custom search path location
+		customConfigPath := fmt.Sprintf("%s/custom/path/config.yaml", os.Getenv("HOME"))
+		err := fs.MkdirAll(filepath.Dir(customConfigPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, customConfigPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName:     "testapp",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			CustomPaths: []string{"$HOME/custom/path"},
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command (should find config in custom search path)
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify config was found in custom search path
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from custom search path")
+		assert.Contains(t, output, customConfigPath, "Output should contain custom config file path")
+		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+	})
+
+	t.Run("CustomSearchPathsContainingPwdVar", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		// Create config file in a custom search path location
+		customConfigPath := fmt.Sprintf("%s/path/config.yaml", os.Getenv("PWD"))
+		err := fs.MkdirAll(filepath.Dir(customConfigPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, customConfigPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		// Create a buffer to capture command output
+		var buf bytes.Buffer
+
+		// Set up command with a proper run function
+		rootCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				// Test config discovery inside the command execution
+				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				require.NoError(t, err)
+
+				// Write results to buffer so we can check them
+				if inUse {
+					buf.WriteString("CONFIG_LOADED:")
+					buf.WriteString(message)
+					buf.WriteString(":LOGLEVEL:")
+					buf.WriteString(viper.GetString("loglevel"))
+					buf.WriteString(":JSONLOGGING:")
+					if viper.GetBool("jsonlogging") {
+						buf.WriteString("true")
+					} else {
+						buf.WriteString("false")
+					}
+				} else {
+					buf.WriteString("NO_CONFIG:")
+					buf.WriteString(message)
+				}
+			},
+		}
+
+		// Redirect output to our buffer
+		rootCmd.SetOut(&buf)
+		rootCmd.SetErr(&buf)
+
+		configOpts := autoflags.ConfigOptions{
+			AppName:     "testapp",
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			CustomPaths: []string{"$PWD/path"},
+		}
+
+		err = autoflags.SetupConfig(rootCmd, configOpts)
+		require.NoError(t, err)
+
+		// Execute the command (should find config in custom search path)
+		rootCmd.SetArgs([]string{})
+		err = rootCmd.Execute()
+		require.NoError(t, err)
+
+		// Verify config was found in custom search path
+		output := buf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from custom search path")
+		assert.Contains(t, output, customConfigPath, "Output should contain custom config file path")
+		assert.Contains(t, output, "Using config file:", "Output should indicate config file is being used")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
+		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
+	})
+
 	t.Run("FlagSetupWithDefaults", func(t *testing.T) {
 		setupTest()
 		fs, cleanup := setupMockEnvironment(t)
@@ -1203,4 +1402,378 @@ timeout: 30`
 		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
 		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
 	})
+}
+
+func TestSetupOrdering_ErrorConditions(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	t.Run("setup_debug_on_child_command", func(t *testing.T) {
+		rootCmd := &cobra.Command{Use: "root"}
+		childCmd := &cobra.Command{Use: "child"}
+		rootCmd.AddCommand(childCmd)
+
+		// SetupDebug should fail on child command regardless of when it's called
+		err := autoflags.SetupDebug(childCmd, autoflags.DebugOptions{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must be called on the root command")
+	})
+
+	t.Run("setup_config_on_child_command", func(t *testing.T) {
+		rootCmd := &cobra.Command{Use: "root"}
+		childCmd := &cobra.Command{Use: "child"}
+		rootCmd.AddCommand(childCmd)
+
+		// SetupConfig should fail on child command regardless of when it's called
+		err := autoflags.SetupConfig(childCmd, autoflags.ConfigOptions{})
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "must be called on the root command")
+	})
+}
+
+func TestSetupOrdering_CustomOptions(t *testing.T) {
+	viper.Reset()
+	defer viper.Reset()
+
+	// Test with custom flag names and environment variables
+	opts := &OrderingTestOptions{}
+	cmd := &cobra.Command{Use: "customapp"}
+
+	// Use custom options
+	debugOpts := autoflags.DebugOptions{
+		FlagName: "debug-mode",
+		EnvVar:   "CUSTOM_DEBUG",
+	}
+	configOpts := autoflags.ConfigOptions{
+		AppName:    "customapp",
+		FlagName:   "settings",
+		ConfigName: "app-settings",
+		EnvVar:     "CUSTOM_CONFIG",
+	}
+
+	err := autoflags.SetupConfig(cmd, configOpts)
+	require.NoError(t, err)
+
+	err = autoflags.Define(cmd, opts)
+	require.NoError(t, err)
+
+	err = autoflags.SetupDebug(cmd, debugOpts)
+	require.NoError(t, err)
+
+	// Verify custom flags exist
+	persistentFlags := cmd.PersistentFlags()
+	assert.NotNil(t, persistentFlags.Lookup("debug-mode"), "Custom debug flag should exist")
+	assert.NotNil(t, persistentFlags.Lookup("settings"), "Custom config flag should exist")
+
+	// Verify custom environment variables are annotated
+	debugFlag := persistentFlags.Lookup("debug-mode")
+	envAnnotation := debugFlag.Annotations[autoflags.FlagEnvsAnnotation]
+	assert.Contains(t, envAnnotation, "CUSTOM_DEBUG", "Custom debug env var should be annotated")
+}
+
+type OrderingTestOptions struct {
+	LogLevel string `flag:"log-level" flagenv:"true" flagdescr:"logging level"`
+	Timeout  int    `flag:"timeout" flagenv:"true" flagdescr:"timeout in seconds"`
+	Verbose  bool   `flag:"verbose" flagenv:"true" flagdescr:"verbose output"`
+}
+
+func (o *OrderingTestOptions) Attach(c *cobra.Command) {}
+
+func testOrderingScenario(t *testing.T, setupFunc func(*cobra.Command, *OrderingTestOptions) error) {
+	// Setup test environment
+	viper.Reset()
+	autoflags.SetEnvPrefix("")
+
+	// Setup mock filesystem
+	fs := afero.NewMemMapFs()
+	viper.SetFs(fs)
+
+	// Store original environment values
+	originalEnvs := map[string]string{
+		"HOME":                  os.Getenv("HOME"),
+		"TESTAPP_LOG_LEVEL":     os.Getenv("TESTAPP_LOG_LEVEL"),
+		"TESTAPP_TIMEOUT":       os.Getenv("TESTAPP_TIMEOUT"),
+		"TESTAPP_VERBOSE":       os.Getenv("TESTAPP_VERBOSE"),
+		"TESTAPP_DEBUG_OPTIONS": os.Getenv("TESTAPP_DEBUG_OPTIONS"),
+		"TESTAPP_CONFIG":        os.Getenv("TESTAPP_CONFIG"),
+	}
+
+	// Cleanup function
+	defer func() {
+		for key, value := range originalEnvs {
+			if value != "" {
+				os.Setenv(key, value)
+			} else {
+				os.Unsetenv(key)
+			}
+		}
+		viper.Reset()
+	}()
+
+	// Set up test environment variables
+	mockHome := "/home/testuser"
+	os.Setenv("HOME", mockHome)
+	os.Setenv("TESTAPP_LOG_LEVEL", "debug")
+	os.Setenv("TESTAPP_TIMEOUT", "60")
+	os.Setenv("TESTAPP_VERBOSE", "true")
+	os.Setenv("TESTAPP_DEBUG_OPTIONS", "true")
+
+	// Create mock directories and config file
+	err := fs.MkdirAll(mockHome+"/.testapp", 0755)
+	require.NoError(t, err)
+
+	configContent := `log-level: info
+timeout: 30
+verbose: false`
+	configPath := mockHome + "/.testapp/config.yaml"
+	err = afero.WriteFile(fs, configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	// Create command and options
+	var captureOut bytes.Buffer
+	opts := &OrderingTestOptions{}
+
+	cmd := &cobra.Command{
+		Use: "testapp",
+		Run: func(cmd *cobra.Command, args []string) {
+			// Test that config file discovery works
+			inUse, message, err := autoflags.UseConfig(func() bool { return true })
+			require.NoError(t, err)
+
+			if inUse {
+				captureOut.WriteString("CONFIG_LOADED:")
+				captureOut.WriteString(message)
+			} else {
+				captureOut.WriteString("NO_CONFIG:")
+				captureOut.WriteString(message)
+			}
+
+			// Test that debug functionality works
+			captureOut.WriteRune('\n')
+			autoflags.UseDebug(cmd, &captureOut)
+
+			// Capture final values to verify environment variables took precedence
+			v := autoflags.GetViper(cmd)
+			captureOut.WriteString(":FINAL_LOG_LEVEL:")
+			captureOut.WriteString(v.GetString("log-level"))
+			captureOut.WriteString(":FINAL_TIMEOUT:")
+			captureOut.WriteString(v.GetString("timeout"))
+			captureOut.WriteString(":FINAL_VERBOSE:")
+			if v.GetBool("verbose") {
+				captureOut.WriteString("true")
+			} else {
+				captureOut.WriteString("false")
+			}
+		},
+	}
+
+	// Redirect command output to our buffer
+	cmd.SetOut(&captureOut)
+	cmd.SetErr(&captureOut)
+
+	// Execute the setup function with the specific ordering
+	err = setupFunc(cmd, opts)
+	require.NoError(t, err, "Setup function should succeed regardless of ordering")
+
+	// Verify all expected flags exist
+	t.Run("flags_exist", func(t *testing.T) {
+		// Check that all flags are present
+		flags := cmd.Flags()
+
+		assert.NotNil(t, flags.Lookup("log-level"), "log-level flag should exist")
+		assert.NotNil(t, flags.Lookup("timeout"), "timeout flag should exist")
+		assert.NotNil(t, flags.Lookup("verbose"), "verbose flag should exist")
+
+		persistentFlags := cmd.PersistentFlags()
+		assert.NotNil(t, persistentFlags.Lookup("debug-options"), "debug-options flag should exist")
+		assert.NotNil(t, persistentFlags.Lookup("config"), "config flag should exist")
+	})
+
+	// Execute the command and verify behavior
+	err = cmd.Execute()
+	require.NoError(t, err, "Command execution should succeed")
+
+	// Verify the results
+	output := captureOut.String()
+
+	t.Run("config_discovery", func(t *testing.T) {
+		// Config file should be discovered and loaded
+		assert.Contains(t, output, "CONFIG_LOADED:", "Config should be loaded from search paths")
+		assert.Contains(t, output, configPath, "Should use the mock config file")
+	})
+
+	t.Run("environment_precedence", func(t *testing.T) {
+		// Environment variables should take precedence over config file values
+		assert.Contains(t, output, ":FINAL_LOG_LEVEL:debug", "Environment LOG_LEVEL should override config")
+		assert.Contains(t, output, ":FINAL_TIMEOUT:60", "Environment TIMEOUT should override config")
+		assert.Contains(t, output, ":FINAL_VERBOSE:true", "Environment VERBOSE should override config")
+	})
+
+	t.Run("debug_functionality", func(t *testing.T) {
+		// Debug output should be present since TESTAPP_DEBUG_OPTIONS=true
+		assert.Contains(t, output, "Aliases:", "Debug output should contain alias information")
+		assert.Contains(t, output, "map[string]string{\"loglevel\":\"log-level\"}", "Debug output should contain alias values")
+		assert.Contains(t, output, "Values:", "Debug output should be triggered by environment variable and show final values")
+		assert.Contains(t, output, "Env:", "Debug output should contain env information")
+		assert.Contains(t, output, "\"timeout\":[]string{\"TESTAPP_TIMEOUT\"}", "Debug output should contain timeout env information")
+		assert.Contains(t, output, "\"log-level\":[]string{\"TESTAPP_LOGLEVEL\", \"TESTAPP_LOG_LEVEL\"}", "Debug output should contain log-level env information")
+		assert.Contains(t, output, "\"log-level\":\"debug\"", "Debug output should contain log-level final value")
+		assert.Contains(t, output, "\"debug-options\":\"true\"", "Debug output should contain debug-options final value")
+	})
+
+	// Test flag-based overrides as well
+	t.Run("flag_overrides", func(t *testing.T) {
+		// Reset output buffer
+		captureOut.Reset()
+
+		// Create new command instance with same setup
+		flagTestCmd := &cobra.Command{
+			Use: "testapp",
+			Run: func(cmd *cobra.Command, args []string) {
+				v := autoflags.GetViper(cmd)
+				captureOut.WriteString("FLAG_LOG_LEVEL:")
+				captureOut.WriteString(v.GetString("log-level"))
+				captureOut.WriteString(":FLAG_TIMEOUT:")
+				captureOut.WriteString(v.GetString("timeout"))
+			},
+		}
+		flagTestCmd.SetOut(&captureOut)
+		flagTestCmd.SetErr(&captureOut)
+
+		flagTestOpts := &OrderingTestOptions{}
+		err = setupFunc(flagTestCmd, flagTestOpts)
+		require.NoError(t, err)
+
+		// Test with explicit flags (should override environment)
+		flagTestCmd.SetArgs([]string{"--log-level", "error", "--timeout", "120"})
+		err = flagTestCmd.Execute()
+		require.NoError(t, err)
+
+		flagOutput := captureOut.String()
+		assert.Contains(t, flagOutput, "FLAG_LOG_LEVEL:error", "Explicit flag should override environment")
+		assert.Contains(t, flagOutput, "FLAG_TIMEOUT:120", "Explicit flag should override environment")
+	})
+}
+
+func TestSetupOrdering_AllCombinations(t *testing.T) {
+	orderings := []struct {
+		name  string
+		setup func(*cobra.Command, *OrderingTestOptions) error
+	}{
+		{
+			name: "SetupDebug_SetupConfig_Define",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+					return err
+				}
+				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+					return err
+				}
+
+				return autoflags.Define(cmd, opts)
+			},
+		},
+		{
+			name: "SetupDebug_Define_SetupConfig",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+					return err
+				}
+				if err := autoflags.Define(cmd, opts); err != nil {
+					return err
+				}
+
+				return autoflags.SetupConfig(cmd, autoflags.ConfigOptions{})
+			},
+		},
+		{
+			name: "SetupConfig_SetupDebug_Define",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+					return err
+				}
+				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+					return err
+				}
+
+				return autoflags.Define(cmd, opts)
+			},
+		},
+		{
+			name: "SetupConfig_Define_SetupDebug",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+					return err
+				}
+				if err := autoflags.Define(cmd, opts); err != nil {
+					return err
+				}
+
+				return autoflags.SetupDebug(cmd, autoflags.DebugOptions{})
+			},
+		},
+		{
+			name: "Define_SetupDebug_SetupConfig",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.Define(cmd, opts); err != nil {
+					return err
+				}
+				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+					return err
+				}
+
+				return autoflags.SetupConfig(cmd, autoflags.ConfigOptions{})
+			},
+		},
+		{
+			name: "Define_SetupConfig_SetupDebug",
+			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
+				if err := autoflags.Define(cmd, opts); err != nil {
+					return err
+				}
+				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+					return err
+				}
+				return autoflags.SetupDebug(cmd, autoflags.DebugOptions{})
+			},
+		},
+	}
+
+	for _, ordering := range orderings {
+		t.Run(ordering.name, func(t *testing.T) {
+			testOrderingScenario(t, ordering.setup)
+		})
+	}
+}
+
+func TestSetupFunctions_AppNameSync(t *testing.T) {
+	autoflags.SetEnvPrefix("")
+
+	rootCmd := &cobra.Command{Use: "testapp"}
+
+	// Call SetupConfig first
+	err := autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{AppName: "myapp"})
+	require.NoError(t, err)
+	assert.Equal(t, "MYAPP", autoflags.EnvPrefix())
+
+	// Call SetupDebug after without app name
+	err = autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
+	require.NoError(t, err)
+	assert.Equal(t, "MYAPP", autoflags.EnvPrefix(), "should use the already set app name")
+}
+
+func TestSetupFunctions_NoPrefix_NoAppName_EmptyCommandName(t *testing.T) {
+	autoflags.SetEnvPrefix("")
+
+	rootCmd := &cobra.Command{Use: ""}
+
+	// Call SetupConfig first
+	err := autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "couldn't determine the app name")
+
+	// Call SetupDebug after
+	err = autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
+	require.Error(t, err)
+	require.ErrorContains(t, err, "couldn't determine the app name")
 }
