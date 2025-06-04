@@ -11,8 +11,7 @@ func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
 		"cgroup": {"S4SONIC_DNS_CGROUP"},
 	})
 
-	v := GetViper(cmd)
-	bindEnv(v, cmd)
+	bindEnv(cmd)
 
 	// Get the scope and check bound envs
 	scope := getScope(cmd)
@@ -28,17 +27,15 @@ func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 		"cgroup": {"S4SONIC_DNS_CGROUP"},
 	})
 
-	v := GetViper(cmd)
-
 	// First call
-	bindEnv(v, cmd)
+	bindEnv(cmd)
 
 	// Add a new flag to simulate second call (like dnsOpts.Attach after commonOpts.Attach)
 	cmd.Flags().String("new-flag", "", "new test flag")
 	_ = cmd.Flags().SetAnnotation("new-flag", FlagEnvsAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
 
 	// Second call should not bind existing flags again, but should bind new flag
-	bindEnv(v, cmd)
+	bindEnv(cmd)
 
 	// Check bound envs
 	scope := getScope(cmd)
@@ -61,11 +58,8 @@ func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
 	})
 
 	// Bind for both commands
-	v1 := GetViper(dnsCmd)
-	bindEnv(v1, dnsCmd)
-
-	v2 := GetViper(ttyCmd)
-	bindEnv(v2, ttyCmd)
+	bindEnv(dnsCmd)
+	bindEnv(ttyCmd)
 
 	// Both commands should have their flags bound independently
 	dnsScope := getScope(dnsCmd)
@@ -88,8 +82,7 @@ func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 		"no-env": {},                     // No env annotation
 	})
 
-	v := GetViper(cmd)
-	bindEnv(v, cmd)
+	bindEnv(cmd)
 
 	// Only flags with env annotations should be tracked
 	scope := getScope(cmd)
@@ -102,10 +95,8 @@ func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
 	cmd := &cobra.Command{Use: "empty"}
 
-	v := GetViper(cmd)
-
 	// Should not panic with empty command
-	bindEnv(v, cmd)
+	bindEnv(cmd)
 
 	// Should have scope but no bound envs
 	scope := getScope(cmd)
