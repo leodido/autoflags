@@ -21,6 +21,8 @@ func TestAutoflagsSuite(t *testing.T) {
 func (suite *autoflagsSuite) SetupTest() {
 	// Reset viper state before each test to prevent test pollution
 	viper.Reset()
+	// Reset global prefix
+	SetEnvPrefix("")
 }
 
 // createTestC creates a command with flags that have environment annotations
