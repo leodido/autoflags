@@ -20,6 +20,37 @@ const (
 	FlagEnvsAnnotation = "___flagenvs"
 )
 
+// GetOrSetAppName resolves the app name consistently.
+//
+// When name is given, use it (and set as prefix if none exists)
+// Otherwise, when an environment prefix already exists, use it
+// Finally, it falls back to `cName` and set it as prefix
+func GetOrSetAppName(name, cName string) string {
+	// If a name was explicitly given then use it
+	if name != "" {
+		if EnvPrefix() == "" {
+			// Also as a prefix if there's not one already
+			SetEnvPrefix(name)
+		}
+
+		return name
+	}
+
+	// Do we already have a prefix set? Use it
+	if existingPrefix := EnvPrefix(); existingPrefix != "" {
+		return existingPrefix
+	}
+
+	// Fall back to command name
+	if cName != "" {
+		SetEnvPrefix(cName)
+
+		return cName
+	}
+
+	return ""
+}
+
 func SetEnvPrefix(str string) {
 	if str == "" {
 		prefix = ""
