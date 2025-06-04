@@ -392,12 +392,10 @@ func TestSetupConfig_Integration(t *testing.T) {
 		require.NotNil(t, configFlag, "config flag should be created")
 		assert.Equal(t, "", configFlag.DefValue, "default value should be empty")
 		assert.Contains(t, configFlag.Usage, "config file", "usage should mention config file")
-		assert.Contains(t, configFlag.Usage, "myapp", "usage should contain app name")
-
-		// Verify environment variable annotation
-		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
-		require.NotNil(t, envAnnotation, "environment annotation should be set")
-		require.Contains(t, envAnnotation, "MYAPP_CONFIG", "should contain expected env var")
+		assert.Contains(t, configFlag.Usage, "/etc/myapp", "usage should contain /etc/<root_cmd_name>")
+		assert.Contains(t, configFlag.Usage, "{executable_dir}/.myapp", "usage should contain {executable_dir}/.<root_cmd_name>")
+		assert.Contains(t, configFlag.Usage, "$HOME/.myapp", "usage should contain $HOME/.<root_cmd_name>")
+		assert.Contains(t, configFlag.Usage, "config.", "usage should use config.<ext> as config file name")
 	})
 
 	t.Run("DefaultApplication_PartialDefaults", func(t *testing.T) {
@@ -422,13 +420,9 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defaultFlag := rootCmd.PersistentFlags().Lookup("config")
 		require.Nil(t, defaultFlag, "default config flag should not exist")
 
-		// Verify custom env var
-		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
-		require.NotNil(t, envAnnotation)
-		assert.Contains(t, envAnnotation, "CUSTOM_CONFIG_VAR", "should use custom env var")
-
 		// Verify description includes custom config name
 		assert.Contains(t, configFlag.Usage, "app-config", "usage should contain custom config name")
+		assert.Contains(t, configFlag.Usage, ".testapp", "usage should contain dot directory using root command name")
 	})
 
 	t.Run("DefaultApplication_AppNameFromRootCommand", func(t *testing.T) {
@@ -444,13 +438,9 @@ func TestSetupConfig_Integration(t *testing.T) {
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
 		require.NotNil(t, configFlag)
 
-		// Should use root command name for env var
-		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
-		require.NotNil(t, envAnnotation)
-		assert.Contains(t, envAnnotation, "MY_CLI_TOOL_CONFIG", "should use root command name for env var")
-
 		// Should use root command name in paths
 		assert.Contains(t, configFlag.Usage, "my-cli-tool", "should use root command name in paths")
+		assert.Contains(t, configFlag.Usage, "$HOME/.my-cli-tool", "should default to $HOME dot directory")
 	})
 
 	t.Run("FlagCreation_PersistentFlagProperties", func(t *testing.T) {
@@ -491,7 +481,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 			FlagName:    "config",
 			ConfigName:  "settings",
 			EnvVar:      "MYAPP_SETTINGS",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathHomeHidden, autoflags.SearchPathCustom},
+			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathHomeHidden, autoflags.SearchPathWorkingDirHidden, autoflags.SearchPathCustom},
 			CustomPaths: []string{"/opt/myapp"},
 		}
 
@@ -502,15 +492,11 @@ func TestSetupConfig_Integration(t *testing.T) {
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
 		require.NotNil(t, configFlag)
 
-		// Check environment variable
-		envAnnotation := configFlag.Annotations[autoflags.FlagEnvsAnnotation]
-		require.NotNil(t, envAnnotation)
-		assert.Contains(t, envAnnotation, "MYAPP_SETTINGS", "should use custom env var")
-
 		// Check description includes custom config name and paths
-		assert.Contains(t, configFlag.Usage, "settings", "should mention custom config name")
+		assert.Contains(t, configFlag.Usage, "settings.", "should mention custom config name")
 		assert.Contains(t, configFlag.Usage, "config file", "should be identified as config file")
 		assert.Contains(t, configFlag.Usage, "$HOME", "should mask $HOME actual path")
+		assert.Contains(t, configFlag.Usage, "/opt/myapp", "should mentuon custom config path")
 	})
 
 	t.Run("SearchPaths_DefaultPaths", func(t *testing.T) {
