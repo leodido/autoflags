@@ -1,6 +1,8 @@
 package autoflags
 
 import (
+	"testing"
+
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -104,4 +106,57 @@ func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
 
 	assert.NotNil(suite.T(), scope, "empty command should have a scope")
 	assert.Empty(suite.T(), boundEnvs, "empty command should have no bound flags")
+}
+
+func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
+	tests := []struct {
+		descr          string
+		setup          func()
+		name           string
+		cName          string
+		expected       string
+		expectedPrefix string
+	}{
+		{
+			descr:          "provided name with no existing prefix",
+			setup:          func() { SetEnvPrefix("") },
+			name:           "myapp",
+			cName:          "cmd",
+			expected:       "myapp",
+			expectedPrefix: "MYAPP",
+		},
+		{
+			descr:          "fallback to command name",
+			setup:          func() { SetEnvPrefix("") },
+			name:           "",
+			cName:          "mycmd",
+			expected:       "mycmd",
+			expectedPrefix: "MYCMD",
+		},
+		{
+			descr:          "no provided name, use existing prefix",
+			setup:          func() { SetEnvPrefix("already-existing") },
+			name:           "",
+			cName:          "cmd",
+			expected:       "ALREADY_EXISTING",
+			expectedPrefix: "ALREADY_EXISTING",
+		},
+		{
+			descr:          "prefix, given name, and command name empty",
+			setup:          func() { SetEnvPrefix("") },
+			name:           "",
+			cName:          "",
+			expected:       "",
+			expectedPrefix: "",
+		},
+	}
+
+	for _, tt := range tests {
+		suite.T().Run(tt.descr, func(t *testing.T) {
+			tt.setup()
+			result := GetOrSetAppName(tt.name, tt.cName)
+			assert.Equal(t, tt.expected, result)
+			assert.Equal(t, tt.expectedPrefix, EnvPrefix())
+		})
+	}
 }
