@@ -29,7 +29,7 @@ const (
 
 // ConfigOptions defines configuration file behavior
 type ConfigOptions struct {
-	AppName     string           // For default paths and env var name (defaults to the name of the root command)
+	AppName     string
 	FlagName    string           // Name of config flag (defaults to "config")
 	ConfigName  string           // Config file name without extension (defaults to "config")
 	EnvVar      string           // Environment variable (defaults to {APPNAME}_CONFIG)
@@ -44,24 +44,18 @@ var defaultSearchPaths = []SearchPathType{
 	SearchPathWorkingDirHidden,
 }
 
-// SetupConfig creates the --config persistent flag and sets up viper search paths
+// SetupConfig creates the --config global flag and sets up viper search paths
+//
+// Works only for the root command
 func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if rootC.Parent() != nil {
 		return fmt.Errorf("SetupConfig must be called on the root command")
 	}
 
 	// Determine the app name
-	appName := cfgOpts.AppName
-	if appName == "" {
-		appName = rootC.Name()
-	}
+	appName := GetOrSetAppName(cfgOpts.AppName, rootC.Name())
 	if appName == "" {
 		return fmt.Errorf("couldn't determine the app name")
-	}
-
-	// Automatically set app name as the environment prefix
-	if cfgOpts.AppName == "" {
-		SetEnvPrefix(appName)
 	}
 
 	// Apply defaults
@@ -158,7 +152,7 @@ func setupConfig(configFile string, appName string, opts ConfigOptions) {
 // appName is guaranteed to be non-empty by SetupConfig
 func resolveSearchPaths(pathTypes []SearchPathType, customPaths []string, appName string, mask bool) []string {
 	var paths []string
-	customIndex := 0
+	customPathsUsed := false // Track if we've already added custom paths
 
 	for _, pathType := range pathTypes {
 		switch pathType {
@@ -194,18 +188,20 @@ func resolveSearchPaths(pathTypes []SearchPathType, customPaths []string, appNam
 			}
 
 		case SearchPathCustom:
-			if customIndex < len(customPaths) {
-				customPath := customPaths[customIndex]
-				if mask {
-					// For masked paths, show template with {APP} replaced but don't resolve env vars
-					templatePath := strings.ReplaceAll(customPath, "{APP}", appName)
-					paths = append(paths, templatePath)
-				} else {
-					// For actual paths, fully resolve environment variables and placeholders
-					expandedPath := resolveSearchPath(customPath, appName)
-					paths = append(paths, expandedPath)
+			// Add all custom paths at this position only once
+			if !customPathsUsed {
+				for _, customPath := range customPaths {
+					if mask {
+						// For masked paths, show template with {APP} replaced but don't resolve env vars
+						templatePath := strings.ReplaceAll(customPath, "{APP}", appName)
+						paths = append(paths, templatePath)
+					} else {
+						// For actual paths, fully resolve environment variables and placeholders
+						expandedPath := resolveSearchPath(customPath, appName)
+						paths = append(paths, expandedPath)
+					}
 				}
-				customIndex++
+				customPathsUsed = true
 			}
 		}
 	}
