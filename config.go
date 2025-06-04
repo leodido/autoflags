@@ -98,13 +98,6 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 		return fmt.Errorf("couldn't set filename completion: %w", err)
 	}
 
-	// Set up environment variable binding if specified
-	if cfgOpts.EnvVar != "" {
-		if err := rootC.PersistentFlags().SetAnnotation(cfgOpts.FlagName, FlagEnvsAnnotation, []string{cfgOpts.EnvVar}); err != nil {
-			return fmt.Errorf("couldn't set environment variable annotation: %w", err)
-		}
-	}
-
 	// Set up viper configuration
 	cobra.OnInitialize(func() {
 		setupConfig(configFile, appName, cfgOpts)
@@ -137,9 +130,16 @@ func genDescription(appName string, opts ConfigOptions) string {
 
 // setupConfig handles the viper initialization
 func setupConfig(configFile string, appName string, opts ConfigOptions) {
-	if configFile != "" {
+	if cfgFile := strings.TrimSpace(configFile); cfgFile != "" {
 		// Use explicit config file
 		viper.SetConfigFile(configFile)
+
+		return
+	}
+
+	if envConfigPath := strings.TrimSpace(os.Getenv(opts.EnvVar)); envConfigPath != "" {
+		viper.SetConfigFile(envConfigPath)
+
 		return
 	}
 
