@@ -24,7 +24,3 @@ type CommonOptions interface {
 	Context(context.Context) context.Context
 }
 
-type DebuggableOptions interface {
-	Options
-	Debuggable() bool // FIXME: rename this?
-}

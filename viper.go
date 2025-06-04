@@ -2,7 +2,6 @@ package autoflags
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/spf13/cobra"
@@ -14,18 +13,6 @@ func GetViper(c *cobra.Command) *viper.Viper {
 	s := getScope(c)
 
 	return s.viper()
-}
-
-func Debug(c *cobra.Command, opts DebuggableOptions) error {
-	if !opts.Debuggable() {
-		return nil
-	}
-
-	res := GetViper(c)
-	res.Debug()
-	fmt.Fprintf(os.Stdout, "Values:\n%#v\n", res.AllSettings())
-
-	return nil
 }
 
 // createConfigC creates a configuration map for a specific command by merging
@@ -100,6 +87,9 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 			}
 		}
 	}
+
+	// Automatic debug output if debug is on
+	UseDebug(c, nil)
 
 	return nil
 }
