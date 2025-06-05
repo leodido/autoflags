@@ -281,6 +281,9 @@ func (o TestDefineOptions) Attach(c *cobra.Command)             {}
 func (o TestDefineOptions) Transform(ctx context.Context) error { return nil }
 func (o TestDefineOptions) Validate() []error                   { return nil }
 
+// TODO: integration test call with count type flag (-vvv)
+// TODO: test to verify whether flagshort accepts more than one character
+
 func TestDefine_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
