@@ -5,8 +5,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -270,17 +272,26 @@ func TestDefine_Integration(t *testing.T) {
 		},
 	}
 
-	confAnnotation := []string{"Configuration"}
 	requiredAnnotation := []string{"true"}
-	deepAnnotation := []string{"Deep"}
 
 	for _, tc := range cases {
 		t.Run(tc.desc, func(t *testing.T) {
 			setupTest()
-			c := &cobra.Command{}
+			c := &cobra.Command{
+				Use: "testcmd",
+				Run: func(cmd *cobra.Command, args []string) {},
+			}
+			c.SetErr(io.Discard)
+			c.SetOut(io.Discard)
 			autoflags.Define(c, tc.input)
 			f := c.Flags()
 			vip := autoflags.GetViper(c)
+			u := c.UsageString()
+
+			// Usage + Grouping
+			require.NotEmpty(t, u)
+			assert.Contains(t, u, "Configuration Flags:", "The help output should containt the 'Configuration' group")
+			assert.Contains(t, u, "Deep Flags:", "The help output should containt the 'Deep' group")
 
 			// LogLevel
 			logLevelFlag := f.Lookup("log-level")
@@ -288,14 +299,15 @@ func TestDefine_Integration(t *testing.T) {
 			require.Equal(t, "info", vip.Get("log-level"), "Viper default for 'log-level' should be 'info'")
 			require.Equal(t, vip.Get("testdefineconfigflags.loglevel"), vip.Get("log-level"), "Viper should resolve path 'testdefineconfigflags.loglevel' same as 'log-level'")
 			require.NotNil(t, logLevelFlag.Annotations, "'log-level' flag annotations should exist")
-			require.Equal(t, confAnnotation, logLevelFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'log-level' should be 'Configuration' (override)")
+			assertFlagInGroup(t, u, "Configuration", "--log-level")
 			require.Equal(t, "set the logging level", logLevelFlag.Usage, "Usage string for 'log-level'")
+			require.Contains(t, u, "--log-level string", "Flag from LogLevel field")
 
 			// Endpoint
 			endpointFlag := f.Lookup("testdefineconfigflags.endpoint")
 			require.NotNil(t, endpointFlag, "Pflag 'testdefineconfigflags.endpoint' should be defined")
 			require.NotNil(t, endpointFlag.Annotations, "'testdefineconfigflags.endpoint' flag annotations should exist")
-			require.Equal(t, confAnnotation, endpointFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'testdefineconfigflags.endpoint' should be 'Configuration' (override)")
+			assertFlagInGroup(t, u, "Configuration", "testdefineconfigflags.endpoint")
 			require.NotNil(t, endpointFlag.Annotations[cobra.BashCompOneRequiredFlag], "'testdefineconfigflags.endpoint' should have required annotation")
 			require.Equal(t, requiredAnnotation, endpointFlag.Annotations[cobra.BashCompOneRequiredFlag], "Required annotation for 'testdefineconfigflags.endpoint'")
 			require.Equal(t, "the endpoint emitting the verdicts", endpointFlag.Usage, "Usage string for 'testdefineconfigflags.endpoint'")
@@ -304,20 +316,20 @@ func TestDefine_Integration(t *testing.T) {
 			timeoutFlag := f.Lookup("testdefineconfigflags.timeout")
 			require.NotNil(t, timeoutFlag, "Pflag 'testdefineconfigflags.timeout' should be defined")
 			require.NotNil(t, timeoutFlag.Annotations, "'testdefineconfigflags.timeout' flag annotations should exist (or be nil if no annotations are expected)")
-			require.Equal(t, confAnnotation, timeoutFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'testdefineconfigflags.timeout' should be 'Configuration'")
+			assertFlagInGroup(t, u, "Configuration", "--testdefineconfigflags.timeout")
 			require.Equal(t, "set the timeout, in seconds", timeoutFlag.Usage, "Usage string for 'testdefineconfigflags.timeout'")
 
 			// Nest.JSON
 			nestJSONFlag := f.Lookup("nest.json")
 			require.NotNil(t, nestJSONFlag, "Pflag 'nest.json' should be defined")
-			require.Nil(t, nestJSONFlag.Annotations[autoflags.FlagGroupAnnotation], "'nest.json' should have no group annotation unless specified")
+			assertFlagInDefaultGroup(t, u, "nest.json")
 			require.Equal(t, "output the verdicts (if any) in JSON form", nestJSONFlag.Usage, "Usage string for 'nest.json'")
 
 			// Nest.JQ (flag name "nest.jq", shorthand "q")
 			nestJQFlag := f.Lookup("nest.jq")
 			require.NotNil(t, nestJQFlag, "Pflag 'nest.jq' should be defined")
-			require.Nil(t, nestJQFlag.Annotations[autoflags.FlagGroupAnnotation], "'nest.jq' should have no group annotation unless specified")
 			require.NotNil(t, f.ShorthandLookup("q"), "Shorthand 'q' for 'nest.jq' should exist")
+			assertFlagInDefaultGroup(t, u, "nest.jq")
 			require.Equal(t, "filter the output using a jq expression", nestJQFlag.Usage, "Usage string for 'nest.jq'")
 
 			// Nest.Deep.Deep (flag name "deep", shorthand "d")
@@ -327,12 +339,69 @@ func TestDefine_Integration(t *testing.T) {
 			require.Equal(t, "deepdown", vip.Get("nest.deep.deep"), "Viper default for path 'nest.deep.deep'")                             // Path
 			require.Equal(t, vip.Get("nest.deep.deep"), vip.Get("deep"), "Viper should resolve path 'nest.deep.deep' same as flag 'deep'") // Path vs Alias
 			require.NotNil(t, deepFlag.Annotations, "'deep' flag annotations should exist")
-			require.Equal(t, deepAnnotation, deepFlag.Annotations[autoflags.FlagGroupAnnotation], "Group annotation for 'deep'")
+			assertFlagInGroup(t, u, "Deep", "--deep")
 			require.NotNil(t, deepFlag.Annotations[cobra.BashCompOneRequiredFlag], "'deep' flag should have required annotation")
 			require.Equal(t, requiredAnnotation, deepFlag.Annotations[cobra.BashCompOneRequiredFlag], "Required annotation for 'deep'")
 			require.Equal(t, "deep flag", deepFlag.Usage, "Usage string for 'deep'")
+
+			// Required flag enforcement
+			c.SetArgs([]string{})
+			err := c.Execute()
+
+			require.Error(t, err, "Execute() should fail when required flag are missing")
+			assert.Contains(t, err.Error(), `required flag(s)`)
+			assert.Contains(t, err.Error(), `"testdefineconfigflags.endpoint"`)
+			assert.Contains(t, err.Error(), `"deep"`)
+
+			c.SetArgs([]string{"--testdefineconfigflags.endpoint=http://test.com", "--deep=1s"})
+			notErr := c.Execute()
+			require.NoError(t, notErr, "Execute() should work when mandatory flags are provided")
 		})
 	}
+}
+
+func assertFlagInGroup(t *testing.T, usageString, groupTitle, flagName string) {
+	t.Helper()
+
+	fullGroupTitle := groupTitle + " Flags:"
+	sections := strings.Split(usageString, "\n\n")
+
+	var targetSection string
+	var foundGroup bool
+
+	// Look for the section starting with fullGroupTitle
+	for _, section := range sections {
+		if strings.HasPrefix(section, fullGroupTitle) {
+			targetSection = section
+			foundGroup = true
+			break
+		}
+	}
+	require.True(t, foundGroup, "Couldn't find the section for group '%s'", fullGroupTitle)
+	assert.Contains(t, targetSection, flagName, "The flag '%s' should be in group '%s'", flagName, fullGroupTitle)
+}
+
+func assertFlagInDefaultGroup(t *testing.T, usageString, flagName string) {
+	t.Helper()
+
+	const defaultGroupTitle = "Flags:"
+	sections := strings.Split(usageString, "\n\n")
+
+	var defaultSection string
+	var foundGroup bool
+
+	for _, section := range sections {
+		// La sezione di default è quella la cui prima riga è esattamente "Flags:"
+		lines := strings.SplitN(section, "\n", 2)
+		if len(lines) > 0 && lines[0] == defaultGroupTitle {
+			defaultSection = section
+			foundGroup = true
+			break
+		}
+	}
+
+	require.True(t, foundGroup, "Couldn't find the default section 'Flags:'")
+	assert.Contains(t, defaultSection, flagName, "The flag '%s' should be in the default 'Flags:' section", flagName)
 }
 
 func TestSetupConfig_Integration(t *testing.T) {
@@ -1433,13 +1502,41 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 
 func TestSetupOrdering_CustomOptions(t *testing.T) {
 	viper.Reset()
-	defer viper.Reset()
+	autoflags.SetEnvPrefix("")
 
-	// Test with custom flag names and environment variables
+	t.Setenv("CUSTOM_DEBUG", "true")
+
+	fs := afero.NewMemMapFs()
+	viper.SetFs(fs)
+	configContent := "log-level: test-level"
+	configPath := "/tmp/custom-settings.yaml"
+	err := afero.WriteFile(fs, configPath, []byte(configContent), 0644)
+	require.NoError(t, err)
+
+	t.Setenv("CUSTOM_CONFIG", configPath)
+
+	// Pulisci alla fine del test
+	defer func() {
+		viper.Reset()
+		autoflags.SetEnvPrefix("")
+		os.Unsetenv("CUSTOM_CONFIG")
+		os.Unsetenv("CUSTOM_DEBUG")
+	}()
+
 	opts := &OrderingTestOptions{}
-	cmd := &cobra.Command{Use: "customapp"}
+	cmd := &cobra.Command{
+		Use: "customapp",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if _, _, err := autoflags.UseConfig(func() bool { return true }); err != nil {
+				return err
+			}
 
-	// Use custom options
+			return autoflags.Unmarshal(cmd, opts)
+		},
+	}
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+
 	debugOpts := autoflags.DebugOptions{
 		FlagName: "debug-mode",
 		EnvVar:   "CUSTOM_DEBUG",
@@ -1451,24 +1548,25 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 		EnvVar:     "CUSTOM_CONFIG",
 	}
 
-	err := autoflags.SetupConfig(cmd, configOpts)
+	err = autoflags.SetupConfig(cmd, configOpts)
 	require.NoError(t, err)
-
 	err = autoflags.Define(cmd, opts)
 	require.NoError(t, err)
-
 	err = autoflags.SetupDebug(cmd, debugOpts)
 	require.NoError(t, err)
 
-	// Verify custom flags exist
-	persistentFlags := cmd.PersistentFlags()
-	assert.NotNil(t, persistentFlags.Lookup("debug-mode"), "Custom debug flag should exist")
-	assert.NotNil(t, persistentFlags.Lookup("settings"), "Custom config flag should exist")
+	err = cmd.Execute()
+	require.NoError(t, err)
 
-	// Verify custom environment variables are annotated
-	debugFlag := persistentFlags.Lookup("debug-mode")
-	envAnnotation := debugFlag.Annotations[autoflags.FlagEnvsAnnotation]
-	assert.Contains(t, envAnnotation, "CUSTOM_DEBUG", "Custom debug env var should be annotated")
+	v := autoflags.GetViper(cmd)
+
+	persistentFlags := cmd.PersistentFlags()
+	assert.NotNil(t, persistentFlags.Lookup("debug-mode"))
+	assert.NotNil(t, persistentFlags.Lookup("settings"))
+
+	assert.True(t, v.GetBool("debug-mode"), "The 'debug-mode' flag should be true because of CUSTOM_DEBUG env var")
+
+	assert.Equal(t, "test-level", v.GetString("loglevel"), "Viper should load the value from the config file given via CUSTOM_CONFIG env var")
 }
 
 type OrderingTestOptions struct {
