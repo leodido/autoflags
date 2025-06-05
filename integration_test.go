@@ -228,6 +228,34 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 	})
 }
 
+type testContextKey string
+
+type commonOptionsForContextTest struct {
+	DummyField string `flag:"dummy"`
+}
+
+func (o *commonOptionsForContextTest) Attach(c *cobra.Command) {}
+
+func (o *commonOptionsForContextTest) Context(ctx context.Context) context.Context {
+	return context.WithValue(ctx, testContextKey("test-key"), o)
+}
+
+func TestUnmarshal_SetsContext_WhenCommonOptions(t *testing.T) {
+	cmd := &cobra.Command{Use: "test-context"}
+	opts := &commonOptionsForContextTest{}
+
+	autoflags.Define(cmd, opts)
+
+	err := autoflags.Unmarshal(cmd, opts)
+	require.NoError(t, err)
+
+	finalCtx := cmd.Context()
+	require.NotNil(t, finalCtx, "The command context should not be nil")
+
+	val := finalCtx.Value(testContextKey("test-key"))
+	assert.Equal(t, opts, val, "The context should contain the value set from the 'Context()' implementation")
+}
+
 type TestDefineConfigFlags struct {
 	LogLevel string `default:"info" flag:"log-level" flagdescr:"set the logging level" flaggroup:"Config"`
 	Timeout  int    `flagdescr:"set the timeout, in seconds"`
