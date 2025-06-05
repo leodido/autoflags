@@ -374,7 +374,7 @@ func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
 	assert.NotNil(suite.T(), flagWithEnv, "flag should exist")
 
 	// The critical test: verify annotation was set
-	envAnnotation := flagWithEnv.Annotations[FlagEnvsAnnotation]
+	envAnnotation := flagWithEnv.Annotations[flagEnvsAnnotation]
 	assert.NotNil(suite.T(), envAnnotation, "annotation should be set when len(envs) > 0")
 	assert.Greater(suite.T(), len(envAnnotation), 0, "annotation should contain env vars")
 	assert.Contains(suite.T(), envAnnotation, "TEST_HAS_ENV", "should contain expected env var")
@@ -392,7 +392,7 @@ func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsEmpty() {
 	assert.NotNil(suite.T(), flagWithoutEnv, "flag should exist")
 
 	// The critical test: verify annotation was NOT set
-	envAnnotation := flagWithoutEnv.Annotations[FlagEnvsAnnotation]
+	envAnnotation := flagWithoutEnv.Annotations[flagEnvsAnnotation]
 	assert.Nil(suite.T(), envAnnotation, "annotation should NOT be set when len(envs) == 0")
 }
 
@@ -611,7 +611,7 @@ func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
 	assert.NotNil(suite.T(), requiredGroupAnnotation, "required-group should have required annotation")
 	assert.Equal(suite.T(), []string{"true"}, requiredGroupAnnotation)
 
-	groupAnnotation := requiredGroupFlag.Annotations[FlagGroupAnnotation]
+	groupAnnotation := requiredGroupFlag.Annotations[flagGroupAnnotation]
 	assert.NotNil(suite.T(), groupAnnotation, "required-group should have group annotation")
 	assert.Equal(suite.T(), []string{"TestGroup"}, groupAnnotation)
 
@@ -632,7 +632,7 @@ func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
 	assert.NotNil(suite.T(), requiredEnvAnnotation, "required-env should have required annotation")
 	assert.Equal(suite.T(), []string{"true"}, requiredEnvAnnotation)
 
-	envAnnotation := requiredEnvFlag.Annotations[FlagEnvsAnnotation]
+	envAnnotation := requiredEnvFlag.Annotations[flagEnvsAnnotation]
 	assert.NotNil(suite.T(), envAnnotation, "required-env should have env annotation")
 }
 
@@ -1000,10 +1000,10 @@ func (suite *autoflagsSuite) TestFlagenv_WithValidation_ValidValues() {
 	noFlag := cmd.Flags().Lookup("no-env")
 
 	// Check environment annotations
-	trueEnvAnnotation := trueFlag.Annotations[FlagEnvsAnnotation]
-	falseEnvAnnotation := falseFlag.Annotations[FlagEnvsAnnotation]
-	emptyEnvAnnotation := emptyFlag.Annotations[FlagEnvsAnnotation]
-	noEnvAnnotation := noFlag.Annotations[FlagEnvsAnnotation]
+	trueEnvAnnotation := trueFlag.Annotations[flagEnvsAnnotation]
+	falseEnvAnnotation := falseFlag.Annotations[flagEnvsAnnotation]
+	emptyEnvAnnotation := emptyFlag.Annotations[flagEnvsAnnotation]
+	noEnvAnnotation := noFlag.Annotations[flagEnvsAnnotation]
 
 	// Only the true env should have environment binding
 	assert.NotNil(suite.T(), trueEnvAnnotation, "flagenv='true' should have env annotation")
@@ -1046,10 +1046,10 @@ func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	numberZeroFlag := cmd.Flags().Lookup("number-zero")
 
 	// strconv.ParseBool accepts these case variations and numbers
-	caseTrueAnnotation := caseTrueFlag.Annotations[FlagEnvsAnnotation]
-	caseFalseAnnotation := caseFalseFlag.Annotations[FlagEnvsAnnotation]
-	numberOneAnnotation := numberOneFlag.Annotations[FlagEnvsAnnotation]
-	numberZeroAnnotation := numberZeroFlag.Annotations[FlagEnvsAnnotation]
+	caseTrueAnnotation := caseTrueFlag.Annotations[flagEnvsAnnotation]
+	caseFalseAnnotation := caseFalseFlag.Annotations[flagEnvsAnnotation]
+	numberOneAnnotation := numberOneFlag.Annotations[flagEnvsAnnotation]
+	numberZeroAnnotation := numberZeroFlag.Annotations[flagEnvsAnnotation]
 
 	assert.NotNil(suite.T(), caseTrueAnnotation, "ParseBool should accept 'True' as true")
 	assert.Nil(suite.T(), caseFalseAnnotation, "ParseBool should accept 'FALSE' as false")
@@ -1199,14 +1199,14 @@ func (suite *autoflagsSuite) TestFlagenv_ValidationTiming_EarlyValidationPrevent
 	invalidFlag := cmd2.Flags().Lookup("invalid-env")
 	assert.NotNil(suite.T(), invalidFlag, "Invalid env flag should still be created")
 
-	invalidEnvAnnotation := invalidFlag.Annotations[FlagEnvsAnnotation]
+	invalidEnvAnnotation := invalidFlag.Annotations[flagEnvsAnnotation]
 	assert.Nil(suite.T(), invalidEnvAnnotation, "Invalid flagenv should be treated as false (no env binding)")
 
 	// Verify that valid flagenv still works
 	validFlag := cmd2.Flags().Lookup("valid-env")
 	assert.NotNil(suite.T(), validFlag, "Valid env flag should be created")
 
-	validEnvAnnotation := validFlag.Annotations[FlagEnvsAnnotation]
+	validEnvAnnotation := validFlag.Annotations[flagEnvsAnnotation]
 	assert.NotNil(suite.T(), validEnvAnnotation, "Valid flagenv should have env binding")
 }
 
@@ -1227,10 +1227,10 @@ func (suite *autoflagsSuite) TestFlagenv_BackwardCompatibility_SilentFailureWith
 	emptyFlag := flags.Lookup("empty")
 
 	// Check environment annotations
-	shouldWorkAnnotation := shouldWorkFlag.Annotations[FlagEnvsAnnotation]
-	shouldFailAnnotation := shouldFailFlag.Annotations[FlagEnvsAnnotation]
-	yesNoAnnotation := yesNoFlag.Annotations[FlagEnvsAnnotation]
-	emptyAnnotation := emptyFlag.Annotations[FlagEnvsAnnotation]
+	shouldWorkAnnotation := shouldWorkFlag.Annotations[flagEnvsAnnotation]
+	shouldFailAnnotation := shouldFailFlag.Annotations[flagEnvsAnnotation]
+	yesNoAnnotation := yesNoFlag.Annotations[flagEnvsAnnotation]
+	emptyAnnotation := emptyFlag.Annotations[flagEnvsAnnotation]
 
 	assert.NotNil(suite.T(), shouldWorkAnnotation, "flagenv='true' should work")
 	assert.Nil(suite.T(), shouldFailAnnotation, "flagenv='invalid' should be treated as false")
