@@ -22,9 +22,9 @@ const (
 
 // GetOrSetAppName resolves the app name consistently.
 //
-// When name is given, use it (and set as prefix if none exists)
-// Otherwise, when an environment prefix already exists, use it
-// Finally, it falls back to `cName` and set it as prefix
+// When name is given, use it (and set as prefix if none exists).
+// Otherwise, when an environment prefix already exists, use it.
+// Finally, it falls back to `cName` and set it as prefix.
 func GetOrSetAppName(name, cName string) string {
 	// If a name was explicitly given then use it
 	if name != "" {
@@ -51,6 +51,9 @@ func GetOrSetAppName(name, cName string) string {
 	return ""
 }
 
+// SetEnvPrefix sets the global environment variable prefix for the application.
+//
+// The prefix is automatically appended with an underscore when generating environment variable names.
 func SetEnvPrefix(str string) {
 	if str == "" {
 		prefix = ""
@@ -60,6 +63,7 @@ func SetEnvPrefix(str string) {
 	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(normEnv(str), envSep), envSep)
 }
 
+// EnvPrefix returns the current global environment variable prefix without the trailing underscore.
 func EnvPrefix() string {
 	return strings.TrimSuffix(prefix, envSep)
 }

@@ -8,19 +8,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// DebugOptions configures the debug functionality for command-line applications.
 type DebugOptions struct {
 	AppName  string
 	FlagName string // Name of debug flag (defaults to "debug-options")
-	EnvVar   string // Environment variable (defaults to {APPNAME}_DEBUG_OPTIONS)
+	EnvVar   string // Environment variable (defaults to {APP}_DEBUG_OPTIONS)
 }
 
 const (
 	flagDebugAnnotation = "___leodido_autoflags_debugflagname"
 )
 
-// SetupDebug creates the --debug-options global flag and sets up debug behavior
+// SetupDebug creates the --debug-options global flag and sets up debug behavior.
 //
-// Works only for the root command
+// Works only for the root command.
 func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 	if rootC.Parent() != nil {
 		return fmt.Errorf("SetupDebug must be called on the root command")
@@ -67,7 +68,9 @@ func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 	return nil
 }
 
-// UseDebug manually triggers debug output for the given options
+// UseDebug manually triggers debug output for the given options.
+//
+// Debug output is automatically triggered when the debug flag is enabled.
 func UseDebug(c *cobra.Command, w io.Writer) {
 	flagName := "debug-options"
 	if currentFlagName, ok := c.Annotations[flagDebugAnnotation]; ok {

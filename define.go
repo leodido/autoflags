@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// DefineOption configures the Define function behavior
+// DefineOption configures the behavior of the Define function.
 type DefineOption func(*defineContext)
 
 // defineContext holds context for the definition of the options
@@ -21,14 +21,19 @@ type defineContext struct {
 	comm       *cobra.Command
 }
 
-// WithValidation enables strict validation of struct tags
+// WithValidation enables strict validation of struct tags during flag definition.
+//
+// When enabled, invalid boolean values in tags like flagenv, flagcustom, etc.
+// will cause Define() to return an error instead of silently treating them as false.
 func WithValidation() DefineOption {
 	return func(cfg *defineContext) {
 		cfg.validation = true
 	}
 }
 
-// WithExclusions sets flags to exclude from definition
+// WithExclusions sets flags to exclude from definition based on flag names or paths.
+//
+// Exclusions are case-insensitive and apply only to the specific command.
 func WithExclusions(exclusions ...string) DefineOption {
 	return func(cfg *defineContext) {
 		if cfg.exclusions == nil {
@@ -41,7 +46,10 @@ func WithExclusions(exclusions ...string) DefineOption {
 	}
 }
 
-// Define creates flags from struct tags
+// Define creates flags from struct field tags and binds them to the command.
+//
+// It processes struct tags to generate appropriate cobra flags, handles environment
+// variable binding, sets up flag groups, and configures the usage template.
 func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	ctx := &defineContext{
 		comm: c,
