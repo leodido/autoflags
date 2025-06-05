@@ -73,7 +73,6 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	return nil
 }
 
-// TODO: make it a method?
 func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
 	val := getValue(o)
 	if !val.IsValid() {
@@ -148,6 +147,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 						getValue(descr),
 					})
 					inferDecodeHooks(c, name, f.Type.String())
+					// FIXME: custom flags should define also a DecodeX() function?
 
 					goto definition_done
 				} else {
@@ -189,7 +189,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		case reflect.Int:
 			val := field.Interface().(int)
 			ref := (*int)(unsafe.Pointer(field.UnsafeAddr()))
-			if f.Tag.Get("type") == "count" {
+			if f.Tag.Get("flagtype") == "count" {
 				c.Flags().CountVarP(ref, name, short, descr)
 
 				continue
