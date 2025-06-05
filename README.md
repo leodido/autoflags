@@ -2,11 +2,11 @@
 
 > CLI generation from Go structs
 
-Transform your Go structs into fully-featured command-line interfaces with configuration files, environment variables, validation, and beautiful help output.
+Transform your Go structs into fully-featured command-line interfaces with configuration files, environment variables, flags, validation, and beautiful help output.
 
-All with just a few struct tags: declare your options in a struct, and let autoflags do the rest.
+All with just a few struct tags: **declare your options in a struct, and let autoflags do the rest**.
 
-Stop writing boilerplate. Start building features. ⚡
+Stop writing boilerplate. Start building features. ⋙
 
 ## ⚡ Quick Start
 
