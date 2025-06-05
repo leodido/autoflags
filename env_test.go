@@ -134,7 +134,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 			expectedPrefix: "MYCMD",
 		},
 		{
-			descr:          "no provided name, use existing prefix",
+			descr:          "no given app name, use existing prefix",
 			setup:          func() { SetEnvPrefix("already-existing") },
 			name:           "",
 			cName:          "cmd",
@@ -142,12 +142,28 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 			expectedPrefix: "ALREADY_EXISTING",
 		},
 		{
-			descr:          "prefix, given name, and command name empty",
+			descr:          "no prefix, no given app name, no command name",
 			setup:          func() { SetEnvPrefix("") },
 			name:           "",
 			cName:          "",
 			expected:       "",
 			expectedPrefix: "",
+		},
+		{
+			descr:          "prefix, no given app name, no command name",
+			setup:          func() { SetEnvPrefix("prepre") },
+			name:           "",
+			cName:          "",
+			expected:       "PREPRE",
+			expectedPrefix: "PREPRE",
+		},
+		{
+			descr:          "uppercase prefix, no given app name, no command name",
+			setup:          func() { SetEnvPrefix("UPPERC") },
+			name:           "",
+			cName:          "",
+			expected:       "UPPERC",
+			expectedPrefix: "UPPERC",
 		},
 	}
 
