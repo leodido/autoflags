@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/spf13/cobra"
@@ -20,6 +21,19 @@ type DefineHookFunc func(c *cobra.Command, field reflect.StructField, name, shor
 // Registry for predefined flag definition functions
 var defineHookRegistry = map[string]DefineHookFunc{
 	"zapcore.Level": DefineZapcoreLevelHookFunc(),
+	"time.Duration": DefineTimeDurationHookFunc(),
+}
+
+func DefineTimeDurationHookFunc() DefineHookFunc {
+	return func(c *cobra.Command, field reflect.StructField, name, short, descr string, fieldValue reflect.Value) {
+		if !fieldValue.CanAddr() {
+			return
+		}
+
+		val := fieldValue.Interface().(time.Duration)
+		ref := (*time.Duration)(unsafe.Pointer(fieldValue.UnsafeAddr()))
+		c.Flags().DurationVarP(ref, name, short, val, descr)
+	}
 }
 
 // DefineZapcoreLevelHookFunc creates a flag definition function for zapcore.Level.
@@ -60,9 +74,9 @@ func DefineZapcoreLevelHookFunc() DefineHookFunc {
 }
 
 // inferDefineHooks checks if there's a predefined flag definition function for the given type
-func inferDefineHooks(c *cobra.Command, typename string, field reflect.StructField, name, short, descr string, fieldValue reflect.Value) bool {
+func inferDefineHooks(c *cobra.Command, typename string, structField reflect.StructField, name, short, descr string, fieldValue reflect.Value) bool {
 	if defineFunc, ok := defineHookRegistry[typename]; ok {
-		defineFunc(c, field, name, short, descr, fieldValue)
+		defineFunc(c, structField, name, short, descr, fieldValue)
 
 		return true
 	}
