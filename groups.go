@@ -6,7 +6,8 @@ import (
 )
 
 var (
-	localGroupID = "<local>"
+	localGroupID  = "<local>"
+	globalGroupID = "Global"
 )
 
 const (
@@ -17,22 +18,21 @@ const (
 //
 // It organizes flags by their group annotation, with ungrouped flags placed in a default local group.
 func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
-	localGroupID := "<local>"
 	groups := map[string]*pflag.FlagSet{
 		"<origin>": c.LocalFlags(),
 	}
 	delete(groups, "<origin>")
 
-	addToLocal := func(f *pflag.Flag) {
-		if groups[localGroupID] == nil {
-			groups[localGroupID] = pflag.NewFlagSet(c.Name(), pflag.ContinueOnError)
+	addTo := func(f *pflag.Flag, groupID string) {
+		if groups[groupID] == nil {
+			groups[groupID] = pflag.NewFlagSet(c.Name(), pflag.ContinueOnError)
 		}
-		groups[localGroupID].AddFlag(f)
+		groups[groupID].AddFlag(f)
 	}
 
-	c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+	c.LocalNonPersistentFlags().VisitAll(func(f *pflag.Flag) {
 		if len(f.Annotations) == 0 {
-			addToLocal(f)
+			addTo(f, localGroupID)
 		} else {
 			if annotations, ok := f.Annotations[flagGroupAnnotation]; ok {
 				g := annotations[0]
@@ -41,10 +41,16 @@ func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
 				}
 				groups[g].AddFlag(f)
 			} else {
-				addToLocal(f)
+				addTo(f, localGroupID)
 			}
 		}
 	})
+
+	if c.HasPersistentFlags() {
+		c.PersistentFlags().VisitAll(func(f *pflag.Flag) {
+			addTo(f, globalGroupID)
+		})
+	}
 
 	return groups
 }
