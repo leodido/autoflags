@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -2168,4 +2169,106 @@ func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
 	assert.Nil(suite.T(), excludedFlag, "excluded-flag should not be created")
 	assert.Nil(suite.T(), aliasFlag, "alias-flag should not be created")
 	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
+}
+
+type flagShortTestOptions struct {
+	ValidShort     string `flagshort:"v" flag:"valid-short" flagdescr:"should use single char shorthand"`
+	InvalidShort   string `flagshort:"verb" flag:"invalid-short" flagdescr:"has invalid multi-char flagshort"`
+	EmptyShort     string `flagshort:"" flag:"empty-short" flagdescr:"has empty flagshort value"`
+	AnotherInvalid string `flagshort:"abc" flag:"another-invalid" flagdescr:"another multi-char shorthand"`
+	NormalField    string `flag:"normal" flagdescr:"normal field without flagshort"`
+}
+
+func (o *flagShortTestOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
+	opts := &flagShortTestOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Multi-character shorthand should ALWAYS return error (regardless of WithValidation)
+	err := Define(cmd, opts)
+
+	assert.Error(suite.T(), err, "Should always return error for invalid flagshort value")
+	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	assert.Contains(suite.T(), err.Error(), "verb", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "InvalidShort", "Error should mention the field name")
+	assert.Contains(suite.T(), err.Error(), "shorthand flag must be a single character", "Error should have correct message")
+}
+
+type flagShortEdgeCasesOptions struct {
+	SingleChar  string `flagshort:"x" flag:"single" flagdescr:"single character"`
+	TwoChars    string `flagshort:"ab" flag:"two-chars" flagdescr:"two characters"`
+	ThreeChars  string `flagshort:"xyz" flag:"three-chars" flagdescr:"three characters"`
+	WithSpaces  string `flagshort:" v " flag:"with-spaces" flagdescr:"spaces around char"`
+	SpecialChar string `flagshort:"@" flag:"special" flagdescr:"special character"`
+	NumberChar  string `flagshort:"1" flag:"number" flagdescr:"number character"`
+}
+
+func (o *flagShortEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError() {
+	opts := &flagShortEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Multi-character shorthand should always cause error
+	err := Define(cmd, opts)
+
+	assert.Error(suite.T(), err, "Should always return error for multi-character flagshort values")
+	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	// Should contain one of the invalid values
+	errorContainsInvalid := strings.Contains(err.Error(), "ab") ||
+		strings.Contains(err.Error(), "xyz") ||
+		strings.Contains(err.Error(), " v ")
+	assert.True(suite.T(), errorContainsInvalid, "Error should mention one of the invalid multi-char values")
+}
+
+type validShortEdgeCasesOptions struct {
+	SingleChar  string `flagshort:"x" flag:"single" flagdescr:"single character"`
+	SpecialChar string `flagshort:"@" flag:"special" flagdescr:"special character"`
+	NumberChar  string `flagshort:"1" flag:"number" flagdescr:"number character"`
+}
+
+func (o *validShortEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagshort_EdgeCases_ValidValues() {
+	opts := &validShortEdgeCasesOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// These should all pass validation
+	err := Define(cmd, opts)
+	assert.NoError(suite.T(), err, "Should not return error for valid single-character edge cases")
+
+	// Check behavior
+	flags := cmd.Flags()
+	singleFlag := flags.Lookup("single")
+	specialFlag := flags.Lookup("special")
+	numberFlag := flags.Lookup("number")
+
+	assert.Equal(suite.T(), "x", singleFlag.Shorthand, "Should accept normal single char")
+	assert.Equal(suite.T(), "@", specialFlag.Shorthand, "Should accept special character")
+	assert.Equal(suite.T(), "1", numberFlag.Shorthand, "Should accept number character")
+}
+
+type nestedFlagShortOptions struct {
+	TopLevel     string            `flag:"top-level" flagshort:"t" flagdescr:"top level flag"`
+	NestedStruct nestedShortStruct `flaggroup:"Nested"`
+}
+
+type nestedShortStruct struct {
+	ValidNestedShort   string `flag:"nested-valid" flagshort:"n" flagdescr:"nested valid short"`
+	InvalidNestedShort string `flag:"nested-invalid" flagshort:"invalid" flagdescr:"nested invalid short"`
+}
+
+func (o *nestedFlagShortOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
+	opts := &nestedFlagShortOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := Define(cmd, opts)
+
+	assert.Error(suite.T(), err, "Should always return error for invalid nested flagshort value")
+	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "nestedstruct.invalidnestedshort", "Error should mention the nested field name")
 }
