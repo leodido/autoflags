@@ -34,7 +34,7 @@ func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][
 	for flagName, envVars := range flagsWithEnvs {
 		cmd.Flags().String(flagName, "", "test flag")
 		if len(envVars) > 0 {
-			_ = cmd.Flags().SetAnnotation(flagName, FlagEnvsAnnotation, envVars)
+			_ = cmd.Flags().SetAnnotation(flagName, flagEnvsAnnotation, envVars)
 		}
 	}
 

@@ -677,7 +677,7 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 		assert.NotNil(t, requiredAnnotation, "should have required annotation")
 		assert.Equal(t, []string{"true"}, requiredAnnotation)
 
-		envAnnotation := requiredEnvFlag.Annotations[FlagEnvsAnnotation]
+		envAnnotation := requiredEnvFlag.Annotations[flagEnvsAnnotation]
 		assert.NotNil(t, envAnnotation, "should have env annotation")
 		assert.Contains(t, envAnnotation, envVarName, "should contain the correct env var name")
 
@@ -693,7 +693,7 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 		optionalRequiredAnnotation := optionalEnvFlag.Annotations[cobra.BashCompOneRequiredFlag]
 		assert.Nil(t, optionalRequiredAnnotation, "optional flag should not have required annotation")
 
-		optionalEnvAnnotation := optionalEnvFlag.Annotations[FlagEnvsAnnotation]
+		optionalEnvAnnotation := optionalEnvFlag.Annotations[flagEnvsAnnotation]
 		assert.NotNil(t, optionalEnvAnnotation, "optional flag should have env annotation")
 	})
 }

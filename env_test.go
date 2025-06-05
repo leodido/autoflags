@@ -34,7 +34,7 @@ func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 
 	// Add a new flag to simulate second call (like dnsOpts.Attach after commonOpts.Attach)
 	cmd.Flags().String("new-flag", "", "new test flag")
-	_ = cmd.Flags().SetAnnotation("new-flag", FlagEnvsAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
+	_ = cmd.Flags().SetAnnotation("new-flag", flagEnvsAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
 
 	// Second call should not bind existing flags again, but should bind new flag
 	bindEnv(cmd)
