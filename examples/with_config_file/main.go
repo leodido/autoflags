@@ -1,7 +1,8 @@
 package main
 
 import (
-	"github.com/davecgh/go-spew/spew"
+	"fmt"
+
 	"github.com/leodido/autoflags"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
@@ -50,7 +51,7 @@ func main() {
 	}
 
 	cli.RunE = func(c *cobra.Command, args []string) error {
-		spew.Dump(opts)
+		fmt.Println(opts)
 
 		return nil
 	}
