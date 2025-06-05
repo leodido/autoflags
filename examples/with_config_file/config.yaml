@@ -1,0 +1,8 @@
+host: "production-server"
+port: 8443
+apikey: "secret-api-key"
+log-level: "debug"
+log-file: "/var/log/mysrv.log"
+database:
+  url: "postgres://user:pass@localhost/mydb"
+  max-conns: 50
