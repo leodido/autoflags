@@ -10,7 +10,7 @@ var (
 )
 
 const (
-	FlagGroupAnnotation = "___flaggroup"
+	FlagGroupAnnotation = "___leodido_autoflags_flaggroup"
 )
 
 func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
