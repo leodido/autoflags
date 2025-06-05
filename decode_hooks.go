@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	FlagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
+	flagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
 )
 
 var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
@@ -25,13 +25,13 @@ var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
 func inferDecodeHooks(c *cobra.Command, name, typename string) {
 	switch typename {
 	case "time.Duration":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
+		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
 	case "zapcore.Level":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
+		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
 	case "[]string":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
+		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
 	case "[]int":
-		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
+		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
 	}
 }
 

@@ -15,7 +15,7 @@ type DebugOptions struct {
 }
 
 const (
-	FlagDebugAnnotation = "___leodido_autoflags_debugflagname"
+	flagDebugAnnotation = "___leodido_autoflags_debugflagname"
 )
 
 // SetupDebug creates the --debug-options global flag and sets up debug behavior
@@ -51,13 +51,13 @@ func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 	if rootC.Annotations == nil {
 		rootC.Annotations = make(map[string]string)
 	}
-	rootC.Annotations[FlagDebugAnnotation] = flagName
+	rootC.Annotations[flagDebugAnnotation] = flagName
 
 	// Add persistent flag to root command
 	rootC.PersistentFlags().Bool(flagName, false, "enable debug output for options")
 
 	// Add environment annotation
-	rootC.PersistentFlags().SetAnnotation(flagName, FlagEnvsAnnotation, []string{envvName})
+	rootC.PersistentFlags().SetAnnotation(flagName, flagEnvsAnnotation, []string{envvName})
 
 	// Ensure environment binding happens
 	cobra.OnInitialize(func() {
@@ -70,7 +70,7 @@ func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 // UseDebug manually triggers debug output for the given options
 func UseDebug(c *cobra.Command, w io.Writer) {
 	flagName := "debug-options"
-	if currentFlagName, ok := c.Annotations[FlagDebugAnnotation]; ok {
+	if currentFlagName, ok := c.Annotations[flagDebugAnnotation]; ok {
 		flagName = currentFlagName
 	}
 

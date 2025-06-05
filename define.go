@@ -290,12 +290,12 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		}
 
 		if len(envs) > 0 {
-			_ = c.Flags().SetAnnotation(name, FlagEnvsAnnotation, envs)
+			_ = c.Flags().SetAnnotation(name, flagEnvsAnnotation, envs)
 		}
 
 		// Set the group annotation on the current flag
 		if group != "" {
-			_ = c.Flags().SetAnnotation(name, FlagGroupAnnotation, []string{group})
+			_ = c.Flags().SetAnnotation(name, flagGroupAnnotation, []string{group})
 		}
 	}
 }
