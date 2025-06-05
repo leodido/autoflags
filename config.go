@@ -102,6 +102,9 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 		viper.Reset()
 	})
 
+	// Regenerate usage templates for any commands already processed by Define()
+	regenerateUsage(rootC)
+
 	return nil
 }
 
