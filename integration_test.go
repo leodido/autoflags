@@ -21,6 +21,7 @@ import (
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 // Package-level variables to hold the initialized instances
@@ -257,9 +258,9 @@ func TestUnmarshal_SetsContext_WhenCommonOptions(t *testing.T) {
 }
 
 type TestDefineConfigFlags struct {
-	LogLevel string `default:"info" flag:"log-level" flagdescr:"set the logging level" flaggroup:"Config"`
-	Timeout  int    `flagdescr:"set the timeout, in seconds"`
-	Endpoint string `flagdescr:"the endpoint emitting the verdicts" flaggroup:"Config" flagrequired:"true"`
+	LogLevel zapcore.Level `default:"info" flag:"log-level" flagdescr:"set the logging level" flaggroup:"Config"`
+	Timeout  int           `flagdescr:"set the timeout, in seconds"`
+	Endpoint string        `flagdescr:"the endpoint emitting the verdicts" flaggroup:"Config" flagrequired:"true"`
 }
 
 type TestDefineDeepFlags struct {
@@ -272,10 +273,13 @@ type TestDefineJSONFlags struct {
 	Deep TestDefineDeepFlags `flagrequired:"true"`
 }
 
+type TestCustomString string
+
 type TestDefineOptions struct {
-	TestDefineConfigFlags `flaggroup:"Configuration"`
-	Nest                  TestDefineJSONFlags
-	Verbose               int `flagshort:"v" flagtype:"count" flagdescr:"verbosity level"`
+	TestDefineConfigFlags  `flaggroup:"Configuration"`
+	Nest                   TestDefineJSONFlags
+	Verbose                int `flaggroup:"Verbosity" flagshort:"v" flagtype:"count" flagdescr:"verbosity level"`
+	IgnoreCustomStringType TestCustomString
 }
 
 func (o TestDefineOptions) Attach(c *cobra.Command)             {}
@@ -319,8 +323,12 @@ func TestDefine_Integration(t *testing.T) {
 
 			// Usage + Grouping
 			require.NotEmpty(t, u)
-			assert.Contains(t, u, "Configuration Flags:", "The help output should containt the 'Configuration' group")
-			assert.Contains(t, u, "Deep Flags:", "The help output should containt the 'Deep' group")
+			assert.Contains(t, u, "Configuration Flags:", "The help output should contain the 'Configuration' group")
+			assert.Contains(t, u, "Deep Flags:", "The help output should contain the 'Deep' group")
+
+			// Ignore custom types (no flagcustom tag, not in the registry)
+			ignorecustomstringtypeFlag := f.Lookup("ignorecustomstringtype")
+			require.Nil(t, ignorecustomstringtypeFlag, "Pflag 'ignorecustomstringtype' should not be defined")
 
 			// LogLevel
 			logLevelFlag := f.Lookup("log-level")
@@ -329,14 +337,14 @@ func TestDefine_Integration(t *testing.T) {
 			require.Equal(t, vip.Get("testdefineconfigflags.loglevel"), vip.Get("log-level"), "Viper should resolve path 'testdefineconfigflags.loglevel' same as 'log-level'")
 			require.NotNil(t, logLevelFlag.Annotations, "'log-level' flag annotations should exist")
 			assertFlagInGroup(t, u, "Configuration", "--log-level")
-			require.Equal(t, "set the logging level", logLevelFlag.Usage, "Usage string for 'log-level'")
-			require.Contains(t, u, "--log-level string", "Flag from LogLevel field")
+			require.Equal(t, "set the logging level {debug,info,warn,error,dpanic,panic,fatal}", logLevelFlag.Usage, "Usage string for 'log-level'")
+			require.Contains(t, u, "--log-level zapcore.Level", "Flag from LogLevel field")
 
 			// Verbose
 			verboseFlag := f.Lookup("verbose")
 			require.NotNil(t, verboseFlag, "Pflag 'verbose' should be defined")
 			require.NotNil(t, f.ShorthandLookup("v"), "Shorthand 'v' for 'verbose' should exist")
-			assertFlagInDefaultGroup(t, u, "verbose")
+			assertFlagInGroup(t, u, "Verbosity", "verbose")
 			require.Equal(t, "verbosity level", verboseFlag.Usage, "Usage string for 'verbose'")
 			require.Contains(t, u, "-v, --verbose", "Count flag should show both short and long forms")
 
@@ -1863,8 +1871,6 @@ verbose: false`
 	t.Run("usage_contains_persistent_flags", func(t *testing.T) {
 		// Get the usage string
 		usageString := cmd.UsageString()
-
-		fmt.Println(usageString)
 
 		// Verify persistent flags appear in usage
 		assert.Contains(t, usageString, "--config", "Usage should contain --config flag")
