@@ -1860,6 +1860,59 @@ verbose: false`
 		assert.Contains(t, output, "\"debug-options\":\"true\"", "Debug output should contain debug-options final value")
 	})
 
+	t.Run("usage_contains_persistent_flags", func(t *testing.T) {
+		// Get the usage string
+		usageString := cmd.UsageString()
+
+		fmt.Println(usageString)
+
+		// Verify persistent flags appear in usage
+		assert.Contains(t, usageString, "--config", "Usage should contain --config flag")
+		assert.Contains(t, usageString, "--debug-options", "Usage should contain --debug-options flag")
+
+		// Verify descriptions are present
+		assert.Contains(t, usageString, "config file", "Usage should contain config flag description")
+		assert.Contains(t, usageString, "enable debug output", "Usage should contain debug flag description")
+
+		// Verify persistent flags appear in Global Flags section
+		assert.Contains(t, usageString, "Global Flags:", "Usage should contain Global Flags section")
+
+		// Find the Global Flags section
+		var globalFlagsSection string
+		var regularFlagsSection string
+
+		for _, section := range strings.Split(usageString, "\n\n") {
+			if strings.HasPrefix(section, "Global Flags:") {
+				globalFlagsSection = section
+			} else if strings.HasPrefix(section, "Flags:") {
+				regularFlagsSection = section
+			}
+		}
+
+		// Verify Global Flags section exists and contains persistent flags
+		require.NotEmpty(t, globalFlagsSection, "Global Flags section should exist")
+		assert.Contains(t, globalFlagsSection, "--config", "--config should be in Global Flags section")
+		assert.Contains(t, globalFlagsSection, "--debug-options", "--debug-options should be in Global Flags section")
+
+		// Verify persistent flags are NOT in regular Flags section
+		if regularFlagsSection != "" {
+			assert.NotContains(t, regularFlagsSection, "--config", "--config should not be in regular Flags section")
+			assert.NotContains(t, regularFlagsSection, "--debug-options", "--debug-options should not be in regular Flags section")
+		}
+
+		// Verify local flags are in regular Flags section (not Global)
+		if regularFlagsSection != "" {
+			assert.Contains(t, regularFlagsSection, "--log-level", "--log-level should be in regular Flags section")
+			assert.Contains(t, regularFlagsSection, "--timeout", "--timeout should be in regular Flags section")
+			assert.Contains(t, regularFlagsSection, "--verbose", "--verbose should be in regular Flags section")
+		}
+
+		// Verify local flags are NOT in Global Flags section
+		assert.NotContains(t, globalFlagsSection, "--log-level", "--log-level should not be in Global Flags section")
+		assert.NotContains(t, globalFlagsSection, "--timeout", "--timeout should not be in Global Flags section")
+		assert.NotContains(t, globalFlagsSection, "--verbose", "--verbose should not be in Global Flags section")
+	})
+
 	// Test flag-based overrides as well
 	t.Run("flag_overrides", func(t *testing.T) {
 		// Reset output buffer
