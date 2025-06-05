@@ -50,7 +50,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
-		if decodeHooks, defineDecodeHooks := f.Annotations[FlagDecodeHookAnnotation]; defineDecodeHooks {
+		if decodeHooks, defineDecodeHooks := f.Annotations[flagDecodeHookAnnotation]; defineDecodeHooks {
 			for _, decodeHook := range decodeHooks {
 				if decodeHookFunc, ok := decodeHookRegistry[decodeHook]; ok {
 					hooks = append(hooks, decodeHookFunc)
@@ -89,7 +89,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	}
 
 	// Automatic debug output if debug is on
-	UseDebug(c, nil)
+	UseDebug(c, c.OutOrStdout())
 
 	return nil
 }
