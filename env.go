@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	FlagEnvsAnnotation = "___leodido_autoflags_flagenvs"
+	flagEnvsAnnotation = "___leodido_autoflags_flagenvs"
 )
 
 // GetOrSetAppName resolves the app name consistently.
@@ -72,7 +72,7 @@ func bindEnv(c *cobra.Command) {
 	s := getScope(c)
 
 	c.Flags().VisitAll(func(f *pflag.Flag) {
-		if envs, defineEnv := f.Annotations[FlagEnvsAnnotation]; defineEnv {
+		if envs, defineEnv := f.Annotations[flagEnvsAnnotation]; defineEnv {
 			// Only bind if we haven't already bound this env var for this command
 			if !s.isEnvBound(f.Name) {
 				s.setBound(f.Name)

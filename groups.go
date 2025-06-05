@@ -10,7 +10,7 @@ var (
 )
 
 const (
-	FlagGroupAnnotation = "___leodido_autoflags_flaggroup"
+	flagGroupAnnotation = "___leodido_autoflags_flaggroup"
 )
 
 func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
@@ -31,7 +31,7 @@ func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
 		if len(f.Annotations) == 0 {
 			addToLocal(f)
 		} else {
-			if annotations, ok := f.Annotations[FlagGroupAnnotation]; ok {
+			if annotations, ok := f.Annotations[flagGroupAnnotation]; ok {
 				g := annotations[0]
 				if groups[g] == nil {
 					groups[g] = pflag.NewFlagSet(c.Name(), pflag.ContinueOnError)
