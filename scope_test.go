@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	autoflagstesting "github.com/leodido/autoflags/testing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -170,6 +171,9 @@ func TestCommandIsolation(t *testing.T) {
 }
 
 func TestMemoryCleanup(t *testing.T) {
+	if autoflagstesting.IsRaceOn() {
+		t.Skip("Skipping memory test when race detector is on")
+	}
 	// This test verifies the pattern works and doesn't accumulate excessive memory
 
 	// Force GC to get a clean baseline
