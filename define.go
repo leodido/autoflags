@@ -70,7 +70,9 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	v := GetViper(c)
 
 	// Define the flags from struct
-	define(c, o, "", "", ctx.exclusions, false, false)
+	if err := define(c, o, "", "", ctx.exclusions, false, false); err != nil {
+		return err
+	}
 	// Bind flag values to struct field values
 	v.BindPFlags(c.Flags())
 	// Bind environment
@@ -81,7 +83,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	return nil
 }
 
-func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) {
+func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) error {
 	val := getValue(o)
 	if !val.IsValid() {
 		val = getValue(getValuePtr(o).Interface())
@@ -121,6 +123,19 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		}
 
 		short := f.Tag.Get("flagshort")
+		if short != "" && len(short) > 1 {
+			fieldName := f.Name
+			if structPath != "" {
+				fieldName = structPath + "." + strings.ToLower(f.Name)
+			}
+
+			return &FieldError{
+				FieldName: fieldName,
+				TagName:   "flagshort",
+				TagValue:  short,
+				Message:   "shorthand flag must be a single character",
+			}
+		}
 
 		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
@@ -180,7 +195,9 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		switch f.Type.Kind() {
 		case reflect.Struct:
 			// NOTE > field.Interface() doesn't work because it actually returns a copy of the object wrapping the interface
-			define(c, field.Addr().Interface(), group, path, exclusions, defineEnv, mandatory)
+			if err := define(c, field.Addr().Interface(), group, path, exclusions, defineEnv, mandatory); err != nil {
+				return err
+			}
 
 			continue
 
@@ -306,6 +323,8 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			_ = c.Flags().SetAnnotation(name, flagGroupAnnotation, []string{group})
 		}
 	}
+
+	return nil
 }
 
 func getName(name, alias string) string {
