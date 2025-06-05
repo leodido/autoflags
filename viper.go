@@ -9,6 +9,9 @@ import (
 	"github.com/spf13/viper"
 )
 
+// GetViper returns the viper instance associated with the given command.
+//
+// Each command has its own isolated viper instance for configuration management.
 func GetViper(c *cobra.Command) *viper.Viper {
 	s := getScope(c)
 
@@ -40,6 +43,10 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 	return configToMerge
 }
 
+// Unmarshal populates the options struct with values from flags, environment variables,
+// and configuration files.
+//
+// It automatically handles decode hooks, validation, transformation, and context updates based on the options type.
 // NOTE: See https://github.com/spf13/viper/pull/1715
 func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookFunc) error {
 	res := GetViper(c)

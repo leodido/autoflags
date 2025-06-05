@@ -13,6 +13,9 @@ const (
 	flagGroupAnnotation = "___leodido_autoflags_flaggroup"
 )
 
+// Groups returns a map of flag groups for the given command.
+//
+// It organizes flags by their group annotation, with ungrouped flags placed in a default local group.
 func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
 	localGroupID := "<local>"
 	groups := map[string]*pflag.FlagSet{

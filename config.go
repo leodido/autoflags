@@ -11,28 +11,28 @@ import (
 	"github.com/spf13/viper"
 )
 
-// SearchPathType represents different search path strategies for the configuration file
+// SearchPathType represents different strategies for locating configuration files.
 type SearchPathType int
 
 const (
-	// SearchPathEtc represents /etc/{app}
+	// SearchPathEtc searches in /etc/{app} directory.
 	SearchPathEtc SearchPathType = iota
-	// SearchPathHomeHidden represents $HOME/.{app}
+	// SearchPathHomeHidden searches in $HOME/.{app} directory.
 	SearchPathHomeHidden
-	// SearchPathWorkingDirHidden represents $PWD/.{app}
+	// SearchPathWorkingDirHidden searches in $PWD/.{app} directory.
 	SearchPathWorkingDirHidden
-	// SearchPathExecutableDirHidden represents {executable_dir}/.{app}
+	// SearchPathExecutableDirHidden searches in {executable_dir}/.{app} directory.
 	SearchPathExecutableDirHidden
-	// SearchPathCustom represents a custom path (must be provided in CustomPaths)
+	// SearchPathCustom uses custom paths provided in CustomPaths field.
 	SearchPathCustom
 )
 
-// ConfigOptions defines configuration file behavior
+// ConfigOptions defines configuration file behavior and search paths.
 type ConfigOptions struct {
 	AppName     string
 	FlagName    string           // Name of config flag (defaults to "config")
 	ConfigName  string           // Config file name without extension (defaults to "config")
-	EnvVar      string           // Environment variable (defaults to {APPNAME}_CONFIG)
+	EnvVar      string           // Environment variable (defaults to {APP}_CONFIG)
 	SearchPaths []SearchPathType // Search path strategies (defaults to common paths)
 	CustomPaths []string         // Custom search paths (when SearchPaths contains SearchPathCustom)
 }
@@ -44,9 +44,9 @@ var defaultSearchPaths = []SearchPathType{
 	SearchPathWorkingDirHidden,
 }
 
-// SetupConfig creates the --config global flag and sets up viper search paths
+// SetupConfig creates the --config global flag and sets up viper search paths.
 //
-// Works only for the root command
+// Works only for the root command.
 func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	if rootC.Parent() != nil {
 		return fmt.Errorf("SetupConfig must be called on the root command")
@@ -222,6 +222,10 @@ func resolveSearchPath(searchPath, appName string) string {
 	return expanded
 }
 
+// UseConfig attempts to read the configuration file based on the provided condition.
+//
+// The readWhen function determines whether config reading should be attempted.
+// Returns whether config was loaded, a status message, and any error encountered.
 func UseConfig(readWhen func() bool) (inUse bool, mes string, err error) {
 	// Use the readWhen function to determine if we should read config
 	if readWhen != nil && !readWhen() {
@@ -241,9 +245,9 @@ func UseConfig(readWhen func() bool) (inUse bool, mes string, err error) {
 	}
 }
 
-// UseConfigSimple is a simpler version of UseConfig that uses cmd.IsAvailableCommand() as the readWhen function
+// UseConfigSimple is a simpler version of UseConfig that uses cmd.IsAvailableCommand() as the readWhen function.
 //
-// It does not check for the config file when the command is not available (eg., help)
+// It does not check for the config file when the command is not available (eg., help).
 func UseConfigSimple(c *cobra.Command) (inUse bool, message string, err error) {
 	return UseConfig(func() bool {
 		return c.IsAvailableCommand()

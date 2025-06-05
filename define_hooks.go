@@ -12,7 +12,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// DefineHookFunc defines how to create a flag for a custom type
+// DefineHookFunc defines how to create a flag for a custom type.
+//
+// It receives the command, struct field information, and flag metadata to create specialized flag definitions beyond the standard types.
 type DefineHookFunc func(c *cobra.Command, field reflect.StructField, name, short, descr string, fieldValue reflect.Value)
 
 // Registry for predefined flag definition functions
@@ -20,7 +22,9 @@ var defineHookRegistry = map[string]DefineHookFunc{
 	"zapcore.Level": DefineZapcoreLevelHookFunc(),
 }
 
-// DefineZapcoreLevelHookFunc creates a flag definition function for zapcore.Level
+// DefineZapcoreLevelHookFunc creates a flag definition function for zapcore.Level.
+//
+// It generates an enum flag with all valid log levels and proper shell completion.
 func DefineZapcoreLevelHookFunc() DefineHookFunc {
 	return func(c *cobra.Command, field reflect.StructField, name, short, descr string, fieldValue reflect.Value) {
 		if !fieldValue.CanAddr() {

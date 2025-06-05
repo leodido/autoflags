@@ -35,10 +35,10 @@ func inferDecodeHooks(c *cobra.Command, name, typename string) {
 	}
 }
 
-type DecodeHookFuncType func(reflect.Type, reflect.Type, interface{}) (interface{}, error)
-
+// StringToZapcoreLevelHookFunc creates a decode hook that converts string values
+// to zapcore.Level types during configuration unmarshaling.
 func StringToZapcoreLevelHookFunc() mapstructure.DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		if f.Kind() != reflect.String {
 			return data, nil
 		}
@@ -55,12 +55,14 @@ func StringToZapcoreLevelHookFunc() mapstructure.DecodeHookFunc {
 	}
 }
 
+// StringToIntSliceHookFunc creates a decode hook that converts comma-separated
+// string values to []int slices during configuration unmarshaling.
 func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
 	return func(
 		f reflect.Type,
 		t reflect.Type,
-		data interface{},
-	) (interface{}, error) {
+		data any,
+	) (any, error) {
 		if f.Kind() != reflect.String {
 			return data, nil
 		}
