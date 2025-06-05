@@ -275,13 +275,13 @@ type TestDefineJSONFlags struct {
 type TestDefineOptions struct {
 	TestDefineConfigFlags `flaggroup:"Configuration"`
 	Nest                  TestDefineJSONFlags
+	Verbose               int `flagshort:"v" flagtype:"count" flagdescr:"verbosity level"`
 }
 
 func (o TestDefineOptions) Attach(c *cobra.Command)             {}
 func (o TestDefineOptions) Transform(ctx context.Context) error { return nil }
 func (o TestDefineOptions) Validate() []error                   { return nil }
 
-// TODO: integration test call with count type flag (-vvv)
 // TODO: test to verify whether flagshort accepts more than one character
 
 func TestDefine_Integration(t *testing.T) {
@@ -334,6 +334,14 @@ func TestDefine_Integration(t *testing.T) {
 			require.Equal(t, "set the logging level", logLevelFlag.Usage, "Usage string for 'log-level'")
 			require.Contains(t, u, "--log-level string", "Flag from LogLevel field")
 
+			// Verbose
+			verboseFlag := f.Lookup("verbose")
+			require.NotNil(t, verboseFlag, "Pflag 'verbose' should be defined")
+			require.NotNil(t, f.ShorthandLookup("v"), "Shorthand 'v' for 'verbose' should exist")
+			assertFlagInDefaultGroup(t, u, "verbose")
+			require.Equal(t, "verbosity level", verboseFlag.Usage, "Usage string for 'verbose'")
+			require.Contains(t, u, "-v, --verbose", "Count flag should show both short and long forms")
+
 			// Endpoint
 			endpointFlag := f.Lookup("testdefineconfigflags.endpoint")
 			require.NotNil(t, endpointFlag, "Pflag 'testdefineconfigflags.endpoint' should be defined")
@@ -378,15 +386,16 @@ func TestDefine_Integration(t *testing.T) {
 			// Required flag enforcement
 			c.SetArgs([]string{})
 			err := c.Execute()
-
 			require.Error(t, err, "Execute() should fail when required flag are missing")
 			assert.Contains(t, err.Error(), `required flag(s)`)
 			assert.Contains(t, err.Error(), `"testdefineconfigflags.endpoint"`)
 			assert.Contains(t, err.Error(), `"deep"`)
 
-			c.SetArgs([]string{"--testdefineconfigflags.endpoint=http://test.com", "--deep=1s"})
-			notErr := c.Execute()
-			require.NoError(t, notErr, "Execute() should work when mandatory flags are provided")
+			// Count flag
+			c.SetArgs([]string{"--testdefineconfigflags.endpoint=http://test.com", "--deep=1s", "-vv", "--verbose"})
+			notErr1 := c.Execute()
+			require.NoError(t, notErr1, "Execute() should work when mandatory flags are provided")
+			require.Equal(t, 3, autoflags.GetViper(c).GetInt("verbose"), "Single -v should set verbose to 3")
 		})
 	}
 }
