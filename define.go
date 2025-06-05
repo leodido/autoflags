@@ -5,7 +5,6 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
-	"time"
 	"unsafe"
 
 	"github.com/spf13/cobra"
@@ -96,6 +95,10 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			continue
 		}
 
+		if !field.CanAddr() {
+			continue
+		}
+
 		f := val.Type().Field(i)
 		path := ""
 		if structPath == "" {
@@ -155,9 +158,11 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 		envs, defineEnv := getEnv(f, defineEnv, path, alias, cName)
 		mandatory := isMandatory(f) || mandatory
 
+		kind := f.Type.Kind()
+
 		// Flags with custom definition hooks
 		custom, _ := strconv.ParseBool(f.Tag.Get("flagcustom"))
-		if custom && f.Type.Kind() != reflect.Struct {
+		if custom && kind != reflect.Struct {
 			hookName := fmt.Sprintf("Define%s", f.Name)
 			if structPtr := getValuePtr(o); structPtr.IsValid() {
 				hookFunc := structPtr.MethodByName(hookName)
@@ -170,7 +175,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 						getValue(descr),
 					})
 					inferDecodeHooks(c, name, f.Type.String())
-					// FIXME: custom flags should define also a DecodeX() function?
+					// FIXME: custom flags should define also a DecodeX() function mandatorily?
 
 					goto definition_done
 				} else {
@@ -187,12 +192,15 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			}
 		}
 
-		if !field.CanAddr() {
-			continue
+		// Check registry in case it's a known custom type
+		if inferDefineHooks(c, f.Type.String(), f, name, short, descr, field) {
+			inferDecodeHooks(c, name, f.Type.String())
+
+			goto definition_done
 		}
 
 		// TODO: complete type switch with missing types
-		switch f.Type.Kind() {
+		switch kind {
 		case reflect.Struct:
 			// NOTE > field.Interface() doesn't work because it actually returns a copy of the object wrapping the interface
 			if err := define(c, field.Addr().Interface(), group, path, exclusions, defineEnv, mandatory); err != nil {
@@ -217,7 +225,7 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			if f.Tag.Get("flagtype") == "count" {
 				c.Flags().CountVarP(ref, name, short, descr)
 
-				continue
+				goto definition_done
 			}
 			c.Flags().IntVarP(ref, name, short, val, descr)
 
@@ -260,21 +268,9 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			inferDecodeHooks(c, name, f.Type.String())
 
 		case reflect.Int64:
-			switch f.Type.String() {
-			case "int64":
-				val := field.Interface().(int64)
-				ref := (*int64)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().Int64VarP(ref, name, short, val, descr)
-
-			case "time.Duration":
-				val := field.Interface().(time.Duration)
-				ref := (*time.Duration)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().DurationVarP(ref, name, short, val, descr)
-				inferDecodeHooks(c, name, f.Type.String())
-
-			default:
-				continue
-			}
+			val := field.Interface().(int64)
+			ref := (*int64)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Int64VarP(ref, name, short, val, descr)
 
 		case reflect.Int8:
 			val := field.Interface().(int8)
@@ -440,4 +436,21 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 	}
 
 	return nil
+}
+
+var standardTypes = func() map[reflect.Kind]reflect.Type {
+	types := make(map[reflect.Kind]reflect.Type)
+	for _, v := range []interface{}{
+		"", int(0), bool(false), int8(0), int16(0), int32(0), int64(0),
+		uint(0), uint8(0), uint16(0), uint32(0), uint64(0),
+	} {
+		t := reflect.TypeOf(v)
+		types[t.Kind()] = t
+	}
+	return types
+}()
+
+func isStandardType(t reflect.Type) bool {
+	expected, exists := standardTypes[t.Kind()]
+	return exists && t == expected
 }
