@@ -56,10 +56,11 @@ func main() {
 		return nil
 	}
 
-	autoflags.SetupConfig(cli, autoflags.ConfigOptions{AppName: "mysrv"}) // FIXME: why this must be before Define()?
-
 	// This single line creates all the options (flags, env vars)
 	opts.Attach(cli)
+
+	// This single line enables the configuration file support
+	autoflags.SetupConfig(cli, autoflags.ConfigOptions{AppName: "mysrv"})
 
 	cli.Execute()
 }

@@ -1746,6 +1746,7 @@ func testOrderingScenario(t *testing.T, setupFunc func(*cobra.Command, *Ordering
 			}
 		}
 		viper.Reset()
+		autoflags.SetEnvPrefix("")
 	}()
 
 	// Set up test environment variables

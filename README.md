@@ -35,7 +35,7 @@ func main() {
 	cli := &cobra.Command{Use: "myapp"}
 
 	// This single line creates all the options (flags, env vars)
-    opts.Attach(cli)
+	opts.Attach(cli)
 
 	cli.PreRunE = func(c *cobra.Command, args []string) error {
 		return autoflags.Unmarshal(c, opts) // Populates struct from flags/env
