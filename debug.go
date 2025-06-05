@@ -15,7 +15,7 @@ type DebugOptions struct {
 }
 
 const (
-	FlagDebugAnnotation = "___autoflags_debugflagname"
+	FlagDebugAnnotation = "___leodido_autoflags_debugflagname"
 )
 
 // SetupDebug creates the --debug-options global flag and sets up debug behavior

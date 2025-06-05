@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	FlagDecodeHookAnnotation = "___flagdecodehooks"
+	FlagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
 )
 
 var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{

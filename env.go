@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	FlagEnvsAnnotation = "___flagenvs"
+	FlagEnvsAnnotation = "___leodido_autoflags_flagenvs"
 )
 
 // GetOrSetAppName resolves the app name consistently.
