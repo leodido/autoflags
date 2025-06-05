@@ -78,7 +78,6 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	// Bind environment
 	bindEnv(c)
 	// Generate the usage message
-	markForUsageRegeneration(c)
 	setUsage(c)
 
 	return nil
