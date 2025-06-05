@@ -199,6 +199,11 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			goto definition_done
 		}
 
+		// Skip custom types that aren't in registry
+		if !isStandardType(f.Type) && kind != reflect.Struct && kind != reflect.Slice {
+			continue
+		}
+
 		// TODO: complete type switch with missing types
 		switch kind {
 		case reflect.Struct:
