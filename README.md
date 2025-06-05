@@ -83,7 +83,7 @@ Your CLI now supports:
 
 - 📝 Command-line flags (`--log-level info`, `-p 8080`)
 - 🌍 Environment variables (`MYAPP_PORT=8080`)
-- Options precedence (flags > env vars > config file)
+- 💦 Options precedence (flags > env vars > config file)
 - ✅ Automatic validation and type conversion
 - 📚 Beautiful help output with proper grouping
 
