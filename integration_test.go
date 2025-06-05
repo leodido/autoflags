@@ -1502,6 +1502,108 @@ timeout: 30`
 		assert.Contains(t, output, ":LOGLEVEL:debug", "Config loglevel should be loaded")
 		assert.Contains(t, output, ":JSONLOGGING:true", "Config jsonlogging should be loaded")
 	})
+
+	t.Run("UseConfigSimple_SkipsConfigForUnavailableCommand", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		configPath := "/home/testuser/.testapp/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(configPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, configPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		var resultBuf bytes.Buffer
+
+		// Test with a hidden command (not available)
+		hiddenC := &cobra.Command{
+			Use:    "hidden-cmd",
+			Hidden: true, // This makes IsAvailableCommand() return false
+			Run: func(c *cobra.Command, args []string) {
+				// Test UseConfigSimple - should NOT load config for hidden command
+				inUse, message, err := autoflags.UseConfigSimple(c)
+				require.NoError(t, err)
+
+				if inUse {
+					resultBuf.WriteString("CONFIG_LOADED:")
+					resultBuf.WriteString(message)
+				} else {
+					resultBuf.WriteString("NO_CONFIG:")
+					resultBuf.WriteString(message)
+				}
+			},
+		}
+
+		configOpts := autoflags.ConfigOptions{
+			AppName: "testapp",
+		}
+
+		err = autoflags.SetupConfig(hiddenC, configOpts)
+		require.NoError(t, err)
+
+		hiddenC.SetOut(&resultBuf)
+		hiddenC.SetErr(&resultBuf)
+		err = hiddenC.Execute()
+		require.NoError(t, err)
+
+		output := resultBuf.String()
+		assert.Contains(t, output, "NO_CONFIG:", "UseConfigSimple should not load config for unavailable command")
+		assert.Equal(t, "NO_CONFIG:", output, "Should return immediately without attempting config read")
+	})
+
+	t.Run("UseConfigSimple_LoadsConfigForAvailableCommand", func(t *testing.T) {
+		setupTest()
+		fs, cleanup := setupMockEnvironment(t)
+		defer cleanup()
+
+		configPath := "/home/testuser/.testapp/config.yaml"
+		err := fs.MkdirAll(filepath.Dir(configPath), 0755)
+		require.NoError(t, err)
+
+		err = afero.WriteFile(fs, configPath, []byte(createConfigContent("yaml")), 0644)
+		require.NoError(t, err)
+
+		var resultBuf bytes.Buffer
+
+		availableC := &cobra.Command{
+			Use:    "available-cmd",
+			Hidden: false, // This makes IsAvailableCommand() return false
+			Run: func(c *cobra.Command, args []string) {
+				// Test UseConfigSimple - should NOT load config for hidden command
+				inUse, message, err := autoflags.UseConfigSimple(c)
+				require.NoError(t, err)
+
+				if inUse {
+					resultBuf.WriteString("CONFIG_LOADED:")
+					resultBuf.WriteString(message)
+					resultBuf.WriteString(":LOGLEVEL:")
+					resultBuf.WriteString(viper.GetString("loglevel"))
+				} else {
+					resultBuf.WriteString("NO_CONFIG:")
+					resultBuf.WriteString(message)
+				}
+			},
+		}
+
+		configOpts := autoflags.ConfigOptions{
+			AppName: "testapp",
+		}
+
+		err = autoflags.SetupConfig(availableC, configOpts)
+		require.NoError(t, err)
+
+		availableC.SetOut(&resultBuf)
+		availableC.SetErr(&resultBuf)
+		err = availableC.Execute()
+		require.NoError(t, err)
+
+		output := resultBuf.String()
+		assert.Contains(t, output, "CONFIG_LOADED:", "UseConfigSimple should load config for available command")
+		assert.Contains(t, output, configPath, "Should load the config file")
+		assert.Contains(t, output, ":LOGLEVEL:debug", "Should load config values")
+	})
 }
 
 func TestSetupOrdering_ErrorConditions(t *testing.T) {
