@@ -74,8 +74,8 @@ func DefineZapcoreLevelHookFunc() DefineHookFunc {
 }
 
 // inferDefineHooks checks if there's a predefined flag definition function for the given type
-func inferDefineHooks(c *cobra.Command, typename string, structField reflect.StructField, name, short, descr string, fieldValue reflect.Value) bool {
-	if defineFunc, ok := defineHookRegistry[typename]; ok {
+func inferDefineHooks(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) bool {
+	if defineFunc, ok := defineHookRegistry[structField.Type.String()]; ok {
 		defineFunc(c, name, short, descr, structField, fieldValue)
 
 		return true
