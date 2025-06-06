@@ -15,23 +15,35 @@ const (
 	flagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
 )
 
+type DecodeHookFunc func(input any) (any, error)
+
 var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
 	"StringToZapcoreLevelHookFunc": StringToZapcoreLevelHookFunc(),
-	"StringToSliceHookFunc":        mapstructure.StringToSliceHookFunc(","),
 	"StringToTimeDurationHookFunc": mapstructure.StringToTimeDurationHookFunc(),
+	"StringToSliceHookFunc":        mapstructure.StringToSliceHookFunc(","),
 	"StringToIntSliceHookFunc":     StringToIntSliceHookFunc(","),
 }
 
-func inferDecodeHooks(c *cobra.Command, name, typename string) {
+func inferDecodeHooks(c *cobra.Command, name, typename string) bool {
 	switch typename {
 	case "time.Duration":
 		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
+
+		return true
 	case "zapcore.Level":
 		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
+
+		return true
 	case "[]string":
 		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
+
+		return true
 	case "[]int":
 		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
+
+		return true
+	default:
+		return false
 	}
 }
 
@@ -89,4 +101,41 @@ func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
 
 		return result, nil
 	}
+}
+
+func storeDecodeHookFunc(c *cobra.Command, flagname string, decodeM reflect.Value, target reflect.Type) error {
+	s := getScope(c)
+
+	// Wrap that adapts user method to mapstructure.DecodeHookFuncType signature
+	hookFunc := func(from reflect.Type, to reflect.Type, data any) (any, error) {
+		// Only apply this hook to the specific target type
+		if to != target {
+			return data, nil
+		}
+
+		// Only convert from string env var and config file values
+		// They always come as strings
+		if from.Kind() != reflect.String {
+			return data, nil
+		}
+
+		// Call user's decode hook: DecodeX(input interface{}) (target, error)
+		results := decodeM.Call([]reflect.Value{reflect.ValueOf(data)})
+
+		if len(results) != 2 {
+			return nil, fmt.Errorf("user decode method must return (value, error)")
+		}
+
+		// Check if error is not nil
+		if !results[1].IsNil() {
+			return nil, results[1].Interface().(error)
+		}
+
+		return results[0].Interface(), nil
+	}
+
+	k := fmt.Sprintf("customDecodeHook_%s_%s", c.Name(), flagname)
+	s.setCustomDecodeHook(k, hookFunc)
+
+	return c.Flags().SetAnnotation(flagname, flagDecodeHookAnnotation, []string{k})
 }
