@@ -82,7 +82,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	return nil
 }
 
-func define(c *cobra.Command, o interface{}, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) error {
+func define(c *cobra.Command, o any, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) error {
 	val := getValue(o)
 	if !val.IsValid() {
 		val = getValue(getValuePtr(o).Interface())
@@ -160,28 +160,51 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 
 		kind := f.Type.Kind()
 
-		// Flags with custom definition hooks
+		// Flags with `flagcustom:"true"` tag
 		custom, _ := strconv.ParseBool(f.Tag.Get("flagcustom"))
 		if custom && kind != reflect.Struct {
-			hookName := fmt.Sprintf("Define%s", f.Name)
+			defineHookName := fmt.Sprintf("Define%s", f.Name)
+			decodeHookName := fmt.Sprintf("Decode%s", f.Name)
+
 			if structPtr := getValuePtr(o); structPtr.IsValid() {
-				hookFunc := structPtr.MethodByName(hookName)
-				if hookFunc.IsValid() {
-					hookFunc.Call([]reflect.Value{
-						getValuePtr(c),
-						getValue(f.Type.String()),
-						getValue(name),
-						getValue(short),
-						getValue(descr),
+				defineHookFunc := structPtr.MethodByName(defineHookName)
+				decodeHookFunc := structPtr.MethodByName(decodeHookName)
+
+				if defineHookFunc.IsValid() {
+					if err := validateDefineHook(defineHookFunc); err != nil {
+						return fmt.Errorf("invalid %s define hook: %w", defineHookName, err)
+					}
+
+					if !decodeHookFunc.IsValid() {
+						return fmt.Errorf("custom type %s has %s define hook but missing %s decode hook", f.Type.String(), defineHookName, decodeHookName)
+					}
+
+					if err := validateDecodeHook(decodeHookFunc); err != nil {
+						return fmt.Errorf("invalid %s decode hook: %w", decodeHookName, err)
+					}
+
+					// Call user's define hook
+					defineHookFunc.Call([]reflect.Value{
+						reflect.ValueOf(c),
+						reflect.ValueOf(name),
+						reflect.ValueOf(short),
+						reflect.ValueOf(descr),
+						reflect.ValueOf(f),
+						reflect.ValueOf(field),
 					})
-					inferDecodeHooks(c, name, f.Type.String())
-					// FIXME: custom flags should define also a DecodeX() function mandatorily?
+					// Register user's decode hook (`Unmarshal` will call it)
+					if err := storeDecodeHookFunc(c, name, decodeHookFunc, f.Type); err != nil {
+						return fmt.Errorf("couldn't register decode hook %s: %w", decodeHookName, err)
+					}
 
 					goto definition_done
 				} else {
-					// Fallback to define hooks registry
-					if inferDefineHooks(c, f.Type.String(), f, name, short, descr, field) {
-						inferDecodeHooks(c, name, f.Type.String())
+					// The users set `flagcustom:"true"` but they didn't define a custom define hook
+					// We fallback to look up the hooks registries to avoid erroring out
+					if inferDefineHooks(c, name, short, descr, f, field) {
+						if !inferDecodeHooks(c, name, f.Type.String()) {
+							return fmt.Errorf("custom type %s has define hook but missing decode hook", f.Type.String())
+						}
 
 						goto definition_done
 					}
@@ -192,9 +215,11 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			}
 		}
 
-		// Check registry in case it's a known custom type
-		if inferDefineHooks(c, f.Type.String(), f, name, short, descr, field) {
-			inferDecodeHooks(c, name, f.Type.String())
+		// Check registry for known custom types
+		if inferDefineHooks(c, name, short, descr, f, field) {
+			if !inferDecodeHooks(c, name, f.Type.String()) {
+				return fmt.Errorf("define hooks registry type %s missing decode hook", f.Type.String())
+			}
 
 			goto definition_done
 		}
@@ -204,7 +229,20 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			continue
 		}
 
-		// TODO: complete type switch with missing types
+		// TODO: complete type switch with missing types for:
+		// c.Flags().StringArrayVarP()
+		// c.Flags().IPSliceVarP()
+		// c.Flags().DurationSliceVarP()
+		// c.Flags().BoolSliceVarP()
+		// c.Flags().UintSliceVarP()
+		// c.Flags().BytesBase64VarP()
+		// c.Flags().BytesHexVarP()
+		// c.Flags().IPMaskVarP()
+		// c.Flags().IPNetVarP()
+		// c.Flags().IPVarP()
+		// c.Flags().StringToStringVarP()
+		// c.Flags().StringToInt64VarP()
+		// c.Flags().StringToIntVarP()
 		switch kind {
 		case reflect.Struct:
 			// NOTE > field.Interface() doesn't work because it actually returns a copy of the object wrapping the interface
@@ -223,16 +261,6 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			val := field.Interface().(string)
 			ref := (*string)(unsafe.Pointer(field.UnsafeAddr()))
 			c.Flags().StringVarP(ref, name, short, val, descr)
-
-		case reflect.Int:
-			val := field.Interface().(int)
-			ref := (*int)(unsafe.Pointer(field.UnsafeAddr()))
-			if f.Tag.Get("flagtype") == "count" {
-				c.Flags().CountVarP(ref, name, short, descr)
-
-				goto definition_done
-			}
-			c.Flags().IntVarP(ref, name, short, val, descr)
 
 		case reflect.Uint:
 			val := field.Interface().(uint)
@@ -259,23 +287,15 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			ref := (*uint64)(unsafe.Pointer(field.UnsafeAddr()))
 			c.Flags().Uint64VarP(ref, name, short, val, descr)
 
-		case reflect.Slice:
-			switch f.Type.Elem().Kind() {
-			case reflect.String:
-				val := field.Interface().([]string)
-				ref := (*[]string)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().StringSliceVarP(ref, name, short, val, descr)
-			case reflect.Int:
-				val := field.Interface().([]int)
-				ref := (*[]int)(unsafe.Pointer(field.UnsafeAddr()))
-				c.Flags().IntSliceVarP(ref, name, short, val, descr)
-			}
-			inferDecodeHooks(c, name, f.Type.String())
+		case reflect.Int:
+			val := field.Interface().(int)
+			ref := (*int)(unsafe.Pointer(field.UnsafeAddr()))
+			if f.Tag.Get("flagtype") == "count" {
+				c.Flags().CountVarP(ref, name, short, descr)
 
-		case reflect.Int64:
-			val := field.Interface().(int64)
-			ref := (*int64)(unsafe.Pointer(field.UnsafeAddr()))
-			c.Flags().Int64VarP(ref, name, short, val, descr)
+				goto definition_done
+			}
+			c.Flags().IntVarP(ref, name, short, val, descr)
 
 		case reflect.Int8:
 			val := field.Interface().(int8)
@@ -291,6 +311,24 @@ func define(c *cobra.Command, o interface{}, startingGroup string, structPath st
 			val := field.Interface().(int32)
 			ref := (*int32)(unsafe.Pointer(field.UnsafeAddr()))
 			c.Flags().Int32VarP(ref, name, short, val, descr)
+
+		case reflect.Int64:
+			val := field.Interface().(int64)
+			ref := (*int64)(unsafe.Pointer(field.UnsafeAddr()))
+			c.Flags().Int64VarP(ref, name, short, val, descr)
+
+		case reflect.Slice:
+			switch f.Type.Elem().Kind() {
+			case reflect.String:
+				val := field.Interface().([]string)
+				ref := (*[]string)(unsafe.Pointer(field.UnsafeAddr()))
+				c.Flags().StringSliceVarP(ref, name, short, val, descr)
+			case reflect.Int:
+				val := field.Interface().([]int)
+				ref := (*[]int)(unsafe.Pointer(field.UnsafeAddr()))
+				c.Flags().IntSliceVarP(ref, name, short, val, descr)
+			}
+			inferDecodeHooks(c, name, f.Type.String()) // FIXME: handle error?
 
 		default:
 			continue
@@ -443,9 +481,46 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 	return nil
 }
 
+func validateDefineHook(m reflect.Value) error {
+	expectedType := reflect.TypeOf((*DefineHookFunc)(nil)).Elem()
+	actualType := m.Type()
+
+	if actualType.NumIn() != expectedType.NumIn() || actualType.NumOut() != expectedType.NumOut() {
+		return fmt.Errorf("define hook must have signature: func(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value)")
+	}
+
+	for i := range actualType.NumIn() {
+		if actualType.In(i) != expectedType.In(i) {
+			return fmt.Errorf("define hook parameter %d has wrong type: expected %v, got %v", i, expectedType.In(i), actualType.In(i))
+		}
+	}
+
+	return nil
+}
+
+func validateDecodeHook(m reflect.Value) error {
+	expectedType := reflect.TypeOf((*DecodeHookFunc)(nil)).Elem()
+	actualType := m.Type()
+
+	if actualType.NumIn() != expectedType.NumIn() || actualType.NumOut() != expectedType.NumOut() {
+		return fmt.Errorf("decode hook must have signature: func(input interface{}) (interface{}, error)")
+	}
+
+	if actualType.In(0) != expectedType.In(0) {
+		return fmt.Errorf("decode hook input parameter has wrong type: expected %v, got %v", expectedType.In(0), actualType.In(0))
+	}
+
+	if actualType.Out(0) != expectedType.Out(0) ||
+		actualType.Out(1) != expectedType.Out(1) {
+		return fmt.Errorf("decode hook must return (interface{}, error)")
+	}
+
+	return nil
+}
+
 var standardTypes = func() map[reflect.Kind]reflect.Type {
 	types := make(map[reflect.Kind]reflect.Type)
-	for _, v := range []interface{}{
+	for _, v := range []any{
 		"", int(0), bool(false), int8(0), int16(0), int32(0), int64(0),
 		uint(0), uint8(0), uint16(0), uint32(0), uint64(0),
 	} {
