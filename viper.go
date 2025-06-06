@@ -49,16 +49,25 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 // It automatically handles decode hooks, validation, transformation, and context updates based on the options type.
 // NOTE: See https://github.com/spf13/viper/pull/1715
 func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookFunc) error {
-	res := GetViper(c)
+	scope := getScope(c)
+	vip := scope.viper()
 
 	// Merging the config map (if any) from the global viper singleton instance
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
-	res.MergeConfigMap(configToMerge)
+	vip.MergeConfigMap(configToMerge)
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if decodeHooks, defineDecodeHooks := f.Annotations[flagDecodeHookAnnotation]; defineDecodeHooks {
 			for _, decodeHook := range decodeHooks {
+				// Custom decode hook have precedence
+				if customDecodeHook, customDecodeHookExists := scope.getCustomDecodeHook(decodeHook); customDecodeHookExists {
+					hooks = append(hooks, customDecodeHook)
+
+					continue
+				}
+
+				// Check the registry for built-in decode hooks
 				if decodeHookFunc, ok := decodeHookRegistry[decodeHook]; ok {
 					hooks = append(hooks, decodeHookFunc)
 				}
@@ -69,7 +78,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		hooks...,
 	))
-	if err := res.Unmarshal(opts, decodeHook); err != nil {
+	if err := vip.Unmarshal(opts, decodeHook); err != nil {
 		return fmt.Errorf("couldn't unmarshal config to options: %w", err)
 	}
 
