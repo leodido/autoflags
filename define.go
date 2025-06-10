@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unsafe"
 
+	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -132,12 +133,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 				fieldName = structPath + "." + strings.ToLower(f.Name)
 			}
 
-			return &FieldError{
-				FieldName: fieldName,
-				TagName:   "flagshort",
-				TagValue:  short,
-				Message:   "shorthand flag must be a single character",
-			}
+			return autoflagserrors.NewInvalidShorthandError(fieldName, short)
 		}
 
 		defval := f.Tag.Get("default")
@@ -413,14 +409,10 @@ func getValuePtr(o any) reflect.Value {
 func validateBooleanTag(fieldName, tagName, tagValue string) error {
 	if tagValue != "" {
 		if _, err := strconv.ParseBool(tagValue); err != nil {
-			return &FieldError{
-				FieldName: fieldName,
-				TagName:   tagName,
-				TagValue:  tagValue,
-				Message:   "invalid boolean value",
-			}
+			return autoflagserrors.NewInvalidBooleanTagError(fieldName, tagName, tagValue)
 		}
 	}
+
 	return nil
 }
 
