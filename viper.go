@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/go-viper/mapstructure/v2"
+	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -97,7 +98,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	// Automatically run options validation if feasible
 	if o, ok := opts.(ValidatableOptions); ok {
 		if validationErrors := o.Validate(); validationErrors != nil {
-			return &ValidationError{
+			return &autoflagserrors.ValidationError{
 				ContextName: c.Name(),
 				Errors:      validationErrors,
 			}
