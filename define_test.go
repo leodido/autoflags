@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
@@ -2221,11 +2222,12 @@ func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
 	// Multi-character shorthand should ALWAYS return error (regardless of WithValidation)
 	err := Define(cmd, opts)
 
-	assert.Error(suite.T(), err, "Should always return error for invalid flagshort value")
-	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	require.Error(suite.T(), err, "Should always return error for invalid flagshort value")
+	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
+	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "verb", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidShort", "Error should mention the field name")
-	assert.Contains(suite.T(), err.Error(), "shorthand flag must be a single character", "Error should have correct message")
+	assert.Contains(suite.T(), err.Error(), "field 'InvalidShort': shorthand flag 'verb' must be a single character", "Error should have correct message")
 }
 
 type flagShortEdgeCasesOptions struct {
@@ -2246,8 +2248,8 @@ func (suite *autoflagsSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError()
 	// Multi-character shorthand should always cause error
 	err := Define(cmd, opts)
 
-	assert.Error(suite.T(), err, "Should always return error for multi-character flagshort values")
-	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	require.Error(suite.T(), err, "Should always return error for multi-character flagshort values")
+	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	// Should contain one of the invalid values
 	errorContainsInvalid := strings.Contains(err.Error(), "ab") ||
 		strings.Contains(err.Error(), "xyz") ||
@@ -2300,8 +2302,9 @@ func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
 
 	err := Define(cmd, opts)
 
-	assert.Error(suite.T(), err, "Should always return error for invalid nested flagshort value")
-	assert.Contains(suite.T(), err.Error(), "flagshort", "Error should mention flagshort")
+	require.Error(suite.T(), err, "Should always return error for invalid nested flagshort value")
+	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
+	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "nestedstruct.invalidnestedshort", "Error should mention the nested field name")
 }

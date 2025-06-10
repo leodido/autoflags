@@ -16,6 +16,7 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
+	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -128,7 +129,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		err := autoflags.Unmarshal(cmd, opts)
 
 		require.Error(t, err, "Unmarshal should return an error for invalid age")
-		var valErr *autoflags.ValidationError
+		var valErr *autoflagserrors.ValidationError
 		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
 
 		assert.Equal(t, cmd.Name(), valErr.ContextName)
@@ -181,7 +182,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 
 		err := autoflags.Unmarshal(cmd, opts)
 
-		var valErr *autoflags.ValidationError
+		var valErr *autoflagserrors.ValidationError
 		require.Error(t, err, "Unmarshal should return an error for invalid email format")
 		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
 
