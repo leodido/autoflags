@@ -45,12 +45,14 @@ func (e *ValidationError) UnderlyingErrors() []error {
 }
 
 var (
-	ErrInvalidBooleanTag = errors.New("invalid boolean tag value")
-	ErrInvalidShorthand  = errors.New("invalid shorthand flag")
-	ErrMissingCustomHook = errors.New("missing custom flag definition hook")
-	ErrInvalidFlagName   = errors.New("invalid flag name")
-	ErrConflictingTags   = errors.New("conflicting struct tags")
-	ErrUnsupportedType   = errors.New("unsupported field type")
+	ErrInvalidBooleanTag          = errors.New("invalid boolean tag value")
+	ErrInvalidShorthand           = errors.New("invalid shorthand flag")
+	ErrMissingCustomHook          = errors.New("missing custom flag definition hook")
+	ErrInvalidDefineHookSignature = errors.New("invalid define hook signature")
+	ErrInvalidDecodeHookSignature = errors.New("invalid decode hook signature")
+	ErrInvalidFlagName            = errors.New("invalid flag name")
+	ErrConflictingTags            = errors.New("conflicting struct tags")
+	ErrUnsupportedType            = errors.New("unsupported field type")
 )
 
 // FieldError represents an error that occurred while processing a struct field's tags at definition time.
@@ -116,6 +118,46 @@ func (e *MissingCustomHookError) Unwrap() error {
 	return ErrMissingCustomHook
 }
 
+// InvalidDecodeHookSignatureError represents an invalid custom flag definition hook
+type InvalidDecodeHookSignatureError struct {
+	FieldName string
+	HookName  string
+	Message   string
+}
+
+func (e *InvalidDecodeHookSignatureError) Error() string {
+	return fmt.Sprintf("field '%s': invalid '%s' decode hook: %s",
+		e.FieldName, e.HookName, e.Message)
+}
+
+func (e *InvalidDecodeHookSignatureError) Field() string {
+	return e.FieldName
+}
+
+func (e *InvalidDecodeHookSignatureError) Unwrap() error {
+	return ErrInvalidDecodeHookSignature
+}
+
+// InvalidDefineHookSignatureError represents an invalid custom flag definition hook
+type InvalidDefineHookSignatureError struct {
+	FieldName string
+	HookName  string
+	Message   string
+}
+
+func (e *InvalidDefineHookSignatureError) Error() string {
+	return fmt.Sprintf("field '%s': invalid '%s' define hook: %s",
+		e.FieldName, e.HookName, e.Message)
+}
+
+func (e *InvalidDefineHookSignatureError) Field() string {
+	return e.FieldName
+}
+
+func (e *InvalidDefineHookSignatureError) Unwrap() error {
+	return ErrInvalidDefineHookSignature
+}
+
 // ConflictingTagsError represents conflicting struct tag values
 type ConflictingTagsError struct {
 	FieldName       string
@@ -179,6 +221,22 @@ func NewMissingCustomHookError(fieldName, hookName, typeName string) error {
 		FieldName:    fieldName,
 		ExpectedHook: hookName,
 		TypeName:     typeName,
+	}
+}
+
+func NewInvalidDecodeHookSignatureError(fieldName, hookName string, err error) error {
+	return &InvalidDecodeHookSignatureError{
+		FieldName: fieldName,
+		HookName:  hookName,
+		Message:   err.Error(),
+	}
+}
+
+func NewInvalidDefineHookSignatureError(fieldName, hookName string, err error) error {
+	return &InvalidDefineHookSignatureError{
+		FieldName: fieldName,
+		HookName:  hookName,
+		Message:   err.Error(),
 	}
 }
 

@@ -17,34 +17,38 @@ const (
 
 type DecodeHookFunc func(input any) (any, error)
 
-var decodeHookRegistry = map[string]mapstructure.DecodeHookFunc{
-	"StringToZapcoreLevelHookFunc": StringToZapcoreLevelHookFunc(),
-	"StringToTimeDurationHookFunc": mapstructure.StringToTimeDurationHookFunc(),
-	"StringToSliceHookFunc":        mapstructure.StringToSliceHookFunc(","),
-	"StringToIntSliceHookFunc":     StringToIntSliceHookFunc(","),
+type decodingAnnotation struct {
+	ann string
+	fx  mapstructure.DecodeHookFunc
+}
+
+var decodeHookRegistry = map[string]decodingAnnotation{
+	"time.Duration": decodingAnnotation{
+		"StringToTimeDurationHookFunc",
+		mapstructure.StringToTimeDurationHookFunc(),
+	},
+	"zapcore.Level": decodingAnnotation{
+		"StringToZapcoreLevelHookFunc",
+		StringToZapcoreLevelHookFunc(),
+	},
+	"[]string": decodingAnnotation{
+		"StringToSliceHookFunc",
+		mapstructure.StringToSliceHookFunc(","),
+	},
+	"[]int": decodingAnnotation{
+		"StringToIntSliceHookFunc",
+		StringToIntSliceHookFunc(","),
+	},
 }
 
 func inferDecodeHooks(c *cobra.Command, name, typename string) bool {
-	switch typename {
-	case "time.Duration":
-		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToTimeDurationHookFunc"})
+	if data, ok := decodeHookRegistry[typename]; ok {
+		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{data.ann})
 
 		return true
-	case "zapcore.Level":
-		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToZapcoreLevelHookFunc"})
-
-		return true
-	case "[]string":
-		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToSliceHookFunc"})
-
-		return true
-	case "[]int":
-		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{"StringToIntSliceHookFunc"})
-
-		return true
-	default:
-		return false
 	}
+
+	return false
 }
 
 // StringToZapcoreLevelHookFunc creates a decode hook that converts string values

@@ -243,7 +243,7 @@ func UseConfig(readWhen func() bool) (inUse bool, mes string, err error) {
 			return false, "Running without a configuration file", nil
 		} else {
 			// Config file was found but another error was produced
-			return false, "", fmt.Errorf("Error running with config file: %s: %v", viper.ConfigFileUsed(), err)
+			return false, "", fmt.Errorf("error running with config file: %s: %v", viper.ConfigFileUsed(), err)
 		}
 	}
 }
