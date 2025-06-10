@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 type configFlags struct {
@@ -277,13 +278,14 @@ const (
 )
 
 type comprehensiveCustomOptions struct {
-	ServerMode serverMode `flagcustom:"true" flag:"server-mode" flagshort:"m" flagdescr:"set server mode"`
-	SomeConfig string     `flagcustom:"true" flag:"some-config" flagshort:"c" flagdescr:"config file path"`
-	NoMethod   string     `flagcustom:"true" flag:"no-method" flagdescr:"this should not appear"`
-	NormalFlag string     `flag:"normal-flag" flagdescr:"normal description"`
+	LogLevel   zapcore.Level `flagcustom:"true" flagdescr:"log level"`
+	ServerMode serverMode    `flagcustom:"true" flag:"server-mode" flagshort:"m" flagdescr:"set server mode"`
+	SomeConfig string        `flagcustom:"true" flag:"some-config" flagshort:"c" flagdescr:"config file path"`
+	NoMethod   string        `flagcustom:"true" flag:"no-method" flagdescr:"this should not appear"`
+	NormalFlag string        `flag:"normal-flag" flagdescr:"normal description"`
 }
 
-func (o *comprehensiveCustomOptions) DefineServerMode(c *cobra.Command, typename, name, short, descr string) {
+func (o *comprehensiveCustomOptions) DefineServerMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	enhancedDesc := descr + fmt.Sprintf(" (%s,%s,%s)", string(development), string(staging), string(production))
 	c.Flags().StringP(name, short, string(development), enhancedDesc)
 
@@ -293,7 +295,12 @@ func (o *comprehensiveCustomOptions) DefineServerMode(c *cobra.Command, typename
 	})
 }
 
-func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, typename, name, short, descr string) {
+func (o *comprehensiveCustomOptions) DecodeServerMode(input any) (any, error) {
+
+	return "", nil // TODO: impl
+}
+
+func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	enhancedDesc := descr + " (must be .yaml, .yml, or .json)"
 	c.Flags().StringP(name, short, "", enhancedDesc)
 
@@ -302,15 +309,25 @@ func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, typename
 	})
 }
 
+func (o *comprehensiveCustomOptions) DecodeSomeConfig(input any) (any, error) {
+
+	return "", nil // TODO: impl
+}
+
 func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) {}
 
 func (suite *autoflagsSuite) TestFlagcustom_ComprehensiveScenarios() {
 	opts := &comprehensiveCustomOptions{}
 
 	c := &cobra.Command{Use: "test"}
-	Define(c, opts)
+	err := Define(c, opts)
+	require.NoError(suite.T(), err, "define should work for custom flags too")
 
 	f := c.Flags()
+
+	logLevelFlag := f.Lookup("loglevel")
+	assert.NotNil(suite.T(), logLevelFlag, "log-level flag should be defined disregarding having or not having the flagcustom")
+	assert.Equal(suite.T(), "log level {debug,info,warn,error,dpanic,panic,fatal}", logLevelFlag.Usage)
 
 	modeFlag := f.Lookup("server-mode")
 	assert.NotNil(suite.T(), modeFlag, "server-mode flag should be defined")
@@ -806,8 +823,12 @@ type flagCustomTestOptions struct {
 	NormalField   string `flag:"normal" flagdescr:"normal field without flagcustom"`
 }
 
-func (o *flagCustomTestOptions) DefineValidCustom(c *cobra.Command, typename, name, short, descr string) {
+func (o *flagCustomTestOptions) DefineValidCustom(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
+}
+
+func (o *flagCustomTestOptions) DecodeValidCustom(input any) (any, error) {
+	return input, nil
 }
 
 func (o *flagCustomTestOptions) Attach(c *cobra.Command) {}
@@ -845,8 +866,12 @@ type validFlagCustomOptions struct {
 	NoCustom    string `flag:"no-custom" flagdescr:"should not use custom"`
 }
 
-func (o *validFlagCustomOptions) DefineTrueCustom(c *cobra.Command, typename, name, short, descr string) {
+func (o *validFlagCustomOptions) DefineTrueCustom(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_VALUE", descr+" [CUSTOM]")
+}
+
+func (o *validFlagCustomOptions) DecodeTrueCustom(input any) (any, error) {
+	return input, nil
 }
 
 func (o *validFlagCustomOptions) Attach(c *cobra.Command) {}
@@ -857,7 +882,7 @@ func (suite *autoflagsSuite) TestFlagCustom_WithValidation_ValidValues() {
 
 	err := Define(cmd, opts, WithValidation())
 
-	assert.NoError(suite.T(), err, "Should not return error for valid flagcustom values")
+	require.NoError(suite.T(), err, "Should not return error for valid flagcustom values")
 
 	// Check that flags are created correctly
 	trueFlag := cmd.Flags().Lookup("true-custom")
@@ -880,11 +905,11 @@ type flagCustomEdgeCasesOptions struct {
 	WithSpaces string `flagcustom:" true " flag:"with-spaces" flagdescr:"spaces around true"`
 }
 
-func (o *flagCustomEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, typename, name, short, descr string) {
+func (o *flagCustomEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_TRUE", descr)
 }
 
-func (o *flagCustomEdgeCasesOptions) DefineNumberOne(c *cobra.Command, typename, name, short, descr string) {
+func (o *flagCustomEdgeCasesOptions) DefineNumberOne(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_ONE", descr)
 }
 
@@ -897,12 +922,20 @@ type validEdgeCasesOptions struct {
 	NumberZero string `flagcustom:"0" flag:"number-zero" flagdescr:"number 0"`
 }
 
-func (o *validEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, typename, name, short, descr string) {
+func (o *validEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_TRUE", descr)
 }
 
-func (o *validEdgeCasesOptions) DefineNumberOne(c *cobra.Command, typename, name, short, descr string) {
+func (o *validEdgeCasesOptions) DecodeCaseTrue(input any) (any, error) {
+	return input, nil
+}
+
+func (o *validEdgeCasesOptions) DefineNumberOne(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_ONE", descr)
+}
+
+func (o *validEdgeCasesOptions) DecodeNumberOne(input any) (any, error) {
+	return input, nil
 }
 
 func (o *validEdgeCasesOptions) Attach(c *cobra.Command) {}
@@ -1122,7 +1155,7 @@ type flagEnvCombinedOptions struct {
 	InvalidEnvValid string `flagenv:"invalid" flagcustom:"true" flag:"invalid-env-valid" flagdescr:"invalid env with valid custom"`
 }
 
-func (o *flagEnvCombinedOptions) DefineEnvWithCustom(c *cobra.Command, typename, name, short, descr string) {
+func (o *flagEnvCombinedOptions) DefineEnvWithCustom(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
 }
 
@@ -1133,7 +1166,7 @@ func (suite *autoflagsSuite) TestFlagenv_CombinedWithOtherTags() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// Should fail due to invalid flagenv, even though flagcustom is valid
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts, WithValidation()) // FIXME: should validation check the missing DecodeX?
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagenv value")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
