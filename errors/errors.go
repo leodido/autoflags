@@ -19,7 +19,7 @@ func (e *ValidationError) Error() string {
 	} else {
 		sb.WriteString("invalid options")
 	}
-	if len(e.Errors) > 1 {
+	if len(e.Errors) >= 1 {
 		sb.WriteString(":")
 	}
 

@@ -146,7 +146,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		assert.True(t, foundAgeError, "Expected validator.FieldError for Age with 'min' tag")
 
 		assert.Contains(t, err.Error(), "invalid options for "+cmd.Name()+":")
-		assert.Contains(t, err.Error(), "Error:Field validation for 'Age' failed on the 'min' tag")
+		assert.Contains(t, err.Error(), "Key: 'unmarshalIntegrationOptions.Age' Error:Field validation for 'Age' failed on the 'min' tag")
 	})
 
 	t.Run("ValidationFails_RequiredIf_Justification", func(t *testing.T) {
@@ -201,7 +201,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		assert.True(t, foundEmailError, "Expected a validator.FieldError for 'Email' field with 'email' tag")
 
 		assert.Contains(t, err.Error(), "invalid options for "+cmd.Name()+":")
-		assert.Contains(t, err.Error(), "Error:Field validation for 'Email' failed on the 'email' tag")
+		assert.Contains(t, err.Error(), "Key: 'unmarshalIntegrationOptions.Email' Error:Field validation for 'Email' failed on the 'email' tag")
 
 		assert.Equal(t, "notanemail@domain", opts.Email)
 		assert.Equal(t, "active", opts.Status)
