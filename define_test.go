@@ -282,7 +282,6 @@ type comprehensiveCustomOptions struct {
 	LogLevel   zapcore.Level `flagcustom:"true" flagdescr:"log level"`
 	ServerMode serverMode    `flagcustom:"true" flag:"server-mode" flagshort:"m" flagdescr:"set server mode"`
 	SomeConfig string        `flagcustom:"true" flag:"some-config" flagshort:"c" flagdescr:"config file path"`
-	NoMethod   string        `flagcustom:"true" flag:"no-method" flagdescr:"this should not appear"`
 	NormalFlag string        `flag:"normal-flag" flagdescr:"normal description"`
 }
 
@@ -354,22 +353,19 @@ type structFieldOptions struct {
 	methodCalled bool
 }
 
-func (o *structFieldOptions) DefineNest(c *cobra.Command, typename, name, short, descr string) {
-	o.methodCalled = true
-}
-
 func (o *structFieldOptions) Attach(c *cobra.Command) {}
 
 func (suite *autoflagsSuite) TestFlagcustom_EdgeCases() {
 	// Test struct fields (should be ignored)
 	structOpts := &structFieldOptions{}
 	c1 := &cobra.Command{Use: "test1"}
-	Define(c1, structOpts)
+	err := Define(c1, structOpts)
 
+	require.Error(suite.T(), err, "custom methods should not be called for struct fields")
+	require.ErrorIs(suite.T(), err, autoflagserrors.ErrConflictingTags)
+	require.Contains(suite.T(), err.Error(), "cannot be used on struct types")
+	assert.Contains(suite.T(), err.Error(), "Nest")
 	assert.False(suite.T(), structOpts.methodCalled, "custom methods should not be called for struct fields")
-
-	nestedFlag := c1.Flags().Lookup("nest.value")
-	assert.NotNil(suite.T(), nestedFlag, "nested fields should be processed normally")
 }
 
 type envAnnotationsTestOptions struct {
@@ -508,51 +504,53 @@ func (suite *autoflagsSuite) TestFlagrequired_NestedStructs() {
 	assert.Nil(suite.T(), nestedNotRequiredAnnotation, "nested-not-required should not have required annotation")
 }
 
-type invalidBooleanRequiredOptions struct {
-	InvalidTrue   string `flag:"invalid-true" flagrequired:"yes" flagdescr:"invalid boolean value"`
-	InvalidFalse  string `flag:"invalid-false" flagrequired:"no" flagdescr:"invalid boolean value"`
+type validBooleanRequiredOptions struct {
 	EmptyRequired string `flag:"empty-required" flagrequired:"" flagdescr:"empty flagrequired value"`
 	CaseVariation string `flag:"case-variation" flagrequired:"True" flagdescr:"case variation test"`
 }
 
-func (o *invalidBooleanRequiredOptions) Attach(c *cobra.Command) {}
+func (o *validBooleanRequiredOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagrequired_InvalidBooleanValues() {
-	opts := &invalidBooleanRequiredOptions{}
+func (suite *autoflagsSuite) TestFlagrequired_ValidBooleanEdgeCases() {
+	opts := &validBooleanRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	err := Define(cmd, opts)
+	require.NoError(suite.T(), err)
 
 	flags := cmd.Flags()
 
-	// Test invalid "yes" - should be treated as false since strconv.ParseBool returns false for invalid values
-	invalidTrueFlag := flags.Lookup("invalid-true")
-	assert.NotNil(suite.T(), invalidTrueFlag, "invalid-true should exist")
-
-	invalidTrueAnnotation := invalidTrueFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	assert.Nil(suite.T(), invalidTrueAnnotation, "invalid-true should not have required annotation due to invalid boolean")
-
-	// Test invalid "no" - should be treated as false
-	invalidFalseFlag := flags.Lookup("invalid-false")
-	assert.NotNil(suite.T(), invalidFalseFlag, "invalid-false should exist")
-
-	invalidFalseAnnotation := invalidFalseFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	assert.Nil(suite.T(), invalidFalseAnnotation, "invalid-false should not have required annotation due to invalid boolean")
-
 	// Test empty value - should be treated as false
 	emptyRequiredFlag := flags.Lookup("empty-required")
-	assert.NotNil(suite.T(), emptyRequiredFlag, "empty-required should exist")
+	require.NotNil(suite.T(), emptyRequiredFlag, "empty-required should exist")
 
 	emptyRequiredAnnotation := emptyRequiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
 	assert.Nil(suite.T(), emptyRequiredAnnotation, "empty-required should not have required annotation due to empty value")
 
 	// Test case variation - "True" should work since strconv.ParseBool accepts it
 	caseVariationFlag := flags.Lookup("case-variation")
-	assert.NotNil(suite.T(), caseVariationFlag, "case-variation should exist")
+	require.NotNil(suite.T(), caseVariationFlag, "case-variation should exist")
 
 	caseVariationAnnotation := caseVariationFlag.Annotations[cobra.BashCompOneRequiredFlag]
 	assert.NotNil(suite.T(), caseVariationAnnotation, "case-variation should have required annotation since 'True' is valid")
 	assert.Equal(suite.T(), []string{"true"}, caseVariationAnnotation)
+}
+
+type singleInvalidRequiredOption struct {
+	InvalidTrue string `flag:"invalid-true" flagrequired:"yes" flagdescr:"invalid boolean value"`
+}
+
+func (o *singleInvalidRequiredOption) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagrequired_InvalidBooleanValue() {
+	opts := &singleInvalidRequiredOption{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := Define(cmd, opts)
+	require.Error(suite.T(), err, "Should return error for invalid flagrequired value")
+	assert.Contains(suite.T(), err.Error(), "flagrequired")
+	assert.Contains(suite.T(), err.Error(), "yes")
+	assert.Contains(suite.T(), err.Error(), "InvalidTrue")
 }
 
 type multipleTypesRequiredOptions struct {
@@ -834,30 +832,16 @@ func (o *flagCustomTestOptions) DecodeValidCustom(input any) (any, error) {
 
 func (o *flagCustomTestOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagCustom_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagCustom_ShouldReturnError() {
 	opts := &flagCustomTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagcustom value")
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention flagcustom")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidCustom", "Error should mention the field name")
-}
-
-func (suite *autoflagsSuite) TestFlagCustom_WithValidation_OptionsPattern() {
-	opts := &flagCustomTestOptions{}
-	cmd1 := &cobra.Command{Use: "test1"}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	// Without validation - should not return error (backward compatible)
-	err1 := Define(cmd1, opts)
-	assert.NoError(suite.T(), err1, "Without validation should not return error")
-
-	// With validation - should return error
-	err2 := Define(cmd2, opts, WithValidation())
-	assert.Error(suite.T(), err2, "With validation should return error")
 }
 
 type validFlagCustomOptions struct {
@@ -877,11 +861,11 @@ func (o *validFlagCustomOptions) DecodeTrueCustom(input any) (any, error) {
 
 func (o *validFlagCustomOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagCustom_WithValidation_ValidValues() {
+func (suite *autoflagsSuite) TestFlagCustom_ValidValues() {
 	opts := &validFlagCustomOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	require.NoError(suite.T(), err, "Should not return error for valid flagcustom values")
 
@@ -910,8 +894,16 @@ func (o *flagCustomEdgeCasesOptions) DefineCaseTrue(c *cobra.Command, name, shor
 	c.Flags().String(name, "CUSTOM_TRUE", descr)
 }
 
+func (o *flagCustomEdgeCasesOptions) DecodeCaseTrue(input any) (any, error) {
+	return input, nil
+}
+
 func (o *flagCustomEdgeCasesOptions) DefineNumberOne(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_ONE", descr)
+}
+
+func (o *flagCustomEdgeCasesOptions) DecodeNumberOne(input any) (any, error) {
+	return input, nil
 }
 
 func (o *flagCustomEdgeCasesOptions) Attach(c *cobra.Command) {}
@@ -946,7 +938,7 @@ func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// These should all pass validation
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
 
 	// Check behavior
@@ -962,12 +954,12 @@ func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
 	assert.NotEqual(suite.T(), "CUSTOM_ONE", numberZeroFlag.DefValue, "ParseBool should accept '0' as false")
 }
 
-func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ShouldReturnError() {
 	opts := &flagCustomEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
 	// Spaces should cause validation error
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for flagcustom value with spaces")
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention flagcustom")
@@ -985,30 +977,16 @@ type flagEnvTestOptions struct {
 
 func (o *flagEnvTestOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagenv_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagenv_ShouldReturnError() {
 	opts := &flagEnvTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagenv value")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidEnv", "Error should mention the field name")
-}
-
-func (suite *autoflagsSuite) TestFlagenv_WithValidation_OptionsPattern() {
-	opts := &flagEnvTestOptions{}
-	cmd1 := &cobra.Command{Use: "test1"}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	// Without validation - should not return error (backward compatible)
-	err1 := Define(cmd1, opts)
-	assert.NoError(suite.T(), err1, "Without validation should not return error")
-
-	// With validation - should return error
-	err2 := Define(cmd2, opts, WithValidation())
-	assert.Error(suite.T(), err2, "With validation should return error")
 }
 
 type validFlagEnvOptions struct {
@@ -1020,11 +998,11 @@ type validFlagEnvOptions struct {
 
 func (o *validFlagEnvOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagenv_WithValidation_ValidValues() {
+func (suite *autoflagsSuite) TestFlagenv_ValidValues() {
 	opts := &validFlagEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.NoError(suite.T(), err, "Should not return error for valid flagenv values")
 
@@ -1071,7 +1049,7 @@ func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// These should all pass validation
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
 
 	// Check behavior
@@ -1092,12 +1070,12 @@ func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	assert.Nil(suite.T(), numberZeroAnnotation, "ParseBool should accept '0' as false")
 }
 
-func (suite *autoflagsSuite) TestFlagenv_EdgeCases_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ShouldReturnError() {
 	opts := &flagEnvEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
 	// Spaces should cause validation error
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for flagenv value with spaces")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
@@ -1121,7 +1099,7 @@ func (suite *autoflagsSuite) TestFlagenv_NestedStructs_WithValidation() {
 	opts := &nestedFlagEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid nested flagenv value")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
@@ -1141,7 +1119,7 @@ func (suite *autoflagsSuite) TestFlagenv_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagenv values")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
@@ -1160,6 +1138,18 @@ func (o *flagEnvCombinedOptions) DefineEnvWithCustom(c *cobra.Command, name, sho
 	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
 }
 
+func (o *flagEnvCombinedOptions) DecodeEnvWithCustom(input any) (any, error) {
+	return input, nil
+}
+
+func (o *flagEnvCombinedOptions) DefineInvalidEnvValid(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	c.Flags().String(name, "INVALID", descr+" [INVALID]")
+}
+
+func (o *flagEnvCombinedOptions) DecodeInvalidEnvValid(input any) (any, error) {
+	return input, nil
+}
+
 func (o *flagEnvCombinedOptions) Attach(c *cobra.Command) {}
 
 func (suite *autoflagsSuite) TestFlagenv_CombinedWithOtherTags() {
@@ -1167,11 +1157,12 @@ func (suite *autoflagsSuite) TestFlagenv_CombinedWithOtherTags() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// Should fail due to invalid flagenv, even though flagcustom is valid
-	err := Define(cmd, opts, WithValidation()) // FIXME: should validation check the missing DecodeX?
+	err := Define(cmd, opts)
 
-	assert.Error(suite.T(), err, "Should return error for invalid flagenv value")
+	require.Error(suite.T(), err, "Should return error for invalid flagenv value")
 	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should mention flagenv")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "boolean", "Error should mention that the value must be boolean")
 }
 
 type bothInvalidOptions struct {
@@ -1184,29 +1175,12 @@ func (suite *autoflagsSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
 	opts := &bothInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid tag values")
 	// Should return the first error (flagcustom is validated first in the current implementation)
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
 }
-
-type flagEnvValidationTimingOptions struct {
-	ValidEnv   string `flagenv:"true" flag:"valid-env" flagdescr:"valid env binding"`
-	InvalidEnv string `flagenv:"invalid" flag:"invalid-env" flagdescr:"invalid env value"`
-	NoEnv      string `flag:"no-env" flagdescr:"no env binding"`
-}
-
-func (o *flagEnvValidationTimingOptions) Attach(c *cobra.Command) {}
-
-type backwardCompatOptions struct {
-	ShouldWork  string `flagenv:"true" flag:"should-work" flagdescr:"should have env"`
-	ShouldFail  string `flagenv:"invalid" flag:"should-fail" flagdescr:"invalid but silent"`
-	YesNo       string `flagenv:"yes" flag:"yes-no" flagdescr:"common mistake"`
-	EmptyString string `flagenv:"" flag:"empty" flagdescr:"empty should be false"`
-}
-
-func (o *backwardCompatOptions) Attach(c *cobra.Command) {}
 
 type errorMessageOptions struct {
 	BadValue string `flagenv:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
@@ -1214,70 +1188,11 @@ type errorMessageOptions struct {
 
 func (o *errorMessageOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagenv_ValidationTiming_EarlyValidationPreventsLaterErrors() {
-	opts := &flagEnvValidationTimingOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// With validation enabled, should fail at Define() time
-	err := Define(cmd, opts, WithValidation())
-	assert.Error(suite.T(), err, "Should fail during Define() with validation enabled")
-	assert.Contains(suite.T(), err.Error(), "flagenv", "Error should be about flagenv validation")
-
-	// Without validation enabled, should succeed at Define() time
-	opts2 := &flagEnvValidationTimingOptions{}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	err2 := Define(cmd2, opts2) // No WithValidation()
-	assert.NoError(suite.T(), err2, "Should succeed during Define() without validation")
-
-	// Verify that the invalid flagenv value is silently treated as false (backward compatibility)
-	invalidFlag := cmd2.Flags().Lookup("invalid-env")
-	assert.NotNil(suite.T(), invalidFlag, "Invalid env flag should still be created")
-
-	invalidEnvAnnotation := invalidFlag.Annotations[flagEnvsAnnotation]
-	assert.Nil(suite.T(), invalidEnvAnnotation, "Invalid flagenv should be treated as false (no env binding)")
-
-	// Verify that valid flagenv still works
-	validFlag := cmd2.Flags().Lookup("valid-env")
-	assert.NotNil(suite.T(), validFlag, "Valid env flag should be created")
-
-	validEnvAnnotation := validFlag.Annotations[flagEnvsAnnotation]
-	assert.NotNil(suite.T(), validEnvAnnotation, "Valid flagenv should have env binding")
-}
-
-func (suite *autoflagsSuite) TestFlagenv_BackwardCompatibility_SilentFailureWithoutValidation() {
-	opts := &backwardCompatOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// Should not fail without validation
-	err := Define(cmd, opts)
-	assert.NoError(suite.T(), err, "Should not fail without validation enabled")
-
-	// Check the behavior matches expectations
-	flags := cmd.Flags()
-
-	shouldWorkFlag := flags.Lookup("should-work")
-	shouldFailFlag := flags.Lookup("should-fail")
-	yesNoFlag := flags.Lookup("yes-no")
-	emptyFlag := flags.Lookup("empty")
-
-	// Check environment annotations
-	shouldWorkAnnotation := shouldWorkFlag.Annotations[flagEnvsAnnotation]
-	shouldFailAnnotation := shouldFailFlag.Annotations[flagEnvsAnnotation]
-	yesNoAnnotation := yesNoFlag.Annotations[flagEnvsAnnotation]
-	emptyAnnotation := emptyFlag.Annotations[flagEnvsAnnotation]
-
-	assert.NotNil(suite.T(), shouldWorkAnnotation, "flagenv='true' should work")
-	assert.Nil(suite.T(), shouldFailAnnotation, "flagenv='invalid' should be treated as false")
-	assert.Nil(suite.T(), yesNoAnnotation, "flagenv='yes' should be treated as false")
-	assert.Nil(suite.T(), emptyAnnotation, "flagenv='' should be treated as false")
-}
-
 func (suite *autoflagsSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() {
 	opts := &errorMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagenv")
 
@@ -1300,30 +1215,16 @@ type flagIgnoreTestOptions struct {
 
 func (o *flagIgnoreTestOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagignore_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagignore_ShouldReturnError() {
 	opts := &flagIgnoreTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagignore value")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidIgnore", "Error should mention the field name")
-}
-
-func (suite *autoflagsSuite) TestFlagignore_WithValidation_OptionsPattern() {
-	opts := &flagIgnoreTestOptions{}
-	cmd1 := &cobra.Command{Use: "test1"}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	// Without validation - should not return error (backward compatible)
-	err1 := Define(cmd1, opts)
-	assert.NoError(suite.T(), err1, "Without validation should not return error")
-
-	// With validation - should return error
-	err2 := Define(cmd2, opts, WithValidation())
-	assert.Error(suite.T(), err2, "With validation should return error")
 }
 
 type validFlagIgnoreOptions struct {
@@ -1335,11 +1236,11 @@ type validFlagIgnoreOptions struct {
 
 func (o *validFlagIgnoreOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagignore_WithValidation_ValidValues() {
+func (suite *autoflagsSuite) TestFlagignore_ValidValues() {
 	opts := &validFlagIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.NoError(suite.T(), err, "Should not return error for valid flagignore values")
 
@@ -1356,16 +1257,6 @@ func (suite *autoflagsSuite) TestFlagignore_WithValidation_ValidValues() {
 	assert.NotNil(suite.T(), noIgnoreFlag, "no flagignore should create flag")
 }
 
-type flagIgnoreEdgeCasesOptions struct {
-	CaseTrue   string `flagignore:"True" flag:"case-true" flagdescr:"capital True"`
-	CaseFalse  string `flagignore:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
-	NumberOne  string `flagignore:"1" flag:"number-one" flagdescr:"number 1"`
-	NumberZero string `flagignore:"0" flag:"number-zero" flagdescr:"number 0"`
-	WithSpaces string `flagignore:" true " flag:"with-spaces" flagdescr:"spaces around true"`
-}
-
-func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
-
 type validIgnoreEdgeCasesOptions struct {
 	CaseTrue   string `flagignore:"True" flag:"case-true" flagdescr:"capital True"`
 	CaseFalse  string `flagignore:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
@@ -1380,7 +1271,7 @@ func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ValidValues() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// These should all pass validation
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
 
 	// Check behavior - strconv.ParseBool accepts these case variations and numbers
@@ -1395,12 +1286,22 @@ func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ValidValues() {
 	assert.NotNil(suite.T(), numberZeroFlag, "ParseBool should accept '0' as false (create flag)")
 }
 
-func (suite *autoflagsSuite) TestFlagignore_EdgeCases_WithValidation_ShouldReturnError() {
+type flagIgnoreEdgeCasesOptions struct {
+	CaseTrue   string `flagignore:"True" flag:"case-true" flagdescr:"capital True"`
+	CaseFalse  string `flagignore:"FALSE" flag:"case-false" flagdescr:"capital FALSE"`
+	NumberOne  string `flagignore:"1" flag:"number-one" flagdescr:"number 1"`
+	NumberZero string `flagignore:"0" flag:"number-zero" flagdescr:"number 0"`
+	WithSpaces string `flagignore:" true " flag:"with-spaces" flagdescr:"spaces around true"`
+}
+
+func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ShouldReturnError() {
 	opts := &flagIgnoreEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
 	// Spaces should cause validation error
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for flagignore value with spaces")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
@@ -1424,7 +1325,7 @@ func (suite *autoflagsSuite) TestFlagignore_NestedStructs_WithValidation() {
 	opts := &nestedFlagIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid nested flagignore value")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
@@ -1444,7 +1345,7 @@ func (suite *autoflagsSuite) TestFlagignore_MultipleInvalid_ReturnsFirstError() 
 	opts := &multipleInvalidIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagignore values")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
@@ -1459,8 +1360,12 @@ type flagIgnoreCombinedOptions struct {
 	InvalidIgnoreValid string `flagignore:"invalid" flagenv:"true" flag:"invalid-ignore-valid" flagdescr:"invalid ignore with valid env"`
 }
 
-func (o *flagIgnoreCombinedOptions) DefineIgnoreWithCustom(c *cobra.Command, typename, name, short, descr string) {
+func (o *flagIgnoreCombinedOptions) DefineIgnoreWithCustom(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
 	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
+}
+
+func (o *flagIgnoreCombinedOptions) DecodeIgnoreWithCustom(input any) (any, error) {
+	return input, nil
 }
 
 func (o *flagIgnoreCombinedOptions) Attach(c *cobra.Command) {}
@@ -1470,11 +1375,12 @@ func (suite *autoflagsSuite) TestFlagignore_CombinedWithOtherTags() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// Should fail due to invalid flagignore, even though other tags are valid
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagignore value")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
+	assert.Contains(suite.T(), err.Error(), "boolean", "Error should mention that the value must be boolean")
 }
 
 type allThreeInvalidOptions struct {
@@ -1487,31 +1393,12 @@ func (suite *autoflagsSuite) TestFlagignore_AllThreeInvalid_ReturnsFirstError() 
 	opts := &allThreeInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid tag values")
 	// Should return the first error (flagcustom is validated first in the current implementation)
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
 }
-
-// Additional struct definitions for timing and compatibility tests
-
-type flagIgnoreValidationTimingOptions struct {
-	ValidIgnore   string `flagignore:"true" flag:"valid-ignore" flagdescr:"valid ignore"`
-	InvalidIgnore string `flagignore:"invalid" flag:"invalid-ignore" flagdescr:"invalid ignore value"`
-	NoIgnore      string `flag:"no-ignore" flagdescr:"no ignore tag"`
-}
-
-func (o *flagIgnoreValidationTimingOptions) Attach(c *cobra.Command) {}
-
-type backwardIgnoreCompatOptions struct {
-	ShouldWork  string `flagignore:"true" flag:"should-work" flagdescr:"should be ignored"`
-	ShouldFail  string `flagignore:"invalid" flag:"should-fail" flagdescr:"invalid but silent"`
-	YesNo       string `flagignore:"yes" flag:"yes-no" flagdescr:"common mistake"`
-	EmptyString string `flagignore:"" flag:"empty" flagdescr:"empty should be false"`
-}
-
-func (o *backwardIgnoreCompatOptions) Attach(c *cobra.Command) {}
 
 type errorIgnoreMessageOptions struct {
 	BadValue string `flagignore:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
@@ -1519,63 +1406,11 @@ type errorIgnoreMessageOptions struct {
 
 func (o *errorIgnoreMessageOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagignore_ValidationTiming_EarlyValidationPreventsLaterErrors() {
-	opts := &flagIgnoreValidationTimingOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// With validation enabled, should fail at Define() time
-	err := Define(cmd, opts, WithValidation())
-	assert.Error(suite.T(), err, "Should fail during Define() with validation enabled")
-	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should be about flagignore validation")
-
-	// Without validation enabled, should succeed at Define() time
-	opts2 := &flagIgnoreValidationTimingOptions{}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	err2 := Define(cmd2, opts2) // No WithValidation()
-	assert.NoError(suite.T(), err2, "Should succeed during Define() without validation")
-
-	// Verify that the invalid flagignore value is silently treated as false (backward compatibility)
-	invalidFlag := cmd2.Flags().Lookup("invalid-ignore")
-	assert.NotNil(suite.T(), invalidFlag, "Invalid ignore flag should still be created (treated as false)")
-
-	// Verify that valid flagignore still works
-	validFlag := cmd2.Flags().Lookup("valid-ignore")
-	assert.Nil(suite.T(), validFlag, "Valid flagignore='true' should skip flag creation")
-
-	// Verify normal flags still work
-	normalFlag := cmd2.Flags().Lookup("no-ignore")
-	assert.NotNil(suite.T(), normalFlag, "Normal flag should be created")
-}
-
-func (suite *autoflagsSuite) TestFlagignore_BackwardCompatibility_SilentFailureWithoutValidation() {
-	opts := &backwardIgnoreCompatOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// Should not fail without validation
-	err := Define(cmd, opts)
-	assert.NoError(suite.T(), err, "Should not fail without validation enabled")
-
-	// Check the behavior matches expectations
-	flags := cmd.Flags()
-
-	shouldWorkFlag := flags.Lookup("should-work") // flagignore="true"
-	shouldFailFlag := flags.Lookup("should-fail") // flagignore="invalid"
-	yesNoFlag := flags.Lookup("yes-no")           // flagignore="yes"
-	emptyFlag := flags.Lookup("empty")            // flagignore=""
-
-	// Check flag creation behavior
-	assert.Nil(suite.T(), shouldWorkFlag, "flagignore='true' should ignore flag")
-	assert.NotNil(suite.T(), shouldFailFlag, "flagignore='invalid' should be treated as false (create flag)")
-	assert.NotNil(suite.T(), yesNoFlag, "flagignore='yes' should be treated as false (create flag)")
-	assert.NotNil(suite.T(), emptyFlag, "flagignore='' should be treated as false (create flag)")
-}
-
 func (suite *autoflagsSuite) TestFlagignore_ErrorMessages_ContainExpectedContent() {
 	opts := &errorIgnoreMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagignore")
 
@@ -1598,30 +1433,16 @@ type flagRequiredTestOptions struct {
 
 func (o *flagRequiredTestOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagrequired_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagrequired_ShouldReturnError() {
 	opts := &flagRequiredTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagrequired value")
 	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidRequired", "Error should mention the field name")
-}
-
-func (suite *autoflagsSuite) TestFlagrequired_WithValidation_OptionsPattern() {
-	opts := &flagRequiredTestOptions{}
-	cmd1 := &cobra.Command{Use: "test1"}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	// Without validation - should not return error (backward compatible)
-	err1 := Define(cmd1, opts)
-	assert.NoError(suite.T(), err1, "Without validation should not return error")
-
-	// With validation - should return error
-	err2 := Define(cmd2, opts, WithValidation())
-	assert.Error(suite.T(), err2, "With validation should return error")
 }
 
 type validFlagRequiredOptions struct {
@@ -1633,11 +1454,11 @@ type validFlagRequiredOptions struct {
 
 func (o *validFlagRequiredOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagrequired_WithValidation_ValidValues() {
+func (suite *autoflagsSuite) TestFlagrequired_ValidValues() {
 	opts := &validFlagRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.NoError(suite.T(), err, "Should not return error for valid flagrequired values")
 
@@ -1685,7 +1506,7 @@ func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ValidValues() {
 	cmd := &cobra.Command{Use: "test"}
 
 	// These should all pass validation
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
 
 	// Check behavior - strconv.ParseBool accepts these case variations and numbers
@@ -1706,12 +1527,12 @@ func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ValidValues() {
 	assert.Nil(suite.T(), numberZeroAnnotation, "ParseBool should accept '0' as false (not required)")
 }
 
-func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_WithValidation_ShouldReturnError() {
+func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ShouldReturnError() {
 	opts := &flagRequiredEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
 	// Spaces should cause validation error
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for flagrequired value with spaces")
 	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
@@ -1735,7 +1556,7 @@ func (suite *autoflagsSuite) TestFlagrequired_NestedStructs_WithValidation() {
 	opts := &nestedFlagRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid nested flagrequired value")
 	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
@@ -1755,37 +1576,12 @@ func (suite *autoflagsSuite) TestFlagrequired_MultipleInvalid_ReturnsFirstError(
 	opts := &multipleInvalidRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagrequired values")
 	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
 	// Should return the first error encountered (InvalidRequired1)
 	assert.Contains(suite.T(), err.Error(), "InvalidRequired1", "Error should mention the first invalid field")
-}
-
-type flagRequiredCombinedOptions struct {
-	RequiredWithCustom   string `flagrequired:"true" flagcustom:"true" flag:"required-custom" flagdescr:"required with custom"`
-	RequiredWithEnv      string `flagrequired:"true" flagenv:"true" flag:"required-env" flagdescr:"required with env"`
-	RequiredWithGroup    string `flagrequired:"false" flaggroup:"TestGroup" flag:"required-group" flagdescr:"required with group"`
-	InvalidRequiredValid string `flagrequired:"invalid" flagignore:"false" flag:"invalid-required-valid" flagdescr:"invalid required with valid ignore"`
-}
-
-func (o *flagRequiredCombinedOptions) DefineRequiredWithCustom(c *cobra.Command, typename, name, short, descr string) {
-	c.Flags().String(name, "CUSTOM_DEFAULT", descr+" [CUSTOM]")
-}
-
-func (o *flagRequiredCombinedOptions) Attach(c *cobra.Command) {}
-
-func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTagstWihValidation() {
-	opts := &flagRequiredCombinedOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// Should fail due to invalid flagrequired, even though other tags are valid
-	err := Define(cmd, opts, WithValidation())
-
-	assert.Error(suite.T(), err, "Should return error for invalid flagrequired value")
-	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
-	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 }
 
 type allFourInvalidOptions struct {
@@ -1798,29 +1594,12 @@ func (suite *autoflagsSuite) TestFlagrequired_AllFourInvalid_ReturnsFirstError()
 	opts := &allFourInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid tag values")
 	// Should return the first error (flagcustom is validated first in the current implementation)
 	assert.Contains(suite.T(), err.Error(), "flagcustom", "Error should mention the first invalid tag")
 }
-
-type flagRequiredValidationTimingOptions struct {
-	ValidRequired   string `flagrequired:"true" flag:"valid-required" flagdescr:"valid required"`
-	InvalidRequired string `flagrequired:"invalid" flag:"invalid-required" flagdescr:"invalid required value"`
-	NoRequired      string `flag:"no-required" flagdescr:"no required tag"`
-}
-
-func (o *flagRequiredValidationTimingOptions) Attach(c *cobra.Command) {}
-
-type backwardRequiredCompatOptions struct {
-	ShouldWork  string `flagrequired:"true" flag:"should-work" flagdescr:"should be required"`
-	ShouldFail  string `flagrequired:"invalid" flag:"should-fail" flagdescr:"invalid but silent"`
-	YesNo       string `flagrequired:"yes" flag:"yes-no" flagdescr:"common mistake"`
-	EmptyString string `flagrequired:"" flag:"empty" flagdescr:"empty should be false"`
-}
-
-func (o *backwardRequiredCompatOptions) Attach(c *cobra.Command) {}
 
 type errorRequiredMessageOptions struct {
 	BadValue string `flagrequired:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
@@ -1828,74 +1607,11 @@ type errorRequiredMessageOptions struct {
 
 func (o *errorRequiredMessageOptions) Attach(c *cobra.Command) {}
 
-func (suite *autoflagsSuite) TestFlagrequired_ValidationTiming_EarlyValidationPreventsLaterErrors() {
-	opts := &flagRequiredValidationTimingOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// With validation enabled, should fail at Define() time
-	err := Define(cmd, opts, WithValidation())
-	assert.Error(suite.T(), err, "Should fail during Define() with validation enabled")
-	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should be about flagrequired validation")
-
-	// Without validation enabled, should succeed at Define() time
-	opts2 := &flagRequiredValidationTimingOptions{}
-	cmd2 := &cobra.Command{Use: "test2"}
-
-	err2 := Define(cmd2, opts2) // No WithValidation()
-	assert.NoError(suite.T(), err2, "Should succeed during Define() without validation")
-
-	// Verify that the invalid flagrequired value is silently treated as false (backward compatibility)
-	invalidFlag := cmd2.Flags().Lookup("invalid-required")
-	assert.NotNil(suite.T(), invalidFlag, "Invalid required flag should still be created")
-
-	invalidRequiredAnnotation := invalidFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	assert.Nil(suite.T(), invalidRequiredAnnotation, "Invalid flagrequired should be treated as false (not required)")
-
-	// Verify that valid flagrequired still works
-	validFlag := cmd2.Flags().Lookup("valid-required")
-	assert.NotNil(suite.T(), validFlag, "Valid required flag should be created")
-
-	validRequiredAnnotation := validFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	assert.NotNil(suite.T(), validRequiredAnnotation, "Valid flagrequired should mark flag as required")
-
-	// Verify normal flags still work
-	normalFlag := cmd2.Flags().Lookup("no-required")
-	assert.NotNil(suite.T(), normalFlag, "Normal flag should be created")
-}
-
-func (suite *autoflagsSuite) TestFlagrequired_BackwardCompatibility_SilentFailureWithoutValidation() {
-	opts := &backwardRequiredCompatOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// Should not fail without validation
-	err := Define(cmd, opts)
-	assert.NoError(suite.T(), err, "Should not fail without validation enabled")
-
-	// Check the behavior matches expectations
-	flags := cmd.Flags()
-
-	shouldWorkFlag := flags.Lookup("should-work") // flagrequired="true"
-	shouldFailFlag := flags.Lookup("should-fail") // flagrequired="invalid"
-	yesNoFlag := flags.Lookup("yes-no")           // flagrequired="yes"
-	emptyFlag := flags.Lookup("empty")            // flagrequired=""
-
-	// Check required annotations
-	shouldWorkAnnotation := shouldWorkFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	shouldFailAnnotation := shouldFailFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	yesNoAnnotation := yesNoFlag.Annotations[cobra.BashCompOneRequiredFlag]
-	emptyAnnotation := emptyFlag.Annotations[cobra.BashCompOneRequiredFlag]
-
-	assert.NotNil(suite.T(), shouldWorkAnnotation, "flagrequired='true' should mark flag as required")
-	assert.Nil(suite.T(), shouldFailAnnotation, "flagrequired='invalid' should be treated as false (not required)")
-	assert.Nil(suite.T(), yesNoAnnotation, "flagrequired='yes' should be treated as false (not required)")
-	assert.Nil(suite.T(), emptyAnnotation, "flagrequired='' should be treated as false (not required)")
-}
-
 func (suite *autoflagsSuite) TestFlagrequired_ErrorMessages_ContainExpectedContent() {
 	opts := &errorRequiredMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts, WithValidation())
+	err := Define(cmd, opts)
 
 	assert.Error(suite.T(), err, "Should return error for invalid flagrequired")
 
@@ -1907,17 +1623,6 @@ func (suite *autoflagsSuite) TestFlagrequired_ErrorMessages_ContainExpectedConte
 	assert.Contains(suite.T(), errorMsg, "maybe", "Error should contain tag value")
 	assert.Contains(suite.T(), errorMsg, "invalid boolean value", "Error should contain message")
 }
-
-type exclusionsTestOptions struct {
-	NormalFlag   string `flag:"normal-flag" flagdescr:"should be created"`
-	ExcludedFlag string `flag:"excluded-flag" flagdescr:"should be excluded"`
-	AliasFlag    string `flag:"alias-flag" flagdescr:"has alias"`
-	CaseFlag     string `flag:"Case-Flag" flagdescr:"mixed case flag"`
-	NoAlias      string `flagdescr:"no alias"`
-	NestedStruct exclusionsNestedStruct
-}
-
-func (o *exclusionsTestOptions) Attach(c *cobra.Command) {}
 
 type exclusionsNestedStruct struct {
 	NestedFlag     string `flag:"nested-flag" flagdescr:"nested flag"`
@@ -1951,6 +1656,17 @@ func (suite *autoflagsSuite) TestWithExclusions_BasicExclusion() {
 	noAlias := flags.Lookup("noalias")
 	require.NotNil(suite.T(), noAlias, "--noalias should be created")
 }
+
+type exclusionsTestOptions struct {
+	NormalFlag   string `flag:"normal-flag" flagdescr:"should be created"`
+	ExcludedFlag string `flag:"excluded-flag" flagdescr:"should be excluded"`
+	AliasFlag    string `flag:"alias-flag" flagdescr:"has alias"`
+	CaseFlag     string `flag:"Case-Flag" flagdescr:"mixed case flag"`
+	NoAlias      string `flagdescr:"no alias"`
+	NestedStruct exclusionsNestedStruct
+}
+
+func (o *exclusionsTestOptions) Attach(c *cobra.Command) {}
 
 func (suite *autoflagsSuite) TestWithExclusions_MultipleExclusions() {
 	opts := &exclusionsTestOptions{}
@@ -2140,21 +1856,23 @@ func (suite *autoflagsSuite) TestWithExclusions_NoExclusionsOption() {
 	assert.NotNil(suite.T(), aliasFlag, "alias-flag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_CombinedWithOtherOptions() {
+func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	// Test exclusions combined with validation
-	Define(cmd, opts, WithValidation(), WithExclusions("excluded-flag"))
+	// Test with duplicate exclusions (should be handled gracefully)
+	Define(cmd, opts, WithExclusions("excluded-flag", "excluded-flag", "alias-flag"))
 
 	flags := cmd.Flags()
 
-	// Should work normally - excluded flag not created, others created
-	normalFlag := flags.Lookup("normal-flag")
+	// Should work the same as without duplicates
 	excludedFlag := flags.Lookup("excluded-flag")
+	aliasFlag := flags.Lookup("alias-flag")
+	normalFlag := flags.Lookup("normal-flag")
 
-	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 	assert.Nil(suite.T(), excludedFlag, "excluded-flag should not be created")
+	assert.Nil(suite.T(), aliasFlag, "alias-flag should not be created")
+	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 }
 
 type exclusionsSpecialCasesOptions struct {
@@ -2184,25 +1902,6 @@ func (suite *autoflagsSuite) TestWithExclusions_SpecialCharacters() {
 	require.Nil(suite.T(), underscoreFlag, "--flag_with_underscores should be excluded")
 	require.Nil(suite.T(), camelcaseFlag, "--CamelCase should be excluded")
 	require.NotNil(suite.T(), numberFlag, "flag123 should be created")
-}
-
-func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
-	opts := &exclusionsTestOptions{}
-	cmd := &cobra.Command{Use: "test"}
-
-	// Test with duplicate exclusions (should be handled gracefully)
-	Define(cmd, opts, WithExclusions("excluded-flag", "excluded-flag", "alias-flag"))
-
-	flags := cmd.Flags()
-
-	// Should work the same as without duplicates
-	excludedFlag := flags.Lookup("excluded-flag")
-	aliasFlag := flags.Lookup("alias-flag")
-	normalFlag := flags.Lookup("normal-flag")
-
-	assert.Nil(suite.T(), excludedFlag, "excluded-flag should not be created")
-	assert.Nil(suite.T(), aliasFlag, "alias-flag should not be created")
-	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 }
 
 type flagShortTestOptions struct {
@@ -2306,5 +2005,5 @@ func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
 	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
-	assert.Contains(suite.T(), err.Error(), "nestedstruct.invalidnestedshort", "Error should mention the nested field name")
+	assert.Contains(suite.T(), err.Error(), "NestedStruct.InvalidNestedShort", "Error should mention the nested field name")
 }

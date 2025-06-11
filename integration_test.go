@@ -265,13 +265,13 @@ type TestDefineConfigFlags struct {
 }
 
 type TestDefineDeepFlags struct {
-	Deep time.Duration `default:"deepdown" flagdescr:"deep flag" flag:"deep" flagshort:"d" flaggroup:"Deep"`
+	Deep time.Duration `default:"deepdown" flagdescr:"deep flag" flag:"deep" flagshort:"d" flaggroup:"Deep" flagrequired:"true"`
 }
 
 type TestDefineJSONFlags struct {
-	JSON bool                `flagdescr:"output the verdicts (if any) in JSON form"`
-	JQ   string              `flagshort:"q" flagdescr:"filter the output using a jq expression"`
-	Deep TestDefineDeepFlags `flagrequired:"true"`
+	JSON bool   `flagdescr:"output the verdicts (if any) in JSON form"`
+	JQ   string `flagshort:"q" flagdescr:"filter the output using a jq expression"`
+	Deep TestDefineDeepFlags
 }
 
 type TestCustomString string
@@ -317,7 +317,9 @@ func TestDefine_Integration(t *testing.T) {
 			}
 			c.SetErr(io.Discard)
 			c.SetOut(io.Discard)
-			autoflags.Define(c, tc.input)
+			errDefine := autoflags.Define(c, tc.input)
+			require.Nil(t, errDefine)
+
 			f := c.Flags()
 			vip := autoflags.GetViper(c)
 			u := c.UsageString()
