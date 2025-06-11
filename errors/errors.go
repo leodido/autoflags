@@ -53,6 +53,7 @@ var (
 	ErrInvalidDecodeHookSignature = errors.New("invalid decode hook signature")
 	ErrInvalidFlagName            = errors.New("invalid flag name")
 	ErrInvalidTagUsage            = errors.New("invalid tag usage")
+	ErrConflictingTags            = errors.New("conflicting struct tags")
 	ErrUnsupportedType            = errors.New("unsupported field type")
 )
 
@@ -178,6 +179,29 @@ func (e *InvalidTagUsageError) Unwrap() error {
 	return ErrInvalidTagUsage
 }
 
+// ConflictingTagsError represents conflicting struct tag values
+type ConflictingTagsError struct {
+	FieldName       string
+	Message         string
+	ConflictingTags []string
+}
+
+func (e *ConflictingTagsError) Error() string {
+	return fmt.Sprintf(
+		"field '%s': conflicting tags [%s]: %s",
+		e.FieldName,
+		strings.Join(e.ConflictingTags, ", "),
+		e.Message,
+	)
+}
+
+func (e *ConflictingTagsError) Field() string {
+	return e.FieldName
+}
+func (e *ConflictingTagsError) Unwrap() error {
+	return ErrConflictingTags
+}
+
 // UnsupportedTypeError represents an unsupported field type
 type UnsupportedTypeError struct {
 	FieldName string
@@ -241,6 +265,14 @@ func NewInvalidTagUsageError(fieldName, tagName, message string) error {
 		FieldName: fieldName,
 		TagName:   tagName,
 		Message:   message,
+	}
+}
+
+func NewConflictingTagsError(fieldName string, tags []string, message string) error {
+	return &ConflictingTagsError{
+		FieldName:       fieldName,
+		ConflictingTags: tags,
+		Message:         message,
 	}
 }
 
