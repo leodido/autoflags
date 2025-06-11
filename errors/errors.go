@@ -44,6 +44,7 @@ func (e *ValidationError) UnderlyingErrors() []error {
 	return result
 }
 
+// These are all DefinitionError
 var (
 	ErrInvalidBooleanTag          = errors.New("invalid boolean tag value")
 	ErrInvalidShorthand           = errors.New("invalid shorthand flag")
@@ -55,8 +56,8 @@ var (
 	ErrUnsupportedType            = errors.New("unsupported field type")
 )
 
-// FieldError represents an error that occurred while processing a struct field's tags at definition time.
-type FieldError interface {
+// DefinitionError represents an error that occurred while processing a struct field's tags at definition time.
+type DefinitionError interface {
 	error
 	Field() string
 }
@@ -252,6 +253,30 @@ func NewUnsupportedTypeError(fieldName, fieldType, message string) error {
 	return &UnsupportedTypeError{
 		FieldName: fieldName,
 		FieldType: fieldType,
+		Message:   message,
+	}
+}
+
+var ErrInputValue = errors.New("invalid input value")
+
+// InputError represents an invalid input value for flag definition
+type InputError struct {
+	InputType string
+	Message   string
+}
+
+func (e *InputError) Error() string {
+	return fmt.Sprintf("invalid input value of type '%s': %s", e.InputType, e.Message)
+}
+
+func (e *InputError) Unwrap() error {
+	return ErrInputValue
+}
+
+// Add this constructor function after the existing constructor functions
+func NewInputError(inputType, message string) error {
+	return &InputError{
+		InputType: inputType,
 		Message:   message,
 	}
 }
