@@ -378,6 +378,36 @@ func getValuePtr(o any) reflect.Value {
 	return reflect.New(reflect.TypeOf(o))
 }
 
+// getStructPtr is a helper that gets a pointer to a struct value.
+//
+// Similar to getValuePtr but works with reflect.Value directly.
+func getStructPtr(structValue reflect.Value) reflect.Value {
+	if !structValue.IsValid() {
+		return reflect.Value{}
+	}
+
+	// If it's already a pointer, handle appropriately
+	if structValue.Type().Kind() == reflect.Ptr {
+		if structValue.IsNil() {
+			// Create new instance of the pointed-to type
+			return reflect.New(structValue.Type().Elem())
+		}
+
+		return structValue
+	}
+
+	// For non-pointer values, try to get address if possible
+	if structValue.CanAddr() {
+		return structValue.Addr()
+	}
+
+	// Create a pointer to a copy if we can't get address
+	newPtr := reflect.New(structValue.Type())
+	newPtr.Elem().Set(structValue)
+
+	return newPtr
+}
+
 // getValidValue attempts to get a valid reflect.Value from the input object.
 //
 // It handles untyped nil as an error (no type information available).
@@ -451,7 +481,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Ensure that flagshort is given to non-struct types
 		if short != "" && isStructKind {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagshort"}, "flagshort cannot be used on struct types")
+			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagshort", "flagshort cannot be used on struct types")
 		}
 
 		// Validate flagcustom tag
@@ -462,7 +492,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Ensure that flagcustom is given to non-struct types
 		if flagCustomValue != nil && *flagCustomValue && isStructKind {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagcustom"}, "flagcustom cannot be used on struct types")
+			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagcustom", "flagcustom cannot be used on struct types")
 		}
 
 		// Validate the define and decode hooks when flagcustom is true
@@ -489,7 +519,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Ensure that flagignore is given to non-struct types
 		if flagIgnoreValue != nil && *flagIgnoreValue && isStructKind {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagignore"}, "flagignore cannot be used on struct types")
+			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagignore", "flagignore cannot be used on struct types")
 		}
 
 		// Validate flagrequired tag
@@ -500,7 +530,11 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Ensure that flagrequired is given to non-struct types
 		if flagRequiredValue != nil && *flagRequiredValue && isStructKind {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagrequired"}, "flagrequired cannot be used on struct types")
+			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagrequired", "flagrequired cannot be used on struct types")
+		}
+
+		if flagRequiredValue != nil && flagIgnoreValue != nil && *flagRequiredValue && *flagIgnoreValue {
+			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagignore", "flagrequired"}, "mutually exclusive tags")
 		}
 
 		// Recursively validate children structs
@@ -571,13 +605,9 @@ func validateDecodeHookSignature(m reflect.Value) error {
 // validateCustomFlag validates that a custom flag has proper define and decode mechanisms
 func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) error {
 	// Get pointer to struct to access methods
-	var structPtr reflect.Value
-	if structValue.CanAddr() {
-		structPtr = structValue.Addr()
-	} else {
-		// Create a pointer to a copy if we can't get address
-		structPtr = reflect.New(structValue.Type())
-		structPtr.Elem().Set(structValue)
+	structPtr := getStructPtr(structValue)
+	if !structPtr.IsValid() {
+		return fmt.Errorf("cannot get pointer to struct for field '%s'", fieldName)
 	}
 
 	// Check if struct has Define<FieldName> method
@@ -592,7 +622,7 @@ func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) 
 	if defineHookFunc.IsValid() {
 		// Must have corresponding decode method
 		if !decodeHookFunc.IsValid() {
-			return autoflagserrors.NewMissingCustomHookError(fieldName, decodeMethodName, fieldType)
+			return autoflagserrors.NewMissingDecodeHookError(fieldName, decodeMethodName)
 		}
 
 		// Validate signatures
@@ -620,7 +650,7 @@ func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) 
 	}
 
 	// Case 3: No define mechanism found
-	return autoflagserrors.NewMissingCustomHookError(fieldName, defineMethodName, fieldType)
+	return autoflagserrors.NewMissingDefineHookError(fieldName, defineMethodName)
 }
 
 var standardTypes = func() map[reflect.Kind]reflect.Type {
