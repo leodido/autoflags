@@ -264,6 +264,15 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 			field: "InvalidTagField",
 		},
 		{
+			name: "ConflictingTagsError",
+			err: &ConflictingTagsError{
+				FieldName:       "ConflictField",
+				ConflictingTags: []string{"tag1", "tag2"},
+				Message:         "conflict",
+			},
+			field: "ConflictField",
+		},
+		{
 			name: "UnsupportedTypeError",
 			err: &UnsupportedTypeError{
 				FieldName: "UnsupportedField",
@@ -558,6 +567,36 @@ func TestInvalidDefineHookSignatureError_ErrorsAs(t *testing.T) {
 	var fieldErr DefinitionError
 	require.True(t, errors.As(err, &fieldErr))
 	assert.Equal(t, "TestField", fieldErr.Field())
+}
+
+func TestConflictingTagsError_ErrorMessage(t *testing.T) {
+	err := &ConflictingTagsError{
+		FieldName:       "TestField",
+		ConflictingTags: []string{"flagignore", "flagrequired"},
+		Message:         "cannot ignore a required field",
+	}
+	expected := "field 'TestField': conflicting tags [flagignore, flagrequired]: cannot ignore a required field"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestConflictingTagsError_ErrorsIs(t *testing.T) {
+	err := &ConflictingTagsError{
+		FieldName:       "TestField",
+		ConflictingTags: []string{"tag1", "tag2"},
+		Message:         "conflict message",
+	}
+	assert.True(t, errors.Is(err, ErrConflictingTags))
+	assert.False(t, errors.Is(err, ErrUnsupportedType))
+}
+
+func TestNewConflictingTagsError_Constructor(t *testing.T) {
+	tags := []string{"flagignore", "flagrequired"}
+	err := NewConflictingTagsError("TestField", tags, "cannot ignore required field")
+	var conflictErr *ConflictingTagsError
+	require.True(t, errors.As(err, &conflictErr))
+	assert.Equal(t, "TestField", conflictErr.FieldName)
+	assert.Equal(t, tags, conflictErr.ConflictingTags)
+	assert.Equal(t, "cannot ignore required field", conflictErr.Message)
 }
 
 func TestInputError_ErrorMessage(t *testing.T) {
