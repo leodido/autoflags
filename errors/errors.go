@@ -52,7 +52,7 @@ var (
 	ErrInvalidDefineHookSignature = errors.New("invalid define hook signature")
 	ErrInvalidDecodeHookSignature = errors.New("invalid decode hook signature")
 	ErrInvalidFlagName            = errors.New("invalid flag name")
-	ErrConflictingTags            = errors.New("conflicting struct tags")
+	ErrInvalidTagUsage            = errors.New("invalid tag usage")
 	ErrUnsupportedType            = errors.New("unsupported field type")
 )
 
@@ -159,28 +159,23 @@ func (e *InvalidDefineHookSignatureError) Unwrap() error {
 	return ErrInvalidDefineHookSignature
 }
 
-// ConflictingTagsError represents conflicting struct tag values
-type ConflictingTagsError struct {
-	FieldName       string
-	Message         string
-	ConflictingTags []string
+// InvalidTagUsageError represents invalid tag usages
+type InvalidTagUsageError struct {
+	FieldName string
+	TagName   string
+	Message   string
 }
 
-func (e *ConflictingTagsError) Error() string {
-	return fmt.Sprintf(
-		"field '%s': conflicting tags [%s]: %s",
-		e.FieldName,
-		strings.Join(e.ConflictingTags, ", "),
-		e.Message,
-	)
+func (e *InvalidTagUsageError) Error() string {
+	return fmt.Sprintf("field '%s': invalid usage of tag '%s': %s", e.FieldName, e.TagName, e.Message)
 }
 
-func (e *ConflictingTagsError) Field() string {
+func (e *InvalidTagUsageError) Field() string {
 	return e.FieldName
 }
 
-func (e *ConflictingTagsError) Unwrap() error {
-	return ErrConflictingTags
+func (e *InvalidTagUsageError) Unwrap() error {
+	return ErrInvalidTagUsage
 }
 
 // UnsupportedTypeError represents an unsupported field type
@@ -241,11 +236,11 @@ func NewInvalidDefineHookSignatureError(fieldName, hookName string, err error) e
 	}
 }
 
-func NewConflictingTagsError(fieldName string, tags []string, message string) error {
-	return &ConflictingTagsError{
-		FieldName:       fieldName,
-		ConflictingTags: tags,
-		Message:         message,
+func NewInvalidTagUsageError(fieldName, tagName, message string) error {
+	return &InvalidTagUsageError{
+		FieldName: fieldName,
+		TagName:   tagName,
+		Message:   message,
 	}
 }
 
