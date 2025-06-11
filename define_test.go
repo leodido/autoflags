@@ -2329,6 +2329,31 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDecodeHook() {
 	assert.Contains(suite.T(), err.Error(), "CustomField", "Error should mention the field name")
 }
 
+type missingDefineHookOptions struct {
+	CustomField string `flagcustom:"true" flag:"custom-field"`
+}
+
+// No DefineCustomField method - define hook missing
+func (o *missingDefineHookOptions) DecodeCustomField(input any) (any, error) {
+	return input, nil
+}
+
+func (o *missingDefineHookOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDefineHook() {
+	opts := &missingDefineHookOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// This should error because the define hook is missing
+	err := Define(cmd, opts)
+
+	require.Error(suite.T(), err, "Should return error when define hook is missing")
+	require.ErrorIs(suite.T(), err, autoflagserrors.ErrMissingDefineHook)
+	assert.Contains(suite.T(), err.Error(), "missing define hook", "Error should mention missing define hook")
+	assert.Contains(suite.T(), err.Error(), "DefineCustomField", "Error should mention the expected define hook name")
+	assert.Contains(suite.T(), err.Error(), "CustomField", "Error should mention the field name")
+}
+
 type wrongDefineSignatureOptions struct {
 	CustomField string `flagcustom:"true" flag:"custom-field"`
 }
