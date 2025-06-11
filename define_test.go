@@ -296,8 +296,7 @@ func (o *comprehensiveCustomOptions) DefineServerMode(c *cobra.Command, name, sh
 }
 
 func (o *comprehensiveCustomOptions) DecodeServerMode(input any) (any, error) {
-
-	return "", nil // TODO: impl
+	return "", nil
 }
 
 func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
@@ -310,8 +309,7 @@ func (o *comprehensiveCustomOptions) DefineSomeConfig(c *cobra.Command, name, sh
 }
 
 func (o *comprehensiveCustomOptions) DecodeSomeConfig(input any) (any, error) {
-
-	return "", nil // TODO: impl
+	return "", nil
 }
 
 func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) {}
@@ -2006,4 +2004,236 @@ func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "NestedStruct.InvalidNestedShort", "Error should mention the nested field name")
+}
+
+type simpleValidOptions struct {
+	Name    string `flag:"name" flagdescr:"user name"`
+	Port    int    `flag:"port" flagdescr:"server port"`
+	Verbose bool   `flag:"verbose" flagshort:"v" flagdescr:"verbose output"`
+}
+
+func (o simpleValidOptions) Attach(c *cobra.Command) {}
+
+func (suite *autoflagsSuite) TestDefine_InvalidValueFallback() {
+	suite.T().Run("nil_interface_returns_error", func(t *testing.T) {
+		// Test with a nil interface (not a nil pointer to a specific type)
+		var nilInterface Options
+		cmd := &cobra.Command{Use: "test"}
+
+		// This should return an error, not panic
+		err := Define(cmd, nilInterface)
+
+		require.Error(t, err, "nil interface should return error")
+		assert.Contains(t, err.Error(), "cannot define flags")
+		assert.Contains(t, err.Error(), "invalid input value of type 'nil'")
+
+		// Should create no flags since there's an error
+		flagCount := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { flagCount++ })
+		assert.Equal(t, 0, flagCount, "nil interface should create no flags")
+	})
+
+	suite.T().Run("nil_typed_interface_succeeds", func(t *testing.T) {
+		// Test with a typed nil interface using a simple struct
+		var typedNil *simpleValidOptions = nil
+		var nilInterface Options = typedNil
+		cmd := &cobra.Command{Use: "test"}
+
+		// This should succeed using the fallback path
+		err := Define(cmd, nilInterface)
+
+		require.NoError(t, err, "typed nil interface should succeed via fallback")
+
+		// Should create flags as if it was a zero-valued struct
+		normalOpts := &simpleValidOptions{}
+		cmd2 := &cobra.Command{Use: "test2"}
+		Define(cmd2, normalOpts)
+
+		nilInterfaceFlags := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { nilInterfaceFlags++ })
+
+		normalFlags := 0
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { normalFlags++ })
+
+		assert.Equal(t, normalFlags, nilInterfaceFlags, "typed nil interface should create same flags as normal struct")
+	})
+
+	suite.T().Run("direct_nil_pointer_succeeds", func(t *testing.T) {
+		// Test with a direct nil pointer
+		var nilPtr *simpleValidOptions = nil
+		cmd := &cobra.Command{Use: "test"}
+
+		// Should succeed via fallback
+		err := Define(cmd, nilPtr)
+
+		require.NoError(t, err, "direct nil pointer should succeed via fallback")
+
+		// Should create flags as if it was a zero-valued struct
+		normalOpts := &simpleValidOptions{}
+		cmd2 := &cobra.Command{Use: "test2"}
+		Define(cmd2, normalOpts)
+
+		nilPtrFlags := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { nilPtrFlags++ })
+
+		normalFlags := 0
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { normalFlags++ })
+
+		assert.Equal(t, normalFlags, nilPtrFlags, "direct nil pointer should create same flags as normal struct")
+	})
+}
+
+func (suite *autoflagsSuite) TestDefine_GetValueEdgeCases() {
+	suite.T().Run("zero_value_struct", func(t *testing.T) {
+		// Test with a zero-valued struct (not pointer)
+		opts := simpleValidOptions{} // zero value, not pointer
+		cmd := &cobra.Command{Use: "test"}
+
+		err := Define(cmd, opts)
+		assert.NoError(t, err, "zero-value struct should work")
+
+		// Should create flags normally
+		flagCount := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { flagCount++ })
+		assert.Greater(t, flagCount, 0, "zero-value struct should create flags")
+	})
+
+	suite.T().Run("compare_pointer_vs_value_handling", func(t *testing.T) {
+		// Compare behavior between pointer and value for the same struct
+		optsValue := simpleValidOptions{}
+		optsPtr := &simpleValidOptions{}
+
+		cmd1 := &cobra.Command{Use: "test1"}
+		cmd2 := &cobra.Command{Use: "test2"}
+
+		// Both should work without errors
+		err1 := Define(cmd1, optsValue) // struct value
+		err2 := Define(cmd2, optsPtr)   // struct pointer
+
+		assert.NoError(t, err1, "struct value should work")
+		assert.NoError(t, err2, "struct pointer should work")
+
+		// Should create equivalent flags
+		flags1 := []string{}
+		cmd1.Flags().VisitAll(func(flag *pflag.Flag) { flags1 = append(flags1, flag.Name) })
+
+		flags2 := []string{}
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { flags2 = append(flags2, flag.Name) })
+
+		assert.ElementsMatch(t, flags1, flags2, "pointer and value should create equivalent flags")
+	})
+}
+
+func (suite *autoflagsSuite) TestDefine_ReflectionEdgeCases() {
+	suite.T().Run("interface_containing_nil_pointer", func(t *testing.T) {
+		// Create an interface that contains a nil pointer
+		var nilPtr *simpleValidOptions = nil
+		var opts Options = nilPtr
+		cmd := &cobra.Command{Use: "test"}
+
+		// This should trigger the fallback path and succeed
+		err := Define(cmd, opts)
+		assert.NoError(t, err, "interface containing nil pointer should succeed via fallback")
+
+		// Verify it behaves like a normal zero-valued struct
+		normalOpts := &simpleValidOptions{}
+		cmd2 := &cobra.Command{Use: "test2"}
+		Define(cmd2, normalOpts)
+
+		// Count flags
+		nilInterfaceFlags := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { nilInterfaceFlags++ })
+
+		normalFlags := 0
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { normalFlags++ })
+
+		assert.Equal(t, normalFlags, nilInterfaceFlags, "interface containing nil pointer should create same flags as normal struct")
+	})
+
+	suite.T().Run("invalid_reflection_scenarios", func(t *testing.T) {
+		// Test various edge cases that might result in invalid reflection
+		testCases := []struct {
+			name        string
+			opts        Options
+			shouldError bool
+		}{
+			{
+				name:        "untyped_nil",
+				opts:        nil,
+				shouldError: true, // Only untyped nil should error
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				cmd := &cobra.Command{Use: "test"}
+
+				// Should not panic regardless of input
+				err := Define(cmd, tc.opts)
+
+				if tc.shouldError {
+					require.Error(t, err, "should return error for %s", tc.name)
+					require.ErrorIs(t, err, autoflagserrors.ErrInputValue)
+				} else {
+					require.NoError(t, err, "should succeed for %s", tc.name)
+				}
+			})
+		}
+	})
+}
+
+func (suite *autoflagsSuite) TestDefine_NilPointerHandling_Extended() {
+	suite.T().Run("nil_interface_vs_nil_pointer", func(t *testing.T) {
+		// Test the difference between nil interface and nil pointer
+		var nilInterface Options = nil           // untyped nil - should error
+		var nilPointer *simpleValidOptions = nil // typed nil - should succeed
+
+		cmd1 := &cobra.Command{Use: "test1"}
+		cmd2 := &cobra.Command{Use: "test2"}
+
+		// nil interface should error
+		err1 := Define(cmd1, nilInterface)
+		assert.Error(t, err1, "untyped nil interface should error")
+
+		// nil pointer should succeed
+		err2 := Define(cmd2, nilPointer)
+		assert.NoError(t, err2, "typed nil pointer should succeed")
+
+		// nil pointer should create same flags as normal struct
+		normalOpts := &simpleValidOptions{}
+		cmd3 := &cobra.Command{Use: "test3"}
+		Define(cmd3, normalOpts)
+
+		nilPointerFlags := 0
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { nilPointerFlags++ })
+
+		normalFlags := 0
+		cmd3.Flags().VisitAll(func(flag *pflag.Flag) { normalFlags++ })
+
+		assert.Equal(t, normalFlags, nilPointerFlags, "nil pointer should create same flags as normal struct")
+	})
+
+	suite.T().Run("getValue_fallback_behavior", func(t *testing.T) {
+		// Specifically test that the getValue fallback works correctly
+		var opts Options = (*simpleValidOptions)(nil)
+		cmd := &cobra.Command{Use: "test"}
+
+		// This should use the fallback: getValue(getValuePtr(o).Interface())
+		err := Define(cmd, opts)
+		assert.NoError(t, err, "fallback path should work without errors")
+
+		// Should create flags as if it was a zero-valued struct
+		flagCount := 0
+		cmd.Flags().VisitAll(func(flag *pflag.Flag) { flagCount++ })
+
+		// Compare with a normal zero-valued struct
+		normalOpts := &simpleValidOptions{}
+		cmd2 := &cobra.Command{Use: "test2"}
+		Define(cmd2, normalOpts)
+
+		normalFlagCount := 0
+		cmd2.Flags().VisitAll(func(flag *pflag.Flag) { normalFlagCount++ })
+
+		assert.Equal(t, normalFlagCount, flagCount, "fallback path should create same flags as normal zero-valued struct")
+	})
 }
