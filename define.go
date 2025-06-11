@@ -49,7 +49,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 		opt(ctx)
 	}
 
-	// Run validation (on by default)
+	// Run input validation (on by default)
 	if err := validateStructTags(o); err != nil {
 		return err
 	}
@@ -71,12 +71,13 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 }
 
 func define(c *cobra.Command, o any, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) error {
+	// Assuming validation already caught untyped nils...
 	val := getValue(o)
 	if !val.IsValid() {
 		val = getValue(getValuePtr(o).Interface())
 	}
 
-	for i := 0; i < val.NumField(); i++ {
+	for i := range val.NumField() {
 		field := val.Field(i)
 		// Ignore private fields
 		if !field.CanInterface() {
@@ -114,15 +115,6 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		short := f.Tag.Get("flagshort")
-		if short != "" && len(short) > 1 {
-			fieldName := f.Name
-			if structPath != "" {
-				fieldName = structPath + "." + strings.ToLower(f.Name)
-			}
-
-			return autoflagserrors.NewInvalidShorthandError(fieldName, short)
-		}
-
 		defval := f.Tag.Get("default")
 		descr := f.Tag.Get("flagdescr")
 		group := f.Tag.Get("flaggroup")
@@ -349,6 +341,10 @@ func getValue(o any) reflect.Value {
 	var val reflect.Value
 
 	val = reflect.ValueOf(o)
+	// Check if the value is valid before trying to access its type, otherwise let the caller handle it
+	if !val.IsValid() {
+		return val
+	}
 	// When we get a pointer, we want to get the value pointed to.
 	// Otherwise, we need to get a pointer to the value we got.
 	if val.Type().Kind() == reflect.Ptr {
@@ -366,6 +362,10 @@ func getValue(o any) reflect.Value {
 
 func getValuePtr(o any) reflect.Value {
 	val := reflect.ValueOf(o)
+	// Check if the value is valid before trying to access its type, otherwise let the caller handle it
+	if !val.IsValid() {
+		return val
+	}
 	if val.Type().Kind() == reflect.Ptr {
 		// Create a new zero-valued instance of the pointed-to type
 		if val.IsNil() {
@@ -378,11 +378,48 @@ func getValuePtr(o any) reflect.Value {
 	return reflect.New(reflect.TypeOf(o))
 }
 
-// validateStructTags checks for invalid boolean values in struct tags
-func validateStructTags(o any) error {
+// getValidValue attempts to get a valid reflect.Value from the input object.
+//
+// It handles untyped nil as an error (no type information available).
+// For typed nil pointers, it uses a fallback approach to create zero values.
+//
+// Returns an error if no valid Value can be obtained.
+func getValidValue(o any) (reflect.Value, error) {
+	// Handle untyped nil
+	if o == nil {
+		return reflect.Value{}, autoflagserrors.NewInputError("nil", "cannot define flags from nil value")
+	}
+
 	val := getValue(o)
 	if !val.IsValid() {
-		val = getValue(getValuePtr(o).Interface())
+		// Try the fallback approach for cases like typed nil pointers
+		// This allows us to create zero values from type information
+		valPtr := getValuePtr(o)
+		if !valPtr.IsValid() {
+			// This should not happen for valid typed inputs
+			inputType := fmt.Sprintf("%T", o)
+
+			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "cannot obtain valid reflection value")
+		}
+
+		// Only call Interface() if we have a valid value
+		val = getValue(valPtr.Interface())
+		if !val.IsValid() {
+			// This should also not happen for valid inputs
+			inputType := fmt.Sprintf("%T", o)
+
+			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "fallback reflection approach failed")
+		}
+	}
+
+	return val, nil
+}
+
+// validateStructTags checks for invalid boolean values in struct tags
+func validateStructTags(o any) error {
+	val, err := getValidValue(o)
+	if err != nil {
+		return fmt.Errorf("validation failed: %w", err)
 	}
 
 	return validateFieldTags(val, "")
@@ -390,7 +427,7 @@ func validateStructTags(o any) error {
 
 // validateFieldTags recursively validates tags in struct fields
 func validateFieldTags(val reflect.Value, prefix string) error {
-	for i := 0; i < val.NumField(); i++ {
+	for i := range val.NumField() {
 		field := val.Field(i)
 		fieldType := val.Type().Field(i)
 
