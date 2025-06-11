@@ -5,7 +5,7 @@ import (
 )
 
 func (suite *autoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
-	globalSettings := map[string]interface{}{}
+	globalSettings := map[string]any{}
 	commandName := "dns"
 
 	result := createConfigC(globalSettings, commandName)
@@ -14,7 +14,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
 	}
@@ -22,7 +22,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
 	}
@@ -30,10 +30,10 @@ func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
-		"dns": map[string]interface{}{
+		"dns": map[string]any{
 			"freeze": true,
 			"cgroup": []string{"test"},
 		},
@@ -42,7 +42,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
 		"freeze":      true,
@@ -52,7 +52,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel": "debug",
 		"dns":      "invalid-not-a-map",
 		"tty":      42,
@@ -61,7 +61,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel": "debug",
 		"dns":      "invalid-not-a-map",
 		"tty":      42,
@@ -70,10 +70,10 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"freeze":   false,
 		"loglevel": "info",
-		"dns": map[string]interface{}{
+		"dns": map[string]any{
 			"freeze":   true,    // should override top-level
 			"loglevel": "debug", // should override top-level
 			"cgroup":   []string{"test"},
@@ -83,7 +83,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel()
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"freeze":   true,             // from dns section
 		"loglevel": "debug",          // from dns section
 		"cgroup":   []string{"test"}, // from dns section
@@ -92,12 +92,12 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel()
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel": "info",
-		"dns": map[string]interface{}{
+		"dns": map[string]any{
 			"freeze": true,
 		},
-		"tty": map[string]interface{}{
+		"tty": map[string]any{
 			"ignore-comms": []string{"bash"},
 		},
 	}
@@ -105,7 +105,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel": "info",
 		"freeze":   true,
 		// tty section should be excluded
@@ -114,11 +114,11 @@ func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"shared-setting": "value",
-		"dns": map[string]interface{}{
+		"dns": map[string]any{
 			"freeze": true,
-			"nested": map[string]interface{}{
+			"nested": map[string]any{
 				"deep-setting": "deep-value",
 			},
 		},
@@ -127,10 +127,10 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"shared-setting": "value",
 		"freeze":         true,
-		"nested": map[string]interface{}{
+		"nested": map[string]any{
 			"deep-setting": "deep-value",
 		},
 	}
@@ -138,22 +138,22 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel": "debug",
-		"dns":      map[string]interface{}{},
+		"dns":      map[string]any{},
 	}
 	commandName := "dns"
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel": "debug",
 	}
 	assert.Equal(suite.T(), expected, result, "should handle empty command sections gracefully")
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"loglevel": "debug",
 		"dns":      nil,
 	}
@@ -161,7 +161,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"loglevel": "debug",
 		"dns":      nil,
 	}
@@ -169,9 +169,9 @@ func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
 }
 
 func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
-	globalSettings := map[string]interface{}{
+	globalSettings := map[string]any{
 		"timeout": "30s", // string at top level
-		"dns": map[string]interface{}{
+		"dns": map[string]any{
 			"timeout": 30, // int in command section
 		},
 	}
@@ -179,7 +179,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
 
 	result := createConfigC(globalSettings, commandName)
 
-	expected := map[string]interface{}{
+	expected := map[string]any{
 		"timeout": 30, // command section wins
 	}
 	assert.Equal(suite.T(), expected, result, "command section should override top-level even with type conflicts")

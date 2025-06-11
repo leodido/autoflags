@@ -23,11 +23,14 @@ func (suite *autoflagsSuite) TestHooks_DefineZapcoreLevelFlag() {
 	opts := &zapcoreLevelOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	err := Define(cmd, opts)
+
+	require.Nil(suite.T(), err)
 
 	// Check if the flag was created
 	flag := cmd.Flags().Lookup("loglevel")
 	assert.NotNil(suite.T(), flag)
+	assert.Contains(suite.T(), flag.Usage, "{debug,info,warn,error,dpanic,panic,fatal}")
 }
 
 func (suite *autoflagsSuite) TestHooks_ZapcoreLevelFromYAML() {
