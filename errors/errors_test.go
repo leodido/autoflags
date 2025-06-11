@@ -129,25 +129,25 @@ func TestMissingCustomHookError_ErrorsIs(t *testing.T) {
 	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
 }
 
-func TestConflictingTagsError_ErrorMessage(t *testing.T) {
-	err := &ConflictingTagsError{
-		FieldName:       "TestField",
-		ConflictingTags: []string{"flagignore", "flagrequired"},
-		Message:         "cannot ignore a required field",
+func TestInvalidTagUsageError_ErrorMessage(t *testing.T) {
+	err := &InvalidTagUsageError{
+		FieldName: "TestField",
+		TagName:   "flagignore",
+		Message:   "cannot ignore a required field",
 	}
 
-	expected := "field 'TestField': conflicting tags [flagignore, flagrequired]: cannot ignore a required field"
+	expected := "field 'TestField': invalid usage of tag 'flagignore': cannot ignore a required field"
 	assert.Equal(t, expected, err.Error())
 }
 
-func TestConflictingTagsError_ErrorsIs(t *testing.T) {
-	err := &ConflictingTagsError{
-		FieldName:       "TestField",
-		ConflictingTags: []string{"tag1", "tag2"},
-		Message:         "conflict message",
+func TestInvalidTagUsageError_ErrorsIs(t *testing.T) {
+	err := &InvalidTagUsageError{
+		FieldName: "TestField",
+		TagName:   "tag1",
+		Message:   "message",
 	}
 
-	assert.True(t, errors.Is(err, ErrConflictingTags))
+	assert.True(t, errors.Is(err, ErrInvalidTagUsage))
 	assert.False(t, errors.Is(err, ErrUnsupportedType))
 }
 
@@ -202,15 +202,14 @@ func TestNewMissingCustomHookError_Constructor(t *testing.T) {
 	assert.Equal(t, "main.ServerMode", hookErr.TypeName)
 }
 
-func TestNewConflictingTagsError_Constructor(t *testing.T) {
-	tags := []string{"flagignore", "flagrequired"}
-	err := NewConflictingTagsError("TestField", tags, "cannot ignore required field")
+func TestNewInvalidTagUsageError_Constructor(t *testing.T) {
+	err := NewInvalidTagUsageError("TestField", "flagrequired", "cannot ignore required field")
 
-	var conflictErr *ConflictingTagsError
-	require.True(t, errors.As(err, &conflictErr))
-	assert.Equal(t, "TestField", conflictErr.FieldName)
-	assert.Equal(t, tags, conflictErr.ConflictingTags)
-	assert.Equal(t, "cannot ignore required field", conflictErr.Message)
+	var tagErr *InvalidTagUsageError
+	require.True(t, errors.As(err, &tagErr))
+	assert.Equal(t, "TestField", tagErr.FieldName)
+	assert.Equal(t, "flagrequired", tagErr.TagName)
+	assert.Equal(t, "cannot ignore required field", tagErr.Message)
 }
 
 func TestNewUnsupportedTypeError_Constructor(t *testing.T) {
@@ -256,13 +255,13 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 			field: "CustomField",
 		},
 		{
-			name: "ConflictingTagsError",
-			err: &ConflictingTagsError{
-				FieldName:       "ConflictField",
-				ConflictingTags: []string{"tag1", "tag2"},
-				Message:         "conflict",
+			name: "InvalidTagUsage",
+			err: &InvalidTagUsageError{
+				FieldName: "InvalidTagField",
+				TagName:   "tag2",
+				Message:   "invalid_tag",
 			},
-			field: "ConflictField",
+			field: "InvalidTagField",
 		},
 		{
 			name: "UnsupportedTypeError",
