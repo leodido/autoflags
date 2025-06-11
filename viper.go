@@ -69,8 +69,8 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 				}
 
 				// Check the registry for built-in decode hooks
-				if decodingData, ok := decodeHookRegistry[decodeHook]; ok {
-					hooks = append(hooks, decodingData.fx)
+				if decodeHookFunc, ok := annotationToDecodeHookRegistry[decodeHook]; ok {
+					hooks = append(hooks, decodeHookFunc)
 				}
 			}
 		}

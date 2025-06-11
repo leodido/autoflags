@@ -23,22 +23,37 @@ type decodingAnnotation struct {
 }
 
 var decodeHookRegistry = map[string]decodingAnnotation{
-	"time.Duration": decodingAnnotation{
+	"time.Duration": {
 		"StringToTimeDurationHookFunc",
 		mapstructure.StringToTimeDurationHookFunc(),
 	},
-	"zapcore.Level": decodingAnnotation{
+	"zapcore.Level": {
 		"StringToZapcoreLevelHookFunc",
 		StringToZapcoreLevelHookFunc(),
 	},
-	"[]string": decodingAnnotation{
+	"[]string": {
 		"StringToSliceHookFunc",
 		mapstructure.StringToSliceHookFunc(","),
 	},
-	"[]int": decodingAnnotation{
+	"[]int": {
 		"StringToIntSliceHookFunc",
 		StringToIntSliceHookFunc(","),
 	},
+}
+
+// annotationToDecodeHookRegistry maps annotation names to decode hook functions
+var annotationToDecodeHookRegistry map[string]mapstructure.DecodeHookFunc
+
+func init() {
+	// Map annotations to decoding hook
+	annotationToDecodeHookRegistry = make(map[string]mapstructure.DecodeHookFunc)
+	for typename, data := range decodeHookRegistry {
+		if _, exists := annotationToDecodeHookRegistry[data.ann]; exists {
+			panic(fmt.Sprintf("duplicate annotation name '%s' found in decode hook registry (type: %s)", data.ann, typename))
+		}
+
+		annotationToDecodeHookRegistry[data.ann] = data.fx
+	}
 }
 
 func inferDecodeHooks(c *cobra.Command, name, typename string) bool {
