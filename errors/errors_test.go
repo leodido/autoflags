@@ -107,25 +107,43 @@ func TestInvalidShorthandError_ErrorsIs(t *testing.T) {
 	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
 }
 
-func TestMissingCustomHookError_ErrorMessage(t *testing.T) {
-	err := &MissingCustomHookError{
+func TestMissingDefineHookError_ErrorMessage(t *testing.T) {
+	err := &MissingDefineHookError{
 		FieldName:    "ServerMode",
 		ExpectedHook: "DefineServerMode",
-		TypeName:     "main.ServerMode",
 	}
 
-	expected := "field 'ServerMode': flagcustom='true' but hook 'DefineServerMode' not found for type 'main.ServerMode'"
+	expected := "field 'ServerMode': flagcustom='true' but missing define hook 'DefineServerMode'"
 	assert.Equal(t, expected, err.Error())
 }
 
-func TestMissingCustomHookError_ErrorsIs(t *testing.T) {
-	err := &MissingCustomHookError{
+func TestMissingDefineHookError_ErrorsIs(t *testing.T) {
+	err := &MissingDefineHookError{
 		FieldName:    "TestField",
 		ExpectedHook: "DefineTestField",
-		TypeName:     "TestType",
 	}
 
-	assert.True(t, errors.Is(err, ErrMissingCustomHook))
+	assert.True(t, errors.Is(err, ErrMissingDefineHook))
+	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
+}
+
+func TestMissingDecodeHookError_ErrorMessage(t *testing.T) {
+	err := &MissingDecodeHookError{
+		FieldName:    "ServerMode",
+		ExpectedHook: "DecodeServerMode",
+	}
+
+	expected := "field 'ServerMode': flagcustom='true' but missing decode hook 'DecodeServerMode'"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestMissingDecodeHookError_ErrorsIs(t *testing.T) {
+	err := &MissingDecodeHookError{
+		FieldName:    "TestField",
+		ExpectedHook: "DecodeTestField",
+	}
+
+	assert.True(t, errors.Is(err, ErrMissingDecodeHook))
 	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
 }
 
@@ -192,14 +210,22 @@ func TestNewInvalidShorthandError_Constructor(t *testing.T) {
 	assert.Equal(t, "verb", shortErr.Shorthand)
 }
 
-func TestNewMissingCustomHookError_Constructor(t *testing.T) {
-	err := NewMissingCustomHookError("ServerMode", "DefineServerMode", "main.ServerMode")
+func TestNewMissingDefineHookError_Constructor(t *testing.T) {
+	err := NewMissingDefineHookError("ServerMode", "DefineServerMode")
 
-	var hookErr *MissingCustomHookError
+	var hookErr *MissingDefineHookError
 	require.True(t, errors.As(err, &hookErr))
 	assert.Equal(t, "ServerMode", hookErr.FieldName)
 	assert.Equal(t, "DefineServerMode", hookErr.ExpectedHook)
-	assert.Equal(t, "main.ServerMode", hookErr.TypeName)
+}
+
+func TestNewMissingDecodeHookError_Constructor(t *testing.T) {
+	err := NewMissingDecodeHookError("ServerMode", "DecodeServerMode")
+
+	var hookErr *MissingDecodeHookError
+	require.True(t, errors.As(err, &hookErr))
+	assert.Equal(t, "ServerMode", hookErr.FieldName)
+	assert.Equal(t, "DecodeServerMode", hookErr.ExpectedHook)
 }
 
 func TestNewInvalidTagUsageError_Constructor(t *testing.T) {
@@ -246,11 +272,18 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 			field: "ShortField",
 		},
 		{
-			name: "MissingCustomHookError",
-			err: &MissingCustomHookError{
+			name: "MissingDefineHookError",
+			err: &MissingDefineHookError{
 				FieldName:    "CustomField",
 				ExpectedHook: "DefineCustomField",
-				TypeName:     "CustomType",
+			},
+			field: "CustomField",
+		},
+		{
+			name: "MissingDecodeHookError",
+			err: &MissingDecodeHookError{
+				FieldName:    "CustomField",
+				ExpectedHook: "DecodeCustomField",
 			},
 			field: "CustomField",
 		},
@@ -631,7 +664,7 @@ func TestInputError_ErrorsIs(t *testing.T) {
 	require.True(t, errors.Is(err, ErrInputValue))
 	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
 	assert.False(t, errors.Is(err, ErrInvalidShorthand))
-	assert.False(t, errors.Is(err, ErrMissingCustomHook))
+	assert.False(t, errors.Is(err, ErrMissingDefineHook))
 }
 
 func TestInputError_ErrorsAs(t *testing.T) {

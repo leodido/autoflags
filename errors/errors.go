@@ -48,7 +48,8 @@ func (e *ValidationError) UnderlyingErrors() []error {
 var (
 	ErrInvalidBooleanTag          = errors.New("invalid boolean tag value")
 	ErrInvalidShorthand           = errors.New("invalid shorthand flag")
-	ErrMissingCustomHook          = errors.New("missing custom flag definition hook")
+	ErrMissingDefineHook          = errors.New("missing custom flag definition hook")
+	ErrMissingDecodeHook          = errors.New("missing custom flag decoding hook")
 	ErrInvalidDefineHookSignature = errors.New("invalid define hook signature")
 	ErrInvalidDecodeHookSignature = errors.New("invalid decode hook signature")
 	ErrInvalidFlagName            = errors.New("invalid flag name")
@@ -100,24 +101,40 @@ func (e *InvalidShorthandError) Unwrap() error {
 	return ErrInvalidShorthand
 }
 
-// MissingCustomHookError represents a missing custom flag definition hook
-type MissingCustomHookError struct {
+// MissingDefineHookError represents a missing custom flag definition hook
+type MissingDefineHookError struct {
 	FieldName    string
 	ExpectedHook string
-	TypeName     string
 }
 
-func (e *MissingCustomHookError) Error() string {
-	return fmt.Sprintf("field '%s': flagcustom='true' but hook '%s' not found for type '%s'",
-		e.FieldName, e.ExpectedHook, e.TypeName)
+func (e *MissingDefineHookError) Error() string {
+	return fmt.Sprintf("field '%s': flagcustom='true' but missing define hook '%s'", e.FieldName, e.ExpectedHook)
 }
 
-func (e *MissingCustomHookError) Field() string {
+func (e *MissingDefineHookError) Field() string {
 	return e.FieldName
 }
 
-func (e *MissingCustomHookError) Unwrap() error {
-	return ErrMissingCustomHook
+func (e *MissingDefineHookError) Unwrap() error {
+	return ErrMissingDefineHook
+}
+
+// MissingDecodeHookError represents a missing custom flag decoding hook
+type MissingDecodeHookError struct {
+	FieldName    string
+	ExpectedHook string
+}
+
+func (e *MissingDecodeHookError) Error() string {
+	return fmt.Sprintf("field '%s': flagcustom='true' but missing decode hook '%s'", e.FieldName, e.ExpectedHook)
+}
+
+func (e *MissingDecodeHookError) Field() string {
+	return e.FieldName
+}
+
+func (e *MissingDecodeHookError) Unwrap() error {
+	return ErrMissingDecodeHook
 }
 
 // InvalidDecodeHookSignatureError represents an invalid custom flag definition hook
@@ -236,11 +253,17 @@ func NewInvalidShorthandError(fieldName, shorthand string) error {
 	}
 }
 
-func NewMissingCustomHookError(fieldName, hookName, typeName string) error {
-	return &MissingCustomHookError{
+func NewMissingDefineHookError(fieldName, hookName string) error {
+	return &MissingDefineHookError{
 		FieldName:    fieldName,
 		ExpectedHook: hookName,
-		TypeName:     typeName,
+	}
+}
+
+func NewMissingDecodeHookError(fieldName, hookName string) error {
+	return &MissingDecodeHookError{
+		FieldName:    fieldName,
+		ExpectedHook: hookName,
 	}
 }
 
