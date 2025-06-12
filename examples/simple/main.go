@@ -9,8 +9,8 @@ import (
 )
 
 type Options struct {
-	LogLevel zapcore.Level `flag:"log-level" flagcustom:"true" flagdescr:"Set logging level" default:"info" flagenv:"true"`
-	Port     int           `flag:"port" flagshort:"p" flagdescr:"Server port" flagenv:"true"`
+	LogLevel zapcore.Level `flag:"level" flagdescr:"Set logging level" flagenv:"true"`
+	Port     int           `flagshort:"p" flagdescr:"Server port" flagenv:"true" default:"3000"`
 }
 
 func (o *Options) Attach(c *cobra.Command) {
