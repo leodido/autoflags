@@ -77,7 +77,7 @@ func (o *unmarshalIntegrationOptions) Transform(ctx context.Context) error {
 	return nil
 }
 
-func (o *unmarshalIntegrationOptions) Validate() []error {
+func (o *unmarshalIntegrationOptions) Validate(_ context.Context) []error {
 	var errs []error
 	err := testValidator.Struct(o)
 	if err != nil {
@@ -92,6 +92,7 @@ func (o *unmarshalIntegrationOptions) Validate() []error {
 	if len(errs) == 0 {
 		return nil
 	}
+
 	return errs
 }
 
@@ -233,19 +234,30 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 
 type testContextKey string
 
-type commonOptionsForContextTest struct {
+type ctxOptionsForContextTest struct {
 	DummyField string `flag:"dummy"`
 }
 
-func (o *commonOptionsForContextTest) Attach(c *cobra.Command) {}
+func (o *ctxOptionsForContextTest) Attach(c *cobra.Command) {}
 
-func (o *commonOptionsForContextTest) Context(ctx context.Context) context.Context {
+func (o *ctxOptionsForContextTest) Context(ctx context.Context) context.Context {
 	return context.WithValue(ctx, testContextKey("test-key"), o)
 }
 
-func TestUnmarshal_SetsContext_WhenCommonOptions(t *testing.T) {
+func (o *ctxOptionsForContextTest) FromContext(ctx context.Context) error {
+	value, ok := ctx.Value(testContextKey("test-key")).(*ctxOptionsForContextTest)
+	if !ok {
+		return fmt.Errorf("couldn't obtain from context")
+	}
+	*o = *value
+
+	return nil
+}
+
+func TestUnmarshal_SetsContext_WhenContextOptions(t *testing.T) {
 	cmd := &cobra.Command{Use: "test-context"}
-	opts := &commonOptionsForContextTest{}
+	opts := &ctxOptionsForContextTest{}
+	require.Implements(t, (*autoflags.ContextOptions)(nil), opts)
 
 	autoflags.Define(cmd, opts)
 

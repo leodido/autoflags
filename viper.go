@@ -84,7 +84,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	}
 
 	// Automatically set common options into the context of the cobra command
-	if o, ok := opts.(CommonOptions); ok {
+	if o, ok := opts.(ContextOptions); ok {
 		c.SetContext(o.Context(c.Context()))
 	}
 
@@ -97,7 +97,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 
 	// Automatically run options validation if feasible
 	if o, ok := opts.(ValidatableOptions); ok {
-		if validationErrors := o.Validate(); validationErrors != nil {
+		if validationErrors := o.Validate(c.Context()); validationErrors != nil {
 			return &autoflagserrors.ValidationError{
 				ContextName: c.Name(),
 				Errors:      validationErrors,

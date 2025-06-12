@@ -17,7 +17,7 @@ type Options interface {
 //
 // The Validate method is called automatically during Unmarshal().
 type ValidatableOptions interface {
-	Validate() []error
+	Validate(context.Context) []error
 }
 
 // TransformableOptions extends Options with transformation capabilities.
@@ -27,10 +27,11 @@ type TransformableOptions interface {
 	Transform(context.Context) error
 }
 
-// CommonOptions extends Options with context manipulation capabilities.
+// ContextOptions extends Options with context manipulation capabilities.
 //
 // The Context method is called automatically during Unmarshal() to modify the command context.
-type CommonOptions interface {
+type ContextOptions interface {
 	Options
 	Context(context.Context) context.Context
+	FromContext(context.Context) error
 }

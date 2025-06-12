@@ -124,9 +124,9 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		name := getName(path, alias)
 
 		// Determine whether to represent hierarchy with the command name
-		// We assume that options that are not common options are subcommand-specific options
+		// We assume that options that are not context options are subcommand-specific options
 		cName := ""
-		if _, isCommonOptions := o.(CommonOptions); !isCommonOptions {
+		if _, isContextOptions := o.(ContextOptions); !isContextOptions {
 			cName = c.Name()
 		}
 
