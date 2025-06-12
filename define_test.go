@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -1302,7 +1301,6 @@ func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ShouldReturnError() {
 
 	// Spaces should cause validation error
 	err := Define(cmd, opts)
-	spew.Dump(err)
 
 	require.Error(suite.T(), err, "Should return error for flagignore value with spaces")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")

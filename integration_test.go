@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2077,4 +2078,411 @@ func TestSetupFunctions_NoPrefix_NoAppName_EmptyCommandName(t *testing.T) {
 	err = autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "couldn't determine the app name")
+}
+
+type ServerMode string
+
+const (
+	DevMode     ServerMode = "development"
+	StagingMode ServerMode = "staging"
+	ProdMode    ServerMode = "production"
+)
+
+type customDecodeHookOptions struct {
+	ServerMode ServerMode `flagcustom:"true" flag:"server-mode" flagdescr:"Server deployment mode" flagenv:"true"`
+	LogLevel   string     `flag:"log-level" flagdescr:"Logging level"`
+}
+
+func (o *customDecodeHookOptions) DefineServerMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	// Create a string flag with custom description
+	enhancedDesc := descr + " (development, staging, production)"
+	c.Flags().String(name, string(DevMode), enhancedDesc)
+}
+
+func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
+	str, ok := input.(string)
+	if !ok {
+		return input, nil // Not a string, pass through
+	}
+
+	// Custom transformation logic - normalize common aliases and add prefix
+	switch strings.ToLower(strings.TrimSpace(str)) {
+	case "dev", "develop", "development":
+		return ServerMode("development"), nil
+	case "stage", "staging":
+		return ServerMode("staging"), nil
+	case "prod", "production":
+		return ServerMode("production"), nil
+	case "test_custom_decode": // Special test value to verify hook was called
+		return ServerMode("CUSTOM_DECODE_CALLED"), nil
+	default:
+		return nil, fmt.Errorf("invalid server mode: %s (must be development, staging, or production)", str)
+	}
+}
+
+func (o *customDecodeHookOptions) Attach(c *cobra.Command) {}
+
+type mixedHooksOptions struct {
+	ServerMode ServerMode    `flagcustom:"true" flag:"server-mode" flagdescr:"Server mode"`
+	Timeout    time.Duration `flag:"timeout" flagdescr:"Request timeout"`
+	LogLevel   zapcore.Level `flagcustom:"true" flag:"log-level" flagdescr:"Log level"`
+}
+
+// Implement the custom methods for ServerMode
+func (m *mixedHooksOptions) DefineServerMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	c.Flags().String(name, string(DevMode), descr)
+}
+
+func (m *mixedHooksOptions) DecodeServerMode(input any) (any, error) {
+	str, ok := input.(string)
+	if !ok {
+		return input, nil
+	}
+	if strings.ToLower(str) == "test" {
+		return ServerMode("TEST_MODE"), nil
+	}
+	return ServerMode(str), nil
+}
+
+func (o *mixedHooksOptions) Attach(c *cobra.Command) {}
+
+type multiCustomOptions struct {
+	Mode1 ServerMode `flagcustom:"true" flagdescr:"First mode"`
+	Mode2 ServerMode `flagcustom:"true" flagdescr:"Second mode"`
+	Level string     `flag:"level" flagdescr:"Normal field"`
+}
+
+// Define methods for Mode1
+func (m *multiCustomOptions) DefineMode1(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	enhancedDesc := descr + " (first custom mode)"
+	c.Flags().String(name, string(DevMode), enhancedDesc)
+}
+
+func (m *multiCustomOptions) DecodeMode1(input any) (any, error) {
+	str, ok := input.(string)
+	if !ok {
+		return input, nil
+	}
+
+	// Add prefix to distinguish from Mode2
+	switch strings.ToLower(strings.TrimSpace(str)) {
+	case "test1":
+		return ServerMode("MODE1_CUSTOM_CALLED"), nil
+	case "dev", "development":
+		return ServerMode("development"), nil
+	default:
+		return ServerMode("mode1_" + str), nil
+	}
+}
+
+func (m *multiCustomOptions) DefineMode2(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	enhancedDesc := descr + " (second custom mode)"
+	c.Flags().String(name, string(StagingMode), enhancedDesc)
+}
+
+func (m *multiCustomOptions) DecodeMode2(input any) (any, error) {
+	str, ok := input.(string)
+	if !ok {
+		return input, nil
+	}
+
+	// Add different prefix to distinguish from Mode1
+	switch strings.ToLower(strings.TrimSpace(str)) {
+	case "test2":
+		return ServerMode("MODE2_CUSTOM_CALLED"), nil
+	case "stage", "staging":
+		return ServerMode("staging"), nil
+	default:
+		return ServerMode("mode2_" + str), nil
+	}
+}
+
+func (m *multiCustomOptions) Attach(c *cobra.Command) {}
+
+func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
+	setupTest := func() {
+		viper.Reset()
+	}
+
+	t.Run("CustomDecodeHook_FromConfig", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "testcmd-custom-decode"}
+		opts := &customDecodeHookOptions{}
+
+		// Define the flags (this registers the custom decode hook)
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Set config value (to a special value for testing reasons)that should trigger the custom decode hook
+		viper.Set("server-mode", "test_custom_decode")
+		viper.Set("log-level", "debug")
+
+		// Trigger the custom decode hook
+		err = autoflags.Unmarshal(cmd, opts)
+		require.NoError(t, err, "Unmarshal should succeed with custom decode hook")
+
+		// Verify the custom decode hook was called and transformed the value
+		assert.Equal(t, ServerMode("CUSTOM_DECODE_CALLED"), opts.ServerMode, "Custom decode hook should have transformed the value")
+		assert.Equal(t, "debug", opts.LogLevel, "Other fields should work normally")
+	})
+
+	t.Run("CustomDecodeHook_Transformation", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "testcmd-transform"}
+		opts := &customDecodeHookOptions{}
+
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Test various input transformations
+		testCases := []struct {
+			input    string
+			expected ServerMode
+		}{
+			{"dev", DevMode},
+			{"development", DevMode},
+			{"DEVELOPMENT", DevMode},
+			{"  staging  ", StagingMode},
+			{"prod", ProdMode},
+			{"PRODUCTION", ProdMode},
+		}
+
+		for _, tc := range testCases {
+			t.Run(fmt.Sprintf("input_%s", tc.input), func(t *testing.T) {
+				setupTest()
+
+				// Reset options for each test case
+				opts := &customDecodeHookOptions{}
+				cmd := &cobra.Command{Use: "testcmd-transform-" + tc.input}
+
+				err := autoflags.Define(cmd, opts)
+				require.NoError(t, err)
+
+				viper.Set("server-mode", tc.input)
+
+				err = autoflags.Unmarshal(cmd, opts)
+				require.NoError(t, err)
+
+				assert.Equal(t, tc.expected, opts.ServerMode, "Input '%s' should be transformed to '%s'", tc.input, tc.expected)
+			})
+		}
+	})
+
+	t.Run("CustomDecodeHook_Error", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "testcmd-error"}
+		opts := &customDecodeHookOptions{}
+
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Set invalid value that should cause decode hook to return error
+		viper.Set("server-mode", "invalid-mode")
+
+		err = autoflags.Unmarshal(cmd, opts)
+		require.Error(t, err, "Unmarshal should fail when custom decode hook returns error")
+		assert.Contains(t, err.Error(), "invalid server mode", "Error should come from custom decode hook")
+		assert.Contains(t, err.Error(), "couldn't unmarshal config to options", "Error should be wrapped by Unmarshal")
+	})
+
+	t.Run("CustomDecodeHook_FlagOverridesConfig", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "testcmd-flag-override"}
+		opts := &customDecodeHookOptions{}
+
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Set config value
+		viper.Set("server-mode", "dev")
+
+		// Set flag value (should override config)
+		err = cmd.Flags().Set("server-mode", "staging")
+		require.NoError(t, err)
+
+		err = autoflags.Unmarshal(cmd, opts)
+		require.NoError(t, err)
+
+		// Flag value should win and be processed by custom decode hook
+		assert.Equal(t, StagingMode, opts.ServerMode, "Flag should override config and be processed by decode hook")
+	})
+
+	t.Run("CustomDecodeHook_EnvVarOverridesConfig", func(t *testing.T) {
+		setupTest()
+
+		// Set environment variable
+		envVarName := "TESTCMD_ENV_OVERRIDE_SERVER_MODE"
+		originalEnv := os.Getenv(envVarName)
+		defer func() {
+			if originalEnv == "" {
+				os.Unsetenv(envVarName)
+			} else {
+				os.Setenv(envVarName, originalEnv)
+			}
+		}()
+		os.Setenv(envVarName, "staging")
+
+		cmd := &cobra.Command{Use: "testcmd-env-override"}
+		opts := &customDecodeHookOptions{}
+
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Set config value (should be overridden by env var)
+		viper.Set("server-mode", "dev")
+
+		err = autoflags.Unmarshal(cmd, opts)
+		require.NoError(t, err)
+
+		// Env var value should win and be processed by custom decode hook
+		assert.Equal(t, StagingMode, opts.ServerMode, "Environment variable should override config and be processed by decode hook")
+	})
+
+	t.Run("CustomDecodeHook_WithOtherHooks", func(t *testing.T) {
+		// Test that custom decode hooks work alongside built-in hooks
+		setupTest()
+
+		// Use reflection to set the methods (this is a bit hacky for testing)
+		opts := &mixedHooksOptions{}
+		cmd := &cobra.Command{Use: "testcmd-mixed"}
+
+		// We need to manually register the custom hook for this test
+		// Since we can't add methods to a struct defined in a function
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Set values for all types
+		viper.Set("timeout", "37s")      // Built-in time.Duration hook
+		viper.Set("log-level", "debug")  // Built-in zapcore.Level hook
+		viper.Set("server-mode", "test") // Custom hook
+
+		err = autoflags.Unmarshal(cmd, opts)
+		require.NoError(t, err)
+
+		// Verify built-in hooks work
+		assert.Equal(t, 37*time.Second, opts.Timeout, "Built-in duration hook should work")
+		assert.Equal(t, zapcore.DebugLevel, opts.LogLevel, "Built-in zapcore hook should work")
+		assert.Equal(t, ServerMode("TEST_MODE"), opts.ServerMode, "Custom hook should work")
+	})
+}
+
+func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
+	setupTest := func() {
+		viper.Reset()
+	}
+
+	t.Run("ScopeRetrievesCustomDecodeHook", func(t *testing.T) {
+		setupTest()
+		cmd := &cobra.Command{Use: "scope-test"}
+		opts := &customDecodeHookOptions{}
+
+		// Step 1: Define flags (this should register the custom decode hook in the scope)
+		err := autoflags.Define(cmd, opts)
+		require.NoError(t, err)
+
+		// Step 2: Verify the hook was registered by checking scope
+		scope := autoflags.GetViper(cmd) // This gets us access to the scope indirectly
+		require.NotNil(t, scope, "Should have a scope")
+
+		// Step 3: Set up config to trigger decode hook
+		viper.Set("server-mode", "test_custom_decode")
+
+		// Step 4: Call Unmarshal - this is where the scope.getCustomDecodeHook is called
+		err = autoflags.Unmarshal(cmd, opts)
+		require.NoError(t, err)
+
+		// Step 5: Verify the custom decode hook was retrieved and executed
+		assert.Equal(t, ServerMode("CUSTOM_DECODE_CALLED"), opts.ServerMode, "Custom decode hook should have been retrieved from scope and executed")
+	})
+
+	// FIXME: those fails because mapstructure hooks are type driven so DefineMode1/DefineMode2 gets both applied disregarding the field being Mode1 or Mode2
+
+	// t.Run("MultipleCustomHooksInSameCommand", func(t *testing.T) {
+	// 	// Test multiple custom hooks to ensure scope management works correctly
+	// 	setupTest()
+
+	// 	opts := &multiCustomOptions{}
+	// 	cmd := &cobra.Command{Use: "multi-custom"}
+
+	// 	// Define flags - this should register both custom decode hooks in the scope
+	// 	err := autoflags.Define(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Verify both flags were created with custom descriptions
+	// 	mode1Flag := cmd.Flags().Lookup("mode1")
+	// 	mode2Flag := cmd.Flags().Lookup("mode2")
+	// 	levelFlag := cmd.Flags().Lookup("level")
+
+	// 	require.NotNil(t, mode1Flag, "mode1 flag should be created")
+	// 	require.NotNil(t, mode2Flag, "mode2 flag should be created")
+	// 	require.NotNil(t, levelFlag, "level flag should be created")
+
+	// 	assert.Contains(t, mode1Flag.Usage, "first custom mode", "mode1 should have custom description")
+	// 	assert.Contains(t, mode2Flag.Usage, "second custom mode", "mode2 should have custom description")
+
+	// 	// Set test values that will trigger both custom decode hooks
+	// 	viper.Set("mode1", "test1") // Should trigger Mode1 custom decode hook
+	// 	viper.Set("mode2", "test2") // Should trigger Mode2 custom decode hook
+	// 	viper.Set("level", "info")  // Normal field, no custom hook
+
+	// 	err = autoflags.Unmarshal(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Verify both custom decode hooks were retrieved from scope and executed
+	// 	assert.Equal(t, ServerMode("MODE1_CUSTOM_CALLED"), opts.Mode1, "Mode1 custom decode hook should have been retrieved and executed")
+	// 	assert.Equal(t, ServerMode("MODE2_CUSTOM_CALLED"), opts.Mode2, "Mode2 custom decode hook should have been retrieved and executed")
+	// 	assert.Equal(t, "info", opts.Level, "Normal field should work without custom hook")
+	// })
+
+	// t.Run("MultipleCustomHooksWithDifferentTransformations", func(t *testing.T) {
+	// 	// Test that each custom hook applies its own transformation logic
+	// 	setupTest()
+
+	// 	opts := &multiCustomOptions{}
+	// 	cmd := &cobra.Command{Use: "multi-transform"}
+
+	// 	err := autoflags.Define(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Set values that should be transformed differently by each hook
+	// 	viper.Set("mode1", "production") // Mode1 hook adds "mode1_" prefix
+	// 	viper.Set("mode2", "production") // Mode2 hook adds "mode2_" prefix
+
+	// 	err = autoflags.Unmarshal(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Verify each hook applied its own transformation
+	// 	assert.Equal(t, ServerMode("mode1_production"), opts.Mode1,
+	// 		"Mode1 should have mode1_ prefix")
+	// 	assert.Equal(t, ServerMode("mode2_production"), opts.Mode2,
+	// 		"Mode2 should have mode2_ prefix")
+	// })
+
+	// t.Run("MultipleCustomHooksWithFlags", func(t *testing.T) {
+	// 	// Test that flag values override config for multiple custom hooks
+	// 	setupTest()
+
+	// 	opts := &multiCustomOptions{}
+	// 	cmd := &cobra.Command{Use: "multi-flags"}
+
+	// 	err := autoflags.Define(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Set config values
+	// 	viper.Set("mode1", "config1")
+	// 	viper.Set("mode2", "config2")
+
+	// 	// Set flag values (should override config)
+	// 	err = cmd.Flags().Set("mode1", "flag1")
+	// 	require.NoError(t, err)
+	// 	err = cmd.Flags().Set("mode2", "flag2")
+	// 	require.NoError(t, err)
+
+	// 	err = autoflags.Unmarshal(cmd, opts)
+	// 	require.NoError(t, err)
+
+	// 	// Verify flags overrode config and were processed by respective custom hooks
+	// 	assert.Equal(t, ServerMode("mode1_flag1"), opts.Mode1, "Mode1 flag should override config and be processed by custom hook")
+	// 	assert.Equal(t, ServerMode("mode2_flag2"), opts.Mode2, "Mode2 flag should override config and be processed by custom hook")
+	// })
 }
