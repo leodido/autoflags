@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -630,6 +631,119 @@ func TestNewConflictingTagsError_Constructor(t *testing.T) {
 	assert.Equal(t, "TestField", conflictErr.FieldName)
 	assert.Equal(t, tags, conflictErr.ConflictingTags)
 	assert.Equal(t, "cannot ignore required field", conflictErr.Message)
+}
+
+func TestConflictingTypeError_ErrorMessage(t *testing.T) {
+	// Create a test type for the error
+	var testValue int
+	testType := reflect.TypeOf(testValue)
+
+	err := &ConflictingTypeError{
+		Type:     testType,
+		TypeName: testType.String(),
+		Fields:   []string{"Field1", "Field2", "Field3"},
+		Message:  "create distinct custom types for each field",
+	}
+
+	expected := "fields [Field1, Field2, Field3]: conflicting type [int]: create distinct custom types for each field"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestConflictingTypeError_ContainsExpectedStrings(t *testing.T) {
+	// Create a test type for the error
+	type CustomStruct struct {
+		Name string
+	}
+	testType := reflect.TypeOf(CustomStruct{})
+
+	err := &ConflictingTypeError{
+		Type:     testType,
+		TypeName: testType.String(),
+		Fields:   []string{"FieldA", "FieldB"},
+		Message:  "multiple fields cannot use the same custom type",
+	}
+
+	errorMsg := err.Error()
+	assert.Contains(t, errorMsg, "FieldA")
+	assert.Contains(t, errorMsg, "FieldB")
+	assert.Contains(t, errorMsg, testType.String())
+	assert.Contains(t, errorMsg, "multiple fields cannot use the same custom type")
+	assert.Contains(t, errorMsg, "conflicting type")
+}
+
+func TestConflictingTypeError_FieldInterface(t *testing.T) {
+	var testValue string
+	testType := reflect.TypeOf(testValue)
+
+	err := &ConflictingTypeError{
+		Type:     testType,
+		TypeName: testType.String(),
+		Fields:   []string{"FirstField", "SecondField"},
+		Message:  "test message",
+	}
+
+	// Test that it implements DefinitionError interface
+	var fieldErr DefinitionError = err
+	assert.Equal(t, "FirstField, SecondField", fieldErr.Field())
+}
+
+func TestConflictingTypeError_ErrorsIs(t *testing.T) {
+	var testValue bool
+	testType := reflect.TypeOf(testValue)
+
+	err := &ConflictingTypeError{
+		Type:     testType,
+		TypeName: testType.String(),
+		Fields:   []string{"BoolField1", "BoolField2"},
+		Message:  "conflicting boolean fields",
+	}
+
+	// Test errors.Is() functionality
+	assert.True(t, errors.Is(err, ErrConflictingType))
+	assert.False(t, errors.Is(err, ErrConflictingTags))
+	assert.False(t, errors.Is(err, ErrUnsupportedType))
+	assert.False(t, errors.Is(err, ErrInvalidBooleanTag))
+}
+
+func TestConflictingTypeError_ErrorsAs(t *testing.T) {
+	type TestType struct {
+		Value int
+	}
+	testType := reflect.TypeOf(TestType{})
+	fields := []string{"TestField1", "TestField2"}
+
+	err := NewConflictingTypeError(testType, fields, "test conflict message")
+
+	// Test errors.As() functionality
+	var conflictErr *ConflictingTypeError
+	require.True(t, errors.As(err, &conflictErr))
+	assert.Equal(t, testType, conflictErr.Type)
+	assert.Equal(t, testType.String(), conflictErr.TypeName)
+	assert.Equal(t, fields, conflictErr.Fields)
+	assert.Equal(t, "test conflict message", conflictErr.Message)
+
+	// Test DefinitionError interface extraction
+	var fieldErr DefinitionError
+	require.True(t, errors.As(err, &fieldErr))
+	assert.Equal(t, "TestField1, TestField2", fieldErr.Field())
+}
+
+func TestNewConflictingTypeError_Constructor(t *testing.T) {
+	type CustomType struct {
+		Data string
+	}
+	testType := reflect.TypeOf(CustomType{})
+	fields := []string{"CustomField1", "CustomField2", "CustomField3"}
+	message := "create distinct custom types for each field"
+
+	err := NewConflictingTypeError(testType, fields, message)
+
+	var conflictErr *ConflictingTypeError
+	require.True(t, errors.As(err, &conflictErr))
+	assert.Equal(t, testType, conflictErr.Type)
+	assert.Equal(t, testType.String(), conflictErr.TypeName)
+	assert.Equal(t, fields, conflictErr.Fields)
+	assert.Equal(t, message, conflictErr.Message)
 }
 
 func TestInputError_ErrorMessage(t *testing.T) {
