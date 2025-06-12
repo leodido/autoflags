@@ -3,6 +3,7 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -55,6 +56,7 @@ var (
 	ErrInvalidFlagName            = errors.New("invalid flag name")
 	ErrInvalidTagUsage            = errors.New("invalid tag usage")
 	ErrConflictingTags            = errors.New("conflicting struct tags")
+	ErrConflictingType            = errors.New("conflicting struct field types")
 	ErrUnsupportedType            = errors.New("unsupported field type")
 )
 
@@ -219,6 +221,30 @@ func (e *ConflictingTagsError) Unwrap() error {
 	return ErrConflictingTags
 }
 
+// ConflictingTypeError represents conflicting struct fields having the same custom type
+type ConflictingTypeError struct {
+	Type     reflect.Type
+	TypeName string
+	Fields   []string
+	Message  string
+}
+
+func (e *ConflictingTypeError) Error() string {
+	return fmt.Sprintf(
+		"fields [%s]: conflicting type [%s]: %s",
+		strings.Join(e.Fields, ", "),
+		e.TypeName,
+		e.Message,
+	)
+}
+
+func (e *ConflictingTypeError) Field() string {
+	return strings.Join(e.Fields, ", ")
+}
+func (e *ConflictingTypeError) Unwrap() error {
+	return ErrConflictingType
+}
+
 // UnsupportedTypeError represents an unsupported field type
 type UnsupportedTypeError struct {
 	FieldName string
@@ -296,6 +322,15 @@ func NewConflictingTagsError(fieldName string, tags []string, message string) er
 		FieldName:       fieldName,
 		ConflictingTags: tags,
 		Message:         message,
+	}
+}
+
+func NewConflictingTypeError(fieldType reflect.Type, fields []string, message string) error {
+	return &ConflictingTypeError{
+		Fields:   fields,
+		Type:     fieldType,
+		TypeName: fieldType.String(),
+		Message:  message,
 	}
 }
 
