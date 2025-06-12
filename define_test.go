@@ -938,7 +938,7 @@ func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
 
 	// These should all pass validation
 	err := Define(cmd, opts)
-	assert.NoError(suite.T(), err, "Should not return error for valid edge case values")
+	require.NoError(suite.T(), err, "Should not return error for valid edge case values")
 
 	// Check behavior
 	caseTrueFlag := cmd.Flags().Lookup("case-true")
@@ -2585,4 +2585,44 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_EdgeCases() {
 		flag := cmd.Flags().Lookup("nested-custom")
 		assert.NotNil(t, flag, "Nested custom flag should be created")
 	})
+}
+
+type standardTypeOptions struct {
+	Field1 string `flagcustom:"true" flagdescr:"First string field"`
+	Field2 string `flagcustom:"true" flagdescr:"Second string field"`
+	Field3 int    `flagcustom:"true" flagdescr:"Int field"`
+	Level  string `flag:"level" flagdescr:"Normal field"`
+}
+
+func (s *standardTypeOptions) DefineField1(cmd *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	cmd.Flags().String(name, "default1", descr)
+}
+
+func (s *standardTypeOptions) DecodeField1(input any) (any, error) {
+	return "field1_" + input.(string), nil
+}
+
+func (s *standardTypeOptions) DefineField2(cmd *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	cmd.Flags().String(name, "default2", descr)
+}
+
+func (s *standardTypeOptions) DecodeField2(input any) (any, error) {
+	return "field2_" + input.(string), nil
+}
+
+func (s *standardTypeOptions) DefineField3(cmd *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+	cmd.Flags().Int(name, 0, descr)
+}
+
+func (s *standardTypeOptions) DecodeField3(input any) (any, error) { return 42, nil }
+
+func (s *standardTypeOptions) Attach(cmd *cobra.Command) {}
+
+func TestDefine_CustomTypeConflict_StandardTypesAllowed(t *testing.T) {
+	opts := &standardTypeOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// This should NOT error - standard types can have multiple custom fields
+	err := Define(cmd, opts)
+	require.NoError(t, err, "Multiple standard type fields with flagcustom should be allowed")
 }

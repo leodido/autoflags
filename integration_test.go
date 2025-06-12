@@ -2492,3 +2492,49 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		assert.Equal(t, ServerMode2("mode2_flag2"), opts.Mode2, "Mode2 flag should override config and be processed by custom hook")
 	})
 }
+
+type nestedSameCustomType struct {
+	ModeAgain ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
+}
+
+func (m *nestedSameCustomType) DefineModeAgain(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+}
+
+func (m *nestedSameCustomType) DecodeModeAgain(input any) (any, error) {
+	return input, nil
+}
+
+type conflictingCustomType struct {
+	Mode  ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
+	Level string      `flag:"level" flagdescr:"Normal field"`
+	Nest  nestedSameCustomType
+}
+
+func (m *conflictingCustomType) DefineMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+}
+
+func (m *conflictingCustomType) DecodeMode(input any) (any, error) {
+	return input, nil
+}
+
+func (m *conflictingCustomType) Attach(c *cobra.Command) {}
+
+func TestDefine_CustomDecodeHook_Integration(t *testing.T) {
+	setupTest := func() {
+		viper.Reset()
+	}
+
+	t.Run("MultipleFieldsWithSameCustomType", func(t *testing.T) {
+		setupTest()
+
+		opts := &conflictingCustomType{}
+		c := &cobra.Command{Use: "testcmd-custom-type"}
+
+		err := autoflags.Define(c, opts)
+		require.Error(t, err)
+		require.ErrorIs(t, err, autoflagserrors.ErrConflictingType)
+		assert.Contains(t, err.Error(), "create distinct custom types for each field")
+		assert.Contains(t, err.Error(), "Mode")
+		assert.Contains(t, err.Error(), "Nest.ModeAgain")
+	})
+}
