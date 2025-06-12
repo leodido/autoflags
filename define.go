@@ -50,7 +50,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	}
 
 	// Run input validation (on by default)
-	if err := validateStructTags(o); err != nil {
+	if err := validateStruct(o); err != nil {
 		return err
 	}
 
@@ -155,6 +155,9 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 						reflect.ValueOf(f),
 						reflect.ValueOf(field),
 					})
+
+					// FIXME: here we can verify the DefineX hook actually created a flag
+					// FIXME: it's probably better to change the signature of define hooks by requiring return types to use here to create the flag with c.Flags().VarP()
 
 					// Register user's decode hook (`Unmarshal` will call it)
 					if err := storeDecodeHookFunc(c, name, decodeHookFunc, f.Type); err != nil {
@@ -445,36 +448,49 @@ func getValidValue(o any) (reflect.Value, error) {
 	return val, nil
 }
 
-// validateStructTags checks for invalid boolean values in struct tags
-func validateStructTags(o any) error {
+func getFieldName(prefix string, structField reflect.StructField) string {
+	if prefix == "" {
+		return structField.Name
+	}
+	return prefix + "." + structField.Name
+}
+
+// validateStruct checks the coherence of definitions in the given struct
+func validateStruct(o any) error {
 	val, err := getValidValue(o)
 	if err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 
-	return validateFieldTags(val, "")
+	typeToFields := make(map[reflect.Type][]string)
+	if err := validateFields(val, "", typeToFields); err != nil {
+		return fmt.Errorf("validation failed: %w", err)
+	}
+	for fieldType, fieldNames := range typeToFields {
+		if len(fieldNames) > 1 {
+			return autoflagserrors.NewConflictingTypeError(fieldType, fieldNames, "create distinct custom types for each field")
+		}
+	}
+
+	return nil
 }
 
-// validateFieldTags recursively validates tags in struct fields
-func validateFieldTags(val reflect.Value, prefix string) error {
+// validateFields recursively validates the struct fields
+func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]string) error {
 	for i := range val.NumField() {
 		field := val.Field(i)
-		fieldType := val.Type().Field(i)
+		structF := val.Type().Field(i)
 
 		// Skip private fields
 		if !field.CanInterface() {
 			continue
 		}
 
-		fieldName := fieldType.Name
-		if prefix != "" {
-			fieldName = prefix + "." + fieldName
-		}
-
-		isStructKind := fieldType.Type.Kind() == reflect.Struct
+		fieldName := getFieldName(prefix, structF)
+		isStructKind := structF.Type.Kind() == reflect.Struct
 
 		// Validate flagshort tag
-		short := fieldType.Tag.Get("flagshort")
+		short := structF.Tag.Get("flagshort")
 		if short != "" && len(short) > 1 {
 			return autoflagserrors.NewInvalidShorthandError(fieldName, short)
 		}
@@ -485,7 +501,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		}
 
 		// Validate flagcustom tag
-		flagCustomValue, flagCustomErr := validateBooleanTag(fieldName, "flagcustom", fieldType.Tag.Get("flagcustom"))
+		flagCustomValue, flagCustomErr := validateBooleanTag(fieldName, "flagcustom", structF.Tag.Get("flagcustom"))
 		if flagCustomErr != nil {
 			return flagCustomErr
 		}
@@ -497,22 +513,26 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Validate the define and decode hooks when flagcustom is true
 		if flagCustomValue != nil && *flagCustomValue && !isStructKind {
+			// Map current field name to its custom type
+			if !isStandardType(structF.Type) {
+				typeToFields[structF.Type] = append(typeToFields[structF.Type], fieldName)
+			}
 			// Extract the field name (without prefix) for hook lookup
 			parts := strings.Split(fieldName, ".")
 			methodFieldName := parts[len(parts)-1]
 
-			if err := validateCustomFlag(val, methodFieldName, fieldType.Type.String()); err != nil {
+			if err := validateCustomFlag(val, methodFieldName, structF.Type.String()); err != nil {
 				return err
 			}
 		}
 
 		// Validate flagenv tag (can be on struct fields for inheritance)
-		if _, err := validateBooleanTag(fieldName, "flagenv", fieldType.Tag.Get("flagenv")); err != nil {
+		if _, err := validateBooleanTag(fieldName, "flagenv", structF.Tag.Get("flagenv")); err != nil {
 			return err
 		}
 
 		// Validate flagignore tag
-		flagIgnoreValue, flagIgnoreErr := validateBooleanTag(fieldName, "flagignore", fieldType.Tag.Get("flagignore"))
+		flagIgnoreValue, flagIgnoreErr := validateBooleanTag(fieldName, "flagignore", structF.Tag.Get("flagignore"))
 		if flagIgnoreErr != nil {
 			return flagIgnoreErr
 		}
@@ -523,7 +543,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 		}
 
 		// Validate flagrequired tag
-		flagRequiredValue, flagRequiredErr := validateBooleanTag(fieldName, "flagrequired", fieldType.Tag.Get("flagrequired"))
+		flagRequiredValue, flagRequiredErr := validateBooleanTag(fieldName, "flagrequired", structF.Tag.Get("flagrequired"))
 		if flagRequiredErr != nil {
 			return flagRequiredErr
 		}
@@ -539,7 +559,7 @@ func validateFieldTags(val reflect.Value, prefix string) error {
 
 		// Recursively validate children structs
 		if isStructKind {
-			if err := validateFieldTags(field, fieldName); err != nil {
+			if err := validateFields(field, fieldName, typeToFields); err != nil {
 				return err
 			}
 		}
