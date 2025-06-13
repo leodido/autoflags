@@ -75,13 +75,30 @@ func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 //
 // Debug output is automatically triggered when the debug flag is enabled.
 func UseDebug(c *cobra.Command, w io.Writer) {
-	flagName := "debug-options"
+	debugFlagName := "debug-options"
 	if currentFlagName, ok := c.Annotations[flagDebugAnnotation]; ok {
-		flagName = currentFlagName
+		debugFlagName = currentFlagName
 	}
 
-	v := GetViper(c)
-	if !v.GetBool(flagName) {
+	shouldDebug := false
+	rootC := c.Root()
+
+	// Let's first check the flag directly
+	if debugFlag := rootC.PersistentFlags().Lookup(debugFlagName); debugFlag != nil {
+		if debugFlag.Changed {
+			shouldDebug = true
+		}
+	}
+
+	// Check viper for other sources (eg, environment variable)
+	if !shouldDebug {
+		rootV := GetViper(rootC)
+		if rootV.GetBool(debugFlagName) {
+			shouldDebug = true
+		}
+	}
+
+	if !shouldDebug {
 		return
 	}
 
@@ -91,6 +108,8 @@ func UseDebug(c *cobra.Command, w io.Writer) {
 		dest = w
 	}
 
+	// The action of printing debug info is local
+	v := GetViper(c)
 	v.DebugTo(dest)
 	fmt.Fprintf(dest, "Values:\n%#v\n", v.AllSettings())
 }
