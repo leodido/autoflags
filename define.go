@@ -89,12 +89,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		f := val.Type().Field(i)
-		path := ""
-		if structPath == "" {
-			path = strings.ToLower(f.Name)
-		} else {
-			path = fmt.Sprintf("%s.%s", strings.ToLower(structPath), strings.ToLower(f.Name))
-		}
+		path := getFieldPath(structPath, f)
 
 		// Check exclusions for struct path with command name validation (case-insensitive)
 		if cname, ok := exclusions[path]; ok && c.Name() == cname {
@@ -458,6 +453,16 @@ func getFieldName(prefix string, structField reflect.StructField) string {
 	return prefix + "." + structField.Name
 }
 
+func getFieldPath(structPath string, structField reflect.StructField) string {
+	path := ""
+	if structPath == "" {
+		path = strings.ToLower(structField.Name)
+	} else {
+		path = fmt.Sprintf("%s.%s", structPath, strings.ToLower(structField.Name))
+	}
+	return path
+}
+
 // validateStruct checks the coherence of definitions in the given struct
 func validateStruct(o any) error {
 	val, err := getValidValue(o)
@@ -692,6 +697,13 @@ func isStandardType(t reflect.Type) bool {
 	expected, exists := standardTypes[t.Kind()]
 
 	return exists && t == expected
+}
+
+func isMandatory(f reflect.StructField) bool {
+	val := f.Tag.Get("flagrequired")
+	req, _ := strconv.ParseBool(val)
+
+	return req
 }
 
 func signature(f any) string {
