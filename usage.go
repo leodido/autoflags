@@ -68,10 +68,10 @@ Use "{{.CommandPath}} [command] --help" for more information about a command.{{e
 `
 )
 
-// setUsage generates the flag usages of the flags local to the input command.
+// SetupUsage generates the flag usages of the flags local to the input command.
 //
 // It also groups the flags by the FlagGroupAnnotation annotation.
-func setUsage(c *cobra.Command) {
+func SetupUsage(c *cobra.Command) {
 	groups := Groups(c)
 
 	usages := ""

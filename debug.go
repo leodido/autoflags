@@ -66,7 +66,7 @@ func SetupDebug(rootC *cobra.Command, debugOpts DebugOptions) error {
 	})
 
 	// Regenerate usage templates for any commands already processed by Define()
-	setUsage(rootC)
+	SetupUsage(rootC)
 
 	return nil
 }

@@ -103,7 +103,7 @@ func SetupConfig(rootC *cobra.Command, cfgOpts ConfigOptions) error {
 	})
 
 	// Regenerate usage templates for any commands already processed by Define()
-	setUsage(rootC)
+	SetupUsage(rootC)
 
 	return nil
 }
