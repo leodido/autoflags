@@ -308,13 +308,16 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		// Set the defaults
 		if defval != "" {
 			GetViper(c).SetDefault(name, defval)
+			GetViper(c).SetDefault(path, defval)
 			// This is needed for the usage help messages
 			c.Flags().Lookup(name).DefValue = defval
 		}
 
 		if alias != "" && path != alias {
-			// Alias the actual path to the flag name (ie., the alias when not empty)
+			// Make the field name (path) an alias for the flag name (alias)
+			// Allows mapstructure to find values provided via the flag tag name in the config files
 			GetViper(c).RegisterAlias(path, alias)
+
 		}
 
 		if len(envs) > 0 {
