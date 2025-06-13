@@ -26,7 +26,7 @@ const (
 type ServerOptions struct {
 	// Basic flags
 	Host string `flag:"host" flagdescr:"Server host" default:"localhost"`
-	Port int    `flag:"port" flagshort:"p" flagdescr:"Server port" flagrequired:"true"`
+	Port int    `flagshort:"p" flagdescr:"Server port" flagrequired:"true"`
 
 	// Environment variable binding
 	APIKey string `flagenv:"true" flagdescr:"API authentication key"`
@@ -44,7 +44,7 @@ type ServerOptions struct {
 
 type DatabaseConfig struct {
 	URL      string `flag:"db-url" flagdescr:"Database connection URL"`
-	MaxConns int    `flag:"db-max-conns" flagdescr:"Max database connections" default:"10" flagenv:"true"`
+	MaxConns int    `flagdescr:"Max database connections" default:"10" flagenv:"true"`
 }
 
 // DefineTargetEnv defines the custom flag for Environment with autocompletion
