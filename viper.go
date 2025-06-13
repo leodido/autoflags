@@ -2,6 +2,7 @@ package autoflags
 
 import (
 	"fmt"
+	"reflect"
 
 	"github.com/go-viper/mapstructure/v2"
 	autoflagserrors "github.com/leodido/autoflags/errors"
@@ -105,8 +106,49 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 		}
 	}
 
+	syncMandatoryFlags(c, reflect.TypeOf(opts), vip, "")
+
 	// Automatic debug output if debug is on
 	UseDebug(c, c.OutOrStdout())
 
 	return nil
+}
+
+// syncMandatoryFlags tells cobra that a required flag is present when its value is provided by a source other than the command line (e.g., config file).
+func syncMandatoryFlags(c *cobra.Command, T reflect.Type, vip *viper.Viper, structPath string) {
+	if T.Kind() == reflect.Ptr {
+		T = T.Elem()
+	}
+	if T.Kind() != reflect.Struct {
+		return
+	}
+
+	for i := range T.NumField() {
+		structField := T.Field(i)
+
+		// Path calculation logic
+		path := getFieldPath(structPath, structField)
+
+		// Recurse into nested structs first
+		if structField.Type.Kind() == reflect.Struct {
+			syncMandatoryFlags(c, structField.Type, vip, path)
+		}
+
+		// Go on only for mandatory fields
+		if !isMandatory(structField) {
+			continue
+		}
+
+		// Determine the flag name (which is the viper key)
+		alias := structField.Tag.Get("flag")
+		name := getName(path, alias)
+
+		// If viper has a value for this key, find the corresponding
+		// cobra flag and mark its Changed property as true.
+		if vip.IsSet(name) {
+			if f := c.Flags().Lookup(name); f != nil {
+				f.Changed = true
+			}
+		}
+	}
 }
