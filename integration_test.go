@@ -18,6 +18,7 @@ import (
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
 	autoflagserrors "github.com/leodido/autoflags/errors"
+	full_example_cli "github.com/leodido/autoflags/examples/full/cli"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -46,6 +47,182 @@ func TestMain(m *testing.M) {
 
 	// Teardown (if necessary, though not typically for molder/validator instances)
 	os.Exit(exitCode)
+}
+
+type fullAppTestCase struct {
+	name       string
+	args       []string
+	envs       map[string]string
+	config     string
+	configPath string
+	assertFunc func(t *testing.T, output string, err error)
+}
+
+func TestFullApplication(t *testing.T) {
+	testCases := []fullAppTestCase{
+		{
+			name: "Missing required options cause error",
+			args: []string{"srv"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.Error(t, err)
+				require.ErrorContains(t, err, `"port" not set`)
+			},
+		},
+		{
+			name: "Recognize required options from flag",
+			args: []string{"srv", "--port", "9876"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, output, `"Port": 9876`)
+			},
+		},
+		{
+			name: "Recognize required options from env",
+			args: []string{"srv"},
+			envs: map[string]string{"FULL_SRV_PORT": "4455"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				require.Contains(t, output, `"Port": 4455`)
+			},
+		},
+		{
+			name: "--debug-options prints out debugging info",
+			args: []string{"srv", "--debug-options", "-p", "3333"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Aliases:")
+				assert.Contains(t, output, "PFlags:")
+				assert.Contains(t, output, "Env:")
+				assert.Contains(t, output, "Config:")
+				assert.Contains(t, output, "Defaults:")
+				assert.Contains(t, output, "Values:")
+			},
+		},
+		{
+			name: "FULL_DEBUG_OPTIONS env var enables debug output",
+			args: []string{"srv", "-p", "3333"},
+			envs: map[string]string{"FULL_DEBUG_OPTIONS": "true"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Aliases:")
+				assert.Contains(t, output, "Values:")
+			},
+		},
+		{
+			name: "Default values are applied correctly",
+			args: []string{"srv", "--port", "1234"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"Host": "localhost"`)
+				assert.Contains(t, output, `"MaxConns": 10`)
+				assert.Contains(t, output, `"TargetEnv": "dev"`)
+			},
+		},
+		{
+			name: "Custom flag --target-env works correctly",
+			args: []string{"srv", "-p", "3333", "--target-env", "staging"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"TargetEnv": "staging"`)
+			},
+		},
+		{
+			name:   "Error on invalid --target-env value",
+			args:   []string{"srv", "-p", "1234", "--target-env", "ciao"},
+			config: "", // No config file needed for this test
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "invalid environment: ciao")
+			},
+		},
+		{
+			name:       "Values are correctly read from config file in fallback location",
+			args:       []string{"srv"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  host: "host-from-config"
+  port: 6767
+  log-level: "warn"
+  db-url: "postgres://user:pass@config/mydb"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Using config file: /etc/full/config.yaml")
+				assert.Contains(t, output, `"Host": "host-from-config"`)
+				assert.Contains(t, output, `"LogLevel": "warn"`)
+				assert.Contains(t, output, `"Port": 6767`)
+				assert.Contains(t, output, `"URL": "postgres://user:pass@config/mydb"`)
+			},
+		},
+		{
+			name:       "Values are correctly read from explicit config file and env var override works",
+			args:       []string{"srv", "--config", "/some/path/config.yaml", "--debug-options"},
+			envs:       map[string]string{"FULL_SRV_APIKEY": "1terces", "FULL_SRV_DATABASE_MAXCONNS": "50"},
+			configPath: "/some/path/config.yaml",
+			config: `
+srv:
+  host: "host-from-config"
+  port: 6767
+  apikey: "secret1"
+  db-url: "postgres://user:pass@config/mydb"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				fmt.Println(output)
+				assert.Contains(t, output, "Using config file: /some/path/config.yaml")
+				assert.Contains(t, output, `"Host": "host-from-config"`)
+				assert.Contains(t, output, `"Port": 6767`)
+				assert.Contains(t, output, `"APIKey": "1terces"`)
+				assert.Contains(t, output, `"URL": "postgres://user:pass@config/mydb"`)
+				assert.Contains(t, output, `"MaxConns": 50`)
+			},
+		},
+	}
+
+	setupTest := func(t *testing.T, content string, path string) func() {
+		fs := afero.NewMemMapFs()
+		viper.SetFs(fs)
+
+		if content != "" && path != "" {
+			// Ensure the directory exists and write the config file.
+			require.NoError(t, fs.MkdirAll(filepath.Dir(path), 0755))
+			require.NoError(t, afero.WriteFile(fs, path, []byte(content), 0644))
+		}
+
+		// Return a cleanup function to reset Viper's state after the test.
+		return func() {
+			viper.Reset()
+		}
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.envs != nil {
+				for key, value := range tc.envs {
+					t.Setenv(key, value)
+				}
+			}
+			cleanup := setupTest(t, tc.config, tc.configPath)
+			defer cleanup()
+
+			c := full_example_cli.NewRootC()
+
+			// Capture output
+			var out bytes.Buffer
+			c.SetOut(&out)
+			c.SetErr(&out)
+
+			// Set the arguments for this specific test case
+			c.SetArgs(tc.args)
+
+			// Execute the command
+			executionErr := c.Execute()
+
+			// Run the specific assertions for this test case
+			tc.assertFunc(t, out.String(), executionErr)
+		})
+	}
 }
 
 type unmarshalIntegrationOptions struct {
