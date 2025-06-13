@@ -307,6 +307,16 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 			field: "ConflictField",
 		},
 		{
+			name: "ConflictingTypeError",
+			err: &ConflictingTypeError{
+				Type:     reflect.TypeOf(""),
+				TypeName: "string",
+				Fields:   []string{"ConflictField1", "ConflictField2"},
+				Message:  "conflict",
+			},
+			field: "ConflictField1, ConflictField2",
+		},
+		{
 			name: "UnsupportedTypeError",
 			err: &UnsupportedTypeError{
 				FieldName: "UnsupportedField",
