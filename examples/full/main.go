@@ -103,12 +103,15 @@ func makeSrvC() *cobra.Command {
 		Long:  "Start the server with the specified configuration",
 		PreRunE: func(c *cobra.Command, args []string) error {
 			fmt.Println("|--srvC.PreRunE")
+			if err := autoflags.Unmarshal(c, opts); err != nil {
+				return err
+			}
+			spew.Dump(opts)
 
-			return autoflags.Unmarshal(c, opts)
+			return nil
 		},
 		RunE: func(c *cobra.Command, args []string) error {
 			fmt.Println("|--srvC.RunE")
-			spew.Dump(opts)
 
 			return nil
 		},

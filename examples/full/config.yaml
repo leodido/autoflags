@@ -1,0 +1,13 @@
+srv:
+  host: "production-server"
+  port: 8443
+  apikey: "secret-api-key"
+  log-level: "debug"
+  log-file: "/var/log/mysrv.log"
+  # FIXME: nesting seems to do not work anymore :/
+  database:
+    url: "postgres://user:pass@localhost/mydb"
+    maxconns: 50
+  # NOTE: these work
+  # db-url: "postgres://user:pass@localhost/mydb"
+  # db-max-conns: 50
