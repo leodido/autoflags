@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"reflect"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
@@ -106,7 +106,7 @@ func makeSrvC() *cobra.Command {
 			if err := autoflags.Unmarshal(c, opts); err != nil {
 				return err
 			}
-			spew.Dump(opts)
+			fmt.Println(pretty(opts))
 
 			return nil
 		},
@@ -126,7 +126,7 @@ func makeSrvC() *cobra.Command {
 			if err := commonOpts.FromContext(c.Context()); err != nil {
 				return err
 			}
-			spew.Dump(commonOpts)
+			fmt.Println(commonOpts)
 
 			return nil
 		},
@@ -201,13 +201,13 @@ func makeUsrC() *cobra.Command {
 			if err := commonOpts.FromContext(c.Context()); err != nil {
 				return err
 			}
-			spew.Dump(commonOpts)
+			fmt.Println(pretty(commonOpts))
 
 			return autoflags.Unmarshal(c, opts)
 		},
 		RunE: func(c *cobra.Command, args []string) error {
 			fmt.Println("|---add.RunE")
-			spew.Dump(opts)
+			fmt.Println(pretty(opts))
 
 			return nil
 		},
@@ -296,4 +296,13 @@ func main() {
 	if err := rootC.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func pretty(opts any) string {
+	prettyOpts, err := json.MarshalIndent(opts, "", "  ")
+	if err != nil {
+		panic(fmt.Sprintf("Error marshalling options: %s", err.Error()))
+	}
+
+	return string(prettyOpts)
 }
