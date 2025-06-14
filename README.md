@@ -135,9 +135,9 @@ Your CLI now supports:
 - ✅ Automatic validation and type conversion
 - 📚 Beautiful help output with proper grouping
 
-## Key Features
+## 📦  Key Features
 
-### 🏗️ Declarative Flags Definition
+### 🧩 Declarative Flags Definition
 
 Define flags once using Go struct tags.
 
@@ -173,7 +173,7 @@ type DatabaseConfig struct {
 
 See [full example](examples/full/cli/cli.go) for more details.
 
-### 🔧 Automatic Environment Variable Binding
+### 🛠️ Automatic Environment Variable Binding
 
 Automatically generate environment variables binding them to configuration files (YAML, JSON, TOML, etc.) and flags.
 
@@ -188,7 +188,7 @@ Every struct field with the `flagenv:"true"` tag gets an environment variable (t
 
 The prefix of the environment variable name is the CLI name plus the command name to which those options are attached to.
 
-### 📁 Configuration File Support
+### ⚙️ Configuration File Support
 
 Easily set up configuration file discovery (flag, environment variable, and fallback paths) with a single line of code.
 
@@ -245,7 +245,7 @@ func (o *ServerOptions) Transform(ctx context.Context) error {
 
 See a full working example [here](examples/full/cli/cli.go).
 
-#### Automatic Debugging Support
+### 🚧 Automatic Debugging Support
 
 Create a `--debug-options` flag (plus a `FULL_DEBUG_OPTIONS` env var) for troubleshooting config/env/flags resolution.
 
@@ -274,14 +274,14 @@ autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
 # map[string]interface {}{"apikey":"secret-api-key", "database":map[string]interface {}{"maxconns":3, "url":"postgres://user:pass@localhost/mydb"}, "db-url":"postgres://user:pass@localhost/mydb", "host":"production-server", "log-file":"/var/log/mysrv.log", "log-level":"debug", "logfile":"/var/log/mysrv.log", "loglevel":"debug", "port":3333, "target-env":"dev", "targetenv":"dev"}
 ```
 
-### Custom Type Handlers
+### 🪃 Custom Type Handlers
 
 Declare options (flags, env vars, config file keys) with custom types.
 
 Just implement two methods on your options structs:
 
-- `Define<TypeName>` for defining the custom flag, its description, etc.
-- `Decode<TypeName>` for converting any input to your custom type (or erroring out)
+- `Define<FieldName>` for defining the custom flag, its description, etc.
+- `Decode<FieldName>` for converting any input to your custom type (or erroring out)
 
 ```go
 type Environment string
@@ -311,7 +311,7 @@ func (o *ServerOptions) DecodeTargetEnv(input any) (any, error) {
 
 See [full example](examples/full/cli/cli.go) for more details.
 
-#### Command-Specific Configuration
+### 📜 Configuration Is First-Class Citizen
 
 ```yaml
 # Global settings
@@ -379,7 +379,7 @@ Organize your `--help` output into logical groups for better readability.
 # Use "full srv [command] --help" for more information about a command.
 ```
 
-## Available Struct Tags
+## 🏷️ Available Struct Tags
 
 Use these tags in your struct fields to control the behavior:
 
