@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"unsafe"
 
 	autoflagserrors "github.com/leodido/autoflags/errors"
@@ -19,6 +20,9 @@ type defineContext struct {
 	exclusions map[string]string
 	comm       *cobra.Command
 }
+
+// globalFieldMappingsCache stores the mapping of a struct field's path to its `flag` tag alias.
+var globalFieldMappingsCache = &sync.Map{}
 
 // WithExclusions sets flags to exclude from definition based on flag names or paths.
 //
@@ -188,6 +192,10 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 			continue
 		}
 
+		if c.Flags().Lookup(name) != nil {
+			goto definition_done
+		}
+
 		// TODO: complete type switch with missing types for:
 		// c.Flags().StringArrayVarP()
 		// c.Flags().IPSliceVarP()
@@ -309,6 +317,8 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		if alias != "" && path != alias {
+			globalFieldMappingsCache.Store(path, alias)
+
 			// Make the field name (path) an alias for the flag name (alias)
 			// Allows mapstructure to find values provided via the flag tag name in the config files
 			GetViper(c).RegisterAlias(path, alias)

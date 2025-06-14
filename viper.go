@@ -59,9 +59,6 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
 	vip.MergeConfigMap(configToMerge)
 
-	// Build the mapping of field names to their `flag` tag aliases.
-	fieldMappings := buildFieldMappings(reflect.TypeOf(opts))
-
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if decodeHooks, defineDecodeHooks := f.Annotations[flagDecodeHookAnnotation]; defineDecodeHooks {
@@ -89,7 +86,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 		c.WeaklyTypedInput = true
 
 		// This is the custom matching logic that solves the problem.
-		c.MatchName = getNameMatcher(fieldMappings)
+		c.MatchName = getNameMatcher()
 	})
 
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
@@ -130,36 +127,14 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	return nil
 }
 
-// buildFieldMappings recursively traverses a struct type and builds a map of
-// every lowercase field name to its corresponding `flag` tag alias.
-// e.g., {"dryrun": "dry-run", "host": "hhost"}
-func buildFieldMappings(T reflect.Type) map[string]string {
-	mappings := make(map[string]string)
-	if T.Kind() == reflect.Ptr {
-		T = T.Elem()
-	}
-	if T.Kind() != reflect.Struct {
-		return mappings
-	}
-	for i := 0; i < T.NumField(); i++ {
-		field := T.Field(i)
-		// Recurse into nested structs
-		if field.Type.Kind() == reflect.Struct {
-			nestedMappings := buildFieldMappings(field.Type)
-			for k, v := range nestedMappings {
-				mappings[k] = v
-			}
-		}
-		// Add the mapping for the current field
-		alias := field.Tag.Get("flag")
-		if alias != "" {
-			mappings[strings.ToLower(field.Name)] = alias
-		}
-	}
-	return mappings
-}
+func getNameMatcher() func(mapKey, fieldName string) bool {
+	// Build the mapping of field names to their `flag` tag aliases.
+	fieldMappings := make(map[string]string)
+	globalFieldMappingsCache.Range(func(key, value interface{}) bool {
+		fieldMappings[key.(string)] = value.(string)
+		return true
+	})
 
-func getNameMatcher(fieldMappings map[string]string) func(mapKey, fieldName string) bool {
 	return func(mapKey, fieldName string) bool {
 		// First, check for a direct case-insensitive match (default behavior).
 		if strings.EqualFold(mapKey, fieldName) {
