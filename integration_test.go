@@ -238,6 +238,18 @@ srv:
 				assert.Contains(t, output, `"Port": 1111`)
 			},
 		},
+		{
+			name:       "Malformed config file returns an error",
+			args:       []string{"srv", "-p", "2233"},
+			configPath: "/etc/full/config.yaml",
+			config:     "srv:\n\tkey: value",
+			assertFunc: func(t *testing.T, output string, err error) {
+				// We expect an error from Viper when it tries to parse the bad YAML
+				require.Error(t, err)
+				assert.Contains(t, output, "error running with config file: /etc/full/config.yaml")
+				assert.Contains(t, err.Error(), "parsing config: yaml")
+			},
+		},
 	}
 
 	setupTest := func(t *testing.T, content string, path string) func() {
