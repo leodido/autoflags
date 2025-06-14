@@ -127,9 +127,8 @@ func TestFullApplication(t *testing.T) {
 			},
 		},
 		{
-			name:   "Error on invalid --target-env value",
-			args:   []string{"srv", "-p", "1234", "--target-env", "ciao"},
-			config: "", // No config file needed for this test
+			name: "Error on invalid --target-env value",
+			args: []string{"srv", "-p", "1234", "--target-env", "ciao"},
 			assertFunc: func(t *testing.T, output string, err error) {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, "invalid environment: ciao")
@@ -248,6 +247,28 @@ srv:
 				require.Error(t, err)
 				assert.Contains(t, err.Error(), "error running with config file: /etc/full/config.yaml")
 				assert.Contains(t, err.Error(), "parsing config: yaml")
+			},
+		},
+		{
+			name:       "Error on type mismatch when config key matches field name",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config:     `dryrun: "b"`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "cannot parse 'DryRun' as bool")
+				assert.ErrorContains(t, err, `parsing "b": invalid syntax`)
+			},
+		},
+		{
+			name:       "Error on type mismatch when config key matches flag tag",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config:     `dry-run: "a"`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "cannot parse 'DryRun' as bool")
+				assert.ErrorContains(t, err, `parsing "a": invalid syntax`)
 			},
 		},
 	}
