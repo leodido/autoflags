@@ -32,7 +32,7 @@ type ServerOptions struct {
 
 	// Flag grouping for organized help
 	LogLevel zapcore.Level `flag:"log-level" flaggroup:"Logging" flagdescr:"Set log level"`
-	LogFile  string        `flag:"log-file" flaggroup:"Logging" flagdescr:"Log file path"`
+	LogFile  string        `flag:"log-file" flaggroup:"Logging" flagdescr:"Log file path" flagenv:"true"`
 
 	// Nested structs for organization
 	Database DatabaseConfig `flaggroup:"Database"`
@@ -250,7 +250,7 @@ func (f *UtilityFlags) FromContext(ctx context.Context) error {
 	return nil
 }
 
-func NewRootC() *cobra.Command {
+func NewRootC() (*cobra.Command, error) {
 	// Options implementing CommonOptions propagate automatically via commands context
 	commonOpts := &UtilityFlags{}
 
@@ -264,6 +264,8 @@ func NewRootC() *cobra.Command {
 		// Useful for allowing context options not being attached to all the subcommands
 		// Eg, `go run main.go --dry-run usr add` would fail otherwise
 		TraverseChildren: true,
+		// Because we handle errors ourselves in this example
+		SilenceErrors: true,
 	}
 
 	// Global persistent pre-run for config file support
@@ -296,11 +298,15 @@ func NewRootC() *cobra.Command {
 	rootC.AddCommand(makeUsrC())
 
 	// This single line enables the configuration file support
-	autoflags.SetupConfig(rootC, autoflags.ConfigOptions{AppName: "full"})
+	if err := autoflags.SetupConfig(rootC, autoflags.ConfigOptions{AppName: "full"}); err != nil {
+		return nil, err
+	}
 	// This single line enables the debugging global flag
-	autoflags.SetupDebug(rootC, autoflags.DebugOptions{})
+	if err := autoflags.SetupDebug(rootC, autoflags.DebugOptions{}); err != nil {
+		return nil, err
+	}
 
-	return rootC
+	return rootC, nil
 }
 
 func pretty(opts any) string {

@@ -8,7 +8,10 @@ import (
 
 func main() {
 	log.SetFlags(0)
-	c := full_example_cli.NewRootC()
+	c, e := full_example_cli.NewRootC()
+	if e != nil {
+		log.Fatalln(e)
+	}
 
 	if err := c.Execute(); err != nil {
 		log.Fatalln(err)
