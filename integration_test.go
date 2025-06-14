@@ -246,7 +246,7 @@ srv:
 			assertFunc: func(t *testing.T, output string, err error) {
 				// We expect an error from Viper when it tries to parse the bad YAML
 				require.Error(t, err)
-				assert.Contains(t, output, "error running with config file: /etc/full/config.yaml")
+				assert.Contains(t, err.Error(), "error running with config file: /etc/full/config.yaml")
 				assert.Contains(t, err.Error(), "parsing config: yaml")
 			},
 		},
@@ -278,7 +278,7 @@ srv:
 			cleanup := setupTest(t, tc.config, tc.configPath)
 			defer cleanup()
 
-			c := full_example_cli.NewRootC()
+			c, _ := full_example_cli.NewRootC()
 
 			// Capture output
 			var out bytes.Buffer
