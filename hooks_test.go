@@ -16,7 +16,7 @@ type zapcoreLevelOptions struct {
 	LogLevel zapcore.Level `default:"info" flagcustom:"true" flagdescr:"the logging level" flagenv:"true"`
 }
 
-func (o *zapcoreLevelOptions) Attach(c *cobra.Command) {}
+func (o *zapcoreLevelOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestHooks_DefineZapcoreLevelFlag() {
 	// Test just defining the flag, without config file
@@ -60,7 +60,7 @@ type durationOptions struct {
 	Timeout time.Duration `flag:"timeout" flagdescr:"request timeout" default:"30s"`
 }
 
-func (o *durationOptions) Attach(c *cobra.Command) {}
+func (o *durationOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestHooks_DurationFromFlag() {
 	// Test setting duration via command line flag
@@ -191,7 +191,7 @@ type stringSliceOptions struct {
 	Cgroups []string `flag:"cgroups" flagdescr:"list of cgroups to monitor"`
 }
 
-func (o *stringSliceOptions) Attach(c *cobra.Command) {}
+func (o *stringSliceOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestHooks_StringSliceFromFlag() {
 	// Test setting string slice via command line flag
@@ -396,7 +396,7 @@ type intSliceOptions struct {
 	Ports []int `flag:"ports" flagdescr:"list of ports to listen on"`
 }
 
-func (o *intSliceOptions) Attach(c *cobra.Command) {}
+func (o *intSliceOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestHooks_IntSliceFromFlag() {
 	// Test setting int slice via command line flag
@@ -644,7 +644,7 @@ type requiredWithEnvRuntimeOptions struct {
 	OptionalEnvFlag string `flag:"optional-env-flag" flagenv:"true" flagdescr:"optional flag with env"`
 }
 
-func (o *requiredWithEnvRuntimeOptions) Attach(c *cobra.Command) {}
+func (o *requiredWithEnvRuntimeOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 	suite.T().Run("required_flag_with_env_var_set", func(t *testing.T) {

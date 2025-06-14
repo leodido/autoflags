@@ -10,7 +10,7 @@ import (
 //
 // Types implementing this interface can be used with Define() to automatically generate flags from struct fields.
 type Options interface {
-	Attach(*cobra.Command)
+	Attach(*cobra.Command) error
 }
 
 // ValidatableOptions extends Options with validation capabilities.

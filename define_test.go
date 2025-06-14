@@ -38,7 +38,7 @@ type testOptions struct {
 	Nest        jsonFlags
 }
 
-func (o testOptions) Attach(c *cobra.Command)             {}
+func (o testOptions) Attach(c *cobra.Command) error       { return nil }
 func (o testOptions) Transform(ctx context.Context) error { return nil }
 func (o testOptions) Validate() []error                   { return nil }
 
@@ -50,7 +50,7 @@ type uintTestOptions struct {
 	Uint64Field uint64 `flag:"uint64-field" flagdescr:"test uint64 field"`
 }
 
-func (o uintTestOptions) Attach(c *cobra.Command)             {}
+func (o uintTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o uintTestOptions) Transform(ctx context.Context) error { return nil }
 func (o uintTestOptions) Validate() []error                   { return nil }
 
@@ -115,7 +115,7 @@ type intTestOptions struct {
 	Int64Field int64 `flag:"int64-field" flagdescr:"test int64 field"`
 }
 
-func (o intTestOptions) Attach(c *cobra.Command)             {}
+func (o intTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o intTestOptions) Transform(ctx context.Context) error { return nil }
 func (o intTestOptions) Validate() []error                   { return nil }
 
@@ -176,7 +176,7 @@ type countTestOptions struct {
 	Verbose int `flag:"verbose" flagshort:"v" type:"count" flagdescr:"verbosity level"`
 }
 
-func (o countTestOptions) Attach(c *cobra.Command)             {}
+func (o countTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o countTestOptions) Transform(ctx context.Context) error { return nil }
 func (o countTestOptions) Validate() []error                   { return nil }
 
@@ -213,7 +213,7 @@ type sliceTestOptions struct {
 	IntSliceField    []int    `flag:"ints" flagshort:"i" flagdescr:"int slice field"`
 }
 
-func (o sliceTestOptions) Attach(c *cobra.Command)             {}
+func (o sliceTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o sliceTestOptions) Transform(ctx context.Context) error { return nil }
 func (o sliceTestOptions) Validate() []error                   { return nil }
 
@@ -313,7 +313,7 @@ func (o *comprehensiveCustomOptions) DecodeSomeConfig(input any) (any, error) {
 	return "", nil
 }
 
-func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) {}
+func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagcustom_ComprehensiveScenarios() {
 	opts := &comprehensiveCustomOptions{}
@@ -352,7 +352,7 @@ type structFieldOptions struct {
 	methodCalled bool
 }
 
-func (o *structFieldOptions) Attach(c *cobra.Command) {}
+func (o *structFieldOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagcustom_EdgeCases() {
 	// Test struct fields (should be ignored)
@@ -372,7 +372,7 @@ type envAnnotationsTestOptions struct {
 	NoEnv  string `flag:"no-env" flagdescr:"this will have len(envs) == 0"`
 }
 
-func (o *envAnnotationsTestOptions) Attach(c *cobra.Command) {}
+func (o *envAnnotationsTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
 	SetEnvPrefix("TEST")
@@ -417,7 +417,7 @@ type requiredFlagsTestOptions struct {
 	RequiredWithDesc string `flagrequired:"true" flagdescr:"required flag without custom name"`
 }
 
-func (o *requiredFlagsTestOptions) Attach(c *cobra.Command) {}
+func (o *requiredFlagsTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_BasicFunctionality() {
 	opts := &requiredFlagsTestOptions{}
@@ -469,7 +469,7 @@ type nestedRequiredStruct struct {
 	NestedNotRequired string `flag:"nested-not-required" flagdescr:"nested not required flag"`
 }
 
-func (o *nestedRequiredFlagsOptions) Attach(c *cobra.Command) {}
+func (o *nestedRequiredFlagsOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_NestedStructs() {
 	opts := &nestedRequiredFlagsOptions{}
@@ -508,7 +508,7 @@ type validBooleanRequiredOptions struct {
 	CaseVariation string `flag:"case-variation" flagrequired:"True" flagdescr:"case variation test"`
 }
 
-func (o *validBooleanRequiredOptions) Attach(c *cobra.Command) {}
+func (o *validBooleanRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_ValidBooleanEdgeCases() {
 	opts := &validBooleanRequiredOptions{}
@@ -539,7 +539,7 @@ type singleInvalidRequiredOption struct {
 	InvalidTrue string `flag:"invalid-true" flagrequired:"yes" flagdescr:"invalid boolean value"`
 }
 
-func (o *singleInvalidRequiredOption) Attach(c *cobra.Command) {}
+func (o *singleInvalidRequiredOption) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_InvalidBooleanValue() {
 	opts := &singleInvalidRequiredOption{}
@@ -561,7 +561,7 @@ type multipleTypesRequiredOptions struct {
 	NotRequiredInt    int      `flag:"not-required-int" flagrequired:"false" flagdescr:"not required int"`
 }
 
-func (o *multipleTypesRequiredOptions) Attach(c *cobra.Command) {}
+func (o *multipleTypesRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_MultipleTypes() {
 	opts := &multipleTypesRequiredOptions{}
@@ -600,7 +600,7 @@ type requiredWithOtherTagsOptions struct {
 	RequiredWithEnv     string `flag:"required-env" flagrequired:"true" flagenv:"true" flagdescr:"required with env"`
 }
 
-func (o *requiredWithOtherTagsOptions) Attach(c *cobra.Command) {}
+func (o *requiredWithOtherTagsOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
 	opts := &requiredWithOtherTagsOptions{}
@@ -667,20 +667,20 @@ type testOptionsWithInterface struct {
 	InterfaceField testInterface // Interface fields can create addressability issues
 }
 
-func (o testOptionsWithInterface) Attach(c *cobra.Command) {}
+func (o testOptionsWithInterface) Attach(c *cobra.Command) error { return nil }
 
 type simpleTestStruct struct {
 	Field string `flag:"test-field" flagdescr:"test field"`
 }
 
-func (o simpleTestStruct) Attach(c *cobra.Command) {}
+func (o simpleTestStruct) Attach(c *cobra.Command) error { return nil }
 
 type addressabilityTestOptions struct {
 	StringField string `flag:"string-field" flagdescr:"string field"`
 	IntField    int    `flag:"int-field" flagdescr:"int field"`
 }
 
-func (o addressabilityTestOptions) Attach(c *cobra.Command) {}
+func (o addressabilityTestOptions) Attach(c *cobra.Command) error { return nil }
 
 type deepNested struct {
 	Value string `flag:"deep-value" flagdescr:"deep nested value"`
@@ -695,13 +695,13 @@ type topLevelNested struct {
 	Direct string `flag:"direct" flagdescr:"direct field"`
 }
 
-func (o topLevelNested) Attach(c *cobra.Command) {}
+func (o topLevelNested) Attach(c *cobra.Command) error { return nil }
 
 type canAddrTestOptions struct {
 	Field string `flag:"field" flagdescr:"test field"`
 }
 
-func (o canAddrTestOptions) Attach(c *cobra.Command) {}
+func (o canAddrTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestDefine_NonAddressableFields() {
 	suite.T().Run("interface_with_embedded_struct", func(t *testing.T) {
@@ -829,7 +829,7 @@ func (o *flagCustomTestOptions) DecodeValidCustom(input any) (any, error) {
 	return input, nil
 }
 
-func (o *flagCustomTestOptions) Attach(c *cobra.Command) {}
+func (o *flagCustomTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagCustom_ShouldReturnError() {
 	opts := &flagCustomTestOptions{}
@@ -858,7 +858,7 @@ func (o *validFlagCustomOptions) DecodeTrueCustom(input any) (any, error) {
 	return input, nil
 }
 
-func (o *validFlagCustomOptions) Attach(c *cobra.Command) {}
+func (o *validFlagCustomOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagCustom_ValidValues() {
 	opts := &validFlagCustomOptions{}
@@ -905,7 +905,7 @@ func (o *flagCustomEdgeCasesOptions) DecodeNumberOne(input any) (any, error) {
 	return input, nil
 }
 
-func (o *flagCustomEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *flagCustomEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 type validEdgeCasesOptions struct {
 	CaseTrue   string `flagcustom:"True" flag:"case-true" flagdescr:"capital True"`
@@ -930,7 +930,7 @@ func (o *validEdgeCasesOptions) DecodeNumberOne(input any) (any, error) {
 	return input, nil
 }
 
-func (o *validEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *validEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
 	opts := &validEdgeCasesOptions{}
@@ -974,7 +974,7 @@ type flagEnvTestOptions struct {
 	NormalFlag string `flag:"normal" flagdescr:"normal field without flagenv"`
 }
 
-func (o *flagEnvTestOptions) Attach(c *cobra.Command) {}
+func (o *flagEnvTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_ShouldReturnError() {
 	opts := &flagEnvTestOptions{}
@@ -995,7 +995,7 @@ type validFlagEnvOptions struct {
 	NoEnv    string `flag:"no-env" flagdescr:"should not have env"`
 }
 
-func (o *validFlagEnvOptions) Attach(c *cobra.Command) {}
+func (o *validFlagEnvOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_ValidValues() {
 	opts := &validFlagEnvOptions{}
@@ -1032,7 +1032,7 @@ type flagEnvEdgeCasesOptions struct {
 	WithSpaces string `flagenv:" true " flag:"with-spaces" flagdescr:"spaces around true"`
 }
 
-func (o *flagEnvEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *flagEnvEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 type validEnvEdgeCasesOptions struct {
 	CaseTrue   string `flagenv:"True" flag:"case-true" flagdescr:"capital True"`
@@ -1041,7 +1041,7 @@ type validEnvEdgeCasesOptions struct {
 	NumberZero string `flagenv:"0" flag:"number-zero" flagdescr:"number 0"`
 }
 
-func (o *validEnvEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *validEnvEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	opts := &validEnvEdgeCasesOptions{}
@@ -1092,7 +1092,7 @@ type nestedEnvStruct struct {
 	InvalidNestedEnv string `flag:"nested-invalid" flagenv:"invalid" flagdescr:"nested invalid env"`
 }
 
-func (o *nestedFlagEnvOptions) Attach(c *cobra.Command) {}
+func (o *nestedFlagEnvOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_NestedStructs_WithValidation() {
 	opts := &nestedFlagEnvOptions{}
@@ -1112,7 +1112,7 @@ type multipleInvalidEnvOptions struct {
 	ValidEnv    string `flagenv:"true" flag:"valid" flagdescr:"valid env"`
 }
 
-func (o *multipleInvalidEnvOptions) Attach(c *cobra.Command) {}
+func (o *multipleInvalidEnvOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidEnvOptions{}
@@ -1149,7 +1149,7 @@ func (o *flagEnvCombinedOptions) DecodeInvalidEnvValid(input any) (any, error) {
 	return input, nil
 }
 
-func (o *flagEnvCombinedOptions) Attach(c *cobra.Command) {}
+func (o *flagEnvCombinedOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_CombinedWithOtherTags() {
 	opts := &flagEnvCombinedOptions{}
@@ -1168,7 +1168,7 @@ type bothInvalidOptions struct {
 	InvalidBoth string `flagenv:"invalid" flagcustom:"invalid" flag:"invalid-both" flagdescr:"both invalid"`
 }
 
-func (o *bothInvalidOptions) Attach(c *cobra.Command) {}
+func (o *bothInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
 	opts := &bothInvalidOptions{}
@@ -1185,7 +1185,7 @@ type errorMessageOptions struct {
 	BadValue string `flagenv:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
 }
 
-func (o *errorMessageOptions) Attach(c *cobra.Command) {}
+func (o *errorMessageOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() {
 	opts := &errorMessageOptions{}
@@ -1212,7 +1212,7 @@ type flagIgnoreTestOptions struct {
 	NormalFlag    string `flag:"normal" flagdescr:"normal field without flagignore"`
 }
 
-func (o *flagIgnoreTestOptions) Attach(c *cobra.Command) {}
+func (o *flagIgnoreTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_ShouldReturnError() {
 	opts := &flagIgnoreTestOptions{}
@@ -1233,7 +1233,7 @@ type validFlagIgnoreOptions struct {
 	NoIgnore    string `flag:"no-ignore" flagdescr:"should not be ignored"`
 }
 
-func (o *validFlagIgnoreOptions) Attach(c *cobra.Command) {}
+func (o *validFlagIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_ValidValues() {
 	opts := &validFlagIgnoreOptions{}
@@ -1263,7 +1263,7 @@ type validIgnoreEdgeCasesOptions struct {
 	NumberZero string `flagignore:"0" flag:"number-zero" flagdescr:"number 0"`
 }
 
-func (o *validIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *validIgnoreEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ValidValues() {
 	opts := &validIgnoreEdgeCasesOptions{}
@@ -1293,7 +1293,7 @@ type flagIgnoreEdgeCasesOptions struct {
 	WithSpaces string `flagignore:" true " flag:"with-spaces" flagdescr:"spaces around true"`
 }
 
-func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ShouldReturnError() {
 	opts := &flagIgnoreEdgeCasesOptions{}
@@ -1316,7 +1316,7 @@ type flagIgnoreStructFieldOptions struct {
 	Nest flagIgnoreNestedStruct `flagignore:"true"`
 }
 
-func (o *flagIgnoreStructFieldOptions) Attach(c *cobra.Command) {}
+func (o *flagIgnoreStructFieldOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_OnStruct_ShouldReturnError() {
 	opts := &flagIgnoreStructFieldOptions{}
@@ -1340,7 +1340,7 @@ type nestedIgnoreStruct struct {
 	InvalidNestedIgnore string `flag:"nested-invalid" flagignore:"invalid" flagdescr:"nested invalid ignore"`
 }
 
-func (o *nestedFlagIgnoreOptions) Attach(c *cobra.Command) {}
+func (o *nestedFlagIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_NestedStructs_WithValidation() {
 	opts := &nestedFlagIgnoreOptions{}
@@ -1360,7 +1360,7 @@ type multipleInvalidIgnoreOptions struct {
 	ValidIgnore    string `flagignore:"true" flag:"valid" flagdescr:"valid ignore"`
 }
 
-func (o *multipleInvalidIgnoreOptions) Attach(c *cobra.Command) {}
+func (o *multipleInvalidIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidIgnoreOptions{}
@@ -1389,7 +1389,7 @@ func (o *flagIgnoreCombinedOptions) DecodeIgnoreWithCustom(input any) (any, erro
 	return input, nil
 }
 
-func (o *flagIgnoreCombinedOptions) Attach(c *cobra.Command) {}
+func (o *flagIgnoreCombinedOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_CombinedWithOtherTags() {
 	opts := &flagIgnoreCombinedOptions{}
@@ -1408,7 +1408,7 @@ type allThreeInvalidOptions struct {
 	InvalidAll string `flagignore:"invalid" flagenv:"invalid" flagcustom:"invalid" flag:"invalid-all" flagdescr:"all three invalid"`
 }
 
-func (o *allThreeInvalidOptions) Attach(c *cobra.Command) {}
+func (o *allThreeInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_AllThreeInvalid_ReturnsFirstError() {
 	opts := &allThreeInvalidOptions{}
@@ -1425,7 +1425,7 @@ type errorIgnoreMessageOptions struct {
 	BadValue string `flagignore:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
 }
 
-func (o *errorIgnoreMessageOptions) Attach(c *cobra.Command) {}
+func (o *errorIgnoreMessageOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagignore_ErrorMessages_ContainExpectedContent() {
 	opts := &errorIgnoreMessageOptions{}
@@ -1452,7 +1452,7 @@ type flagRequiredTestOptions struct {
 	NormalFlag      string `flag:"normal" flagdescr:"normal field without flagrequired"`
 }
 
-func (o *flagRequiredTestOptions) Attach(c *cobra.Command) {}
+func (o *flagRequiredTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_ShouldReturnError() {
 	opts := &flagRequiredTestOptions{}
@@ -1473,7 +1473,7 @@ type validFlagRequiredOptions struct {
 	NoRequired    string `flag:"no-required" flagdescr:"should not be required"`
 }
 
-func (o *validFlagRequiredOptions) Attach(c *cobra.Command) {}
+func (o *validFlagRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_ValidValues() {
 	opts := &validFlagRequiredOptions{}
@@ -1510,7 +1510,7 @@ type validRequiredEdgeCasesOptions struct {
 	NumberZero string `flagrequired:"0" flag:"number-zero" flagdescr:"number 0"`
 }
 
-func (o *validRequiredEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *validRequiredEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ValidValues() {
 	opts := &validRequiredEdgeCasesOptions{}
@@ -1542,7 +1542,7 @@ type flagRequiredConflicting struct {
 	Conflict string `flagrequired:"true" flagignore:"true"`
 }
 
-func (o *flagRequiredConflicting) Attach(c *cobra.Command) {}
+func (o *flagRequiredConflicting) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_Conflicting_ShouldReturnError() {
 	opts := &flagRequiredConflicting{}
@@ -1566,7 +1566,7 @@ type flagRequiredEdgeCasesOptions struct {
 	WithSpaces string `flagrequired:" true " flag:"with-spaces" flagdescr:"spaces around true"`
 }
 
-func (o *flagRequiredEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *flagRequiredEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ShouldReturnError() {
 	opts := &flagRequiredEdgeCasesOptions{}
@@ -1591,7 +1591,7 @@ type nestedValidInvalidRequiredStruct struct {
 	InvalidNestedRequired string `flag:"nested-invalid" flagrequired:"invalid" flagdescr:"nested invalid required"`
 }
 
-func (o *nestedFlagRequiredOptions) Attach(c *cobra.Command) {}
+func (o *nestedFlagRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_NestedStructs_WithValidation() {
 	opts := &nestedFlagRequiredOptions{}
@@ -1611,7 +1611,7 @@ type multipleInvalidRequiredOptions struct {
 	ValidRequired    string `flagrequired:"true" flag:"valid" flagdescr:"valid required"`
 }
 
-func (o *multipleInvalidRequiredOptions) Attach(c *cobra.Command) {}
+func (o *multipleInvalidRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidRequiredOptions{}
@@ -1629,7 +1629,7 @@ type allFourInvalidOptions struct {
 	InvalidAll string `flagrequired:"invalid" flagignore:"invalid" flagenv:"invalid" flagcustom:"invalid" flag:"invalid-all" flagdescr:"all four invalid"`
 }
 
-func (o *allFourInvalidOptions) Attach(c *cobra.Command) {}
+func (o *allFourInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_AllFourInvalid_ReturnsFirstError() {
 	opts := &allFourInvalidOptions{}
@@ -1646,7 +1646,7 @@ type errorRequiredMessageOptions struct {
 	BadValue string `flagrequired:"maybe" flag:"bad-value" flagdescr:"bad boolean value"`
 }
 
-func (o *errorRequiredMessageOptions) Attach(c *cobra.Command) {}
+func (o *errorRequiredMessageOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagrequired_ErrorMessages_ContainExpectedContent() {
 	opts := &errorRequiredMessageOptions{}
@@ -1707,7 +1707,7 @@ type exclusionsTestOptions struct {
 	NestedStruct exclusionsNestedStruct
 }
 
-func (o *exclusionsTestOptions) Attach(c *cobra.Command) {}
+func (o *exclusionsTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestWithExclusions_MultipleExclusions() {
 	opts := &exclusionsTestOptions{}
@@ -1794,7 +1794,7 @@ type exclusionsAliasTestOptions struct {
 	NormalFlag    string `flagdescr:"auto-named flag"`
 }
 
-func (o *exclusionsAliasTestOptions) Attach(c *cobra.Command) {}
+func (o *exclusionsAliasTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestWithExclusions_AliasExclusion() {
 	opts := &exclusionsAliasTestOptions{}
@@ -1923,7 +1923,7 @@ type exclusionsSpecialCasesOptions struct {
 	NumberFlag     string `flag:"flag123" flagdescr:"flag with numbers"`
 }
 
-func (o *exclusionsSpecialCasesOptions) Attach(c *cobra.Command) {}
+func (o *exclusionsSpecialCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestWithExclusions_SpecialCharacters() {
 	opts := &exclusionsSpecialCasesOptions{}
@@ -1953,7 +1953,7 @@ type flagShortTestOptions struct {
 	NormalField    string `flag:"normal" flagdescr:"normal field without flagshort"`
 }
 
-func (o *flagShortTestOptions) Attach(c *cobra.Command) {}
+func (o *flagShortTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
 	opts := &flagShortTestOptions{}
@@ -1978,7 +1978,7 @@ type flagShortStructFieldOptions struct {
 	Nest flagShortNestedStruct `flagshort:"n"`
 }
 
-func (o *flagShortStructFieldOptions) Attach(c *cobra.Command) {}
+func (o *flagShortStructFieldOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagshort_OnStruct_ShouldReturnError() {
 	opts := &flagShortStructFieldOptions{}
@@ -2001,7 +2001,7 @@ type flagShortEdgeCasesOptions struct {
 	NumberChar  string `flagshort:"1" flag:"number" flagdescr:"number character"`
 }
 
-func (o *flagShortEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *flagShortEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError() {
 	opts := &flagShortEdgeCasesOptions{}
@@ -2026,7 +2026,7 @@ type validShortEdgeCasesOptions struct {
 	NumberChar  string `flagshort:"1" flag:"number" flagdescr:"number character"`
 }
 
-func (o *validShortEdgeCasesOptions) Attach(c *cobra.Command) {}
+func (o *validShortEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagshort_EdgeCases_ValidValues() {
 	opts := &validShortEdgeCasesOptions{}
@@ -2057,7 +2057,7 @@ type nestedShortStruct struct {
 	InvalidNestedShort string `flag:"nested-invalid" flagshort:"invalid" flagdescr:"nested invalid short"`
 }
 
-func (o *nestedFlagShortOptions) Attach(c *cobra.Command) {}
+func (o *nestedFlagShortOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
 	opts := &nestedFlagShortOptions{}
@@ -2078,7 +2078,7 @@ type simpleValidOptions struct {
 	Verbose bool   `flag:"verbose" flagshort:"v" flagdescr:"verbose output"`
 }
 
-func (o simpleValidOptions) Attach(c *cobra.Command) {}
+func (o simpleValidOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestDefine_InvalidValueFallback() {
 	suite.T().Run("nil_interface_returns_error", func(t *testing.T) {
@@ -2312,7 +2312,7 @@ func (o *missingDecodeHookOptions) DefineCustomField(c *cobra.Command, name, sho
 	c.Flags().String(name, "default", descr)
 }
 
-func (o *missingDecodeHookOptions) Attach(c *cobra.Command) {}
+func (o *missingDecodeHookOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDecodeHook() {
 	opts := &missingDecodeHookOptions{}
@@ -2336,7 +2336,7 @@ func (o *missingDefineHookOptions) DecodeCustomField(input any) (any, error) {
 	return input, nil
 }
 
-func (o *missingDefineHookOptions) Attach(c *cobra.Command) {}
+func (o *missingDefineHookOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDefineHook() {
 	opts := &missingDefineHookOptions{}
@@ -2364,7 +2364,7 @@ func (o *wrongDefineSignatureOptions) DecodeCustomField(input any) (any, error) 
 	return input, nil
 }
 
-func (o *wrongDefineSignatureOptions) Attach(c *cobra.Command) {}
+func (o *wrongDefineSignatureOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDefineSignature() {
 	opts := &wrongDefineSignatureOptions{}
@@ -2394,7 +2394,7 @@ func (o *wrongDecodeSignatureOptions) DecodeCustomField(wrongParam string, anoth
 	// Wrong signature - should have (input any) (any, error)
 }
 
-func (o *wrongDecodeSignatureOptions) Attach(c *cobra.Command) {}
+func (o *wrongDecodeSignatureOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDecodeSignature() {
 	opts := &wrongDecodeSignatureOptions{}
@@ -2425,7 +2425,7 @@ func (o *wrongDecodeReturnOptions) DecodeCustomField(input any) string {
 	return "value"
 }
 
-func (o *wrongDecodeReturnOptions) Attach(c *cobra.Command) {}
+func (o *wrongDecodeReturnOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDecodeReturnSignature() {
 	opts := &wrongDecodeReturnOptions{}
@@ -2451,7 +2451,7 @@ func (o *correctHooksOptions) DecodeCustomField(input any) (any, error) {
 	return input, nil
 }
 
-func (o *correctHooksOptions) Attach(c *cobra.Command) {}
+func (o *correctHooksOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_CorrectHooks() {
 	opts := &correctHooksOptions{}
@@ -2538,7 +2538,7 @@ func (o *multipleCustomOptions) DefineBadField(c *cobra.Command, name, short, de
 	c.Flags().String(name, "default", descr)
 }
 
-func (o *multipleCustomOptions) Attach(c *cobra.Command) {}
+func (o *multipleCustomOptions) Attach(c *cobra.Command) error { return nil }
 
 type nestedCustomStruct struct {
 	CustomField string `flagcustom:"true" flag:"nested-custom"`
@@ -2556,7 +2556,7 @@ type parentOptions struct {
 	Nested nestedCustomStruct
 }
 
-func (o *parentOptions) Attach(c *cobra.Command) {}
+func (o *parentOptions) Attach(c *cobra.Command) error { return nil }
 
 func (suite *autoflagsSuite) TestValidateCustomFlag_EdgeCases() {
 	suite.T().Run("multiple_custom_fields", func(t *testing.T) {
@@ -2616,7 +2616,7 @@ func (s *standardTypeOptions) DefineField3(cmd *cobra.Command, name, short, desc
 
 func (s *standardTypeOptions) DecodeField3(input any) (any, error) { return 42, nil }
 
-func (s *standardTypeOptions) Attach(cmd *cobra.Command) {}
+func (s *standardTypeOptions) Attach(cmd *cobra.Command) error { return nil }
 
 func TestDefine_CustomTypeConflict_StandardTypesAllowed(t *testing.T) {
 	opts := &standardTypeOptions{}

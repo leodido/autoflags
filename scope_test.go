@@ -19,7 +19,7 @@ type TestOptions struct {
 	Value string `flag:"value" flagdescr:"test value"`
 }
 
-func (o *TestOptions) Attach(c *cobra.Command) {}
+func (o *TestOptions) Attach(c *cobra.Command) error { return nil }
 
 func TestConcurrentCommandCreation(t *testing.T) {
 	const numGoroutines = 100
