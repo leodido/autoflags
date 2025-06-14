@@ -3,6 +3,7 @@ package autoflags
 import (
 	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
 	autoflagserrors "github.com/leodido/autoflags/errors"
@@ -58,6 +59,9 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
 	vip.MergeConfigMap(configToMerge)
 
+	// Build the mapping of field names to their `flag` tag aliases.
+	fieldMappings := buildFieldMappings(reflect.TypeOf(opts))
+
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if decodeHooks, defineDecodeHooks := f.Annotations[flagDecodeHookAnnotation]; defineDecodeHooks {
@@ -77,10 +81,22 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 		}
 	})
 
+	custonNameHook := viper.DecoderConfigOption(func(c *mapstructure.DecoderConfig) {
+		// The destination struct.
+		c.Result = opts
+
+		// This enables conversion of strings to bool, int, etc.
+		c.WeaklyTypedInput = true
+
+		// This is the custom matching logic that solves the problem.
+		c.MatchName = getNameMatcher(fieldMappings)
+	})
+
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		hooks...,
 	))
-	if err := vip.Unmarshal(opts, decodeHook); err != nil {
+
+	if err := vip.Unmarshal(opts, custonNameHook, decodeHook); err != nil {
 		return fmt.Errorf("couldn't unmarshal config to options: %w", err)
 	}
 
@@ -112,6 +128,51 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	UseDebug(c, c.OutOrStdout())
 
 	return nil
+}
+
+// buildFieldMappings recursively traverses a struct type and builds a map of
+// every lowercase field name to its corresponding `flag` tag alias.
+// e.g., {"dryrun": "dry-run", "host": "hhost"}
+func buildFieldMappings(T reflect.Type) map[string]string {
+	mappings := make(map[string]string)
+	if T.Kind() == reflect.Ptr {
+		T = T.Elem()
+	}
+	if T.Kind() != reflect.Struct {
+		return mappings
+	}
+	for i := 0; i < T.NumField(); i++ {
+		field := T.Field(i)
+		// Recurse into nested structs
+		if field.Type.Kind() == reflect.Struct {
+			nestedMappings := buildFieldMappings(field.Type)
+			for k, v := range nestedMappings {
+				mappings[k] = v
+			}
+		}
+		// Add the mapping for the current field
+		alias := field.Tag.Get("flag")
+		if alias != "" {
+			mappings[strings.ToLower(field.Name)] = alias
+		}
+	}
+	return mappings
+}
+
+func getNameMatcher(fieldMappings map[string]string) func(mapKey, fieldName string) bool {
+	return func(mapKey, fieldName string) bool {
+		// First, check for a direct case-insensitive match (default behavior).
+		if strings.EqualFold(mapKey, fieldName) {
+			return true
+		}
+		// If that fails, check if the mapKey matches the field's `flag` tag alias.
+		if alias, ok := fieldMappings[strings.ToLower(fieldName)]; ok {
+			if strings.EqualFold(mapKey, alias) {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // syncMandatoryFlags tells cobra that a required flag is present when its value is provided by a source other than the command line (e.g., config file).
