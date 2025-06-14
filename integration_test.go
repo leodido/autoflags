@@ -157,7 +157,7 @@ srv:
 		},
 		{
 			name:       "Values are correctly read from explicit config file and env var override works",
-			args:       []string{"srv", "--config", "/some/path/config.yaml", "--debug-options"},
+			args:       []string{"srv", "--config", "/some/path/config.yaml"},
 			envs:       map[string]string{"FULL_SRV_APIKEY": "1terces", "FULL_SRV_DATABASE_MAXCONNS": "50"},
 			configPath: "/some/path/config.yaml",
 			config: `
@@ -169,13 +169,73 @@ srv:
 `,
 			assertFunc: func(t *testing.T, output string, err error) {
 				require.NoError(t, err)
-				fmt.Println(output)
 				assert.Contains(t, output, "Using config file: /some/path/config.yaml")
 				assert.Contains(t, output, `"Host": "host-from-config"`)
 				assert.Contains(t, output, `"Port": 6767`)
 				assert.Contains(t, output, `"APIKey": "1terces"`)
 				assert.Contains(t, output, `"URL": "postgres://user:pass@config/mydb"`)
 				assert.Contains(t, output, `"MaxConns": 50`)
+			},
+		},
+		{
+			name:       "Values are correctly read from explicit FULL_CONFIG and env var override works",
+			args:       []string{"srv"},
+			envs:       map[string]string{"FULL_CONFIG": "/some/path/config.yaml", "FULL_SRV_APIKEY": "1terces", "FULL_SRV_DATABASE_MAXCONNS": "50"},
+			configPath: "/some/path/config.yaml",
+			config: `
+srv:
+  host: "host-from-config"
+  port: 6767
+  apikey: "secret1"
+  db-url: "postgres://user:pass@config/mydb"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Using config file: /some/path/config.yaml")
+				assert.Contains(t, output, `"Host": "host-from-config"`)
+				assert.Contains(t, output, `"Port": 6767`)
+				assert.Contains(t, output, `"APIKey": "1terces"`)
+				assert.Contains(t, output, `"URL": "postgres://user:pass@config/mydb"`)
+				assert.Contains(t, output, `"MaxConns": 50`)
+			},
+		},
+		{
+			name: "Count flag verbosity is correctly tallied",
+			args: []string{"srv", "version", "-vvv"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"Verbose": 3`)
+			},
+		},
+		{
+			name: "Validation fails for invalid user email",
+			args: []string{"usr", "add", "--name", "Test", "--email", "not-an-email", "--age", "30"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, "invalid options for add")
+				assert.ErrorContains(t, err, "Field validation for 'Email' failed on the 'email' tag")
+			},
+		},
+		{
+			name: "Transformation (trim, title) is applied to user name",
+			// Test the 'usr add' command and its TransformableOptions
+			args: []string{"usr", "add", "--name", "  test user  ", "--email", "test@example.com", "--age", "30"},
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"Name": "Test User"`)
+			},
+		},
+		{
+			name: "Flag value overrides both Environment and Config",
+			args: []string{"srv", "--port", "1111"},      // Flag has highest precedence
+			envs: map[string]string{"FULL_PORT": "2222"}, // Env has middle precedence
+			config: `
+srv:
+	port: 3333 # Config has lowest precedence
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"Port": 1111`)
 			},
 		},
 	}
@@ -235,12 +295,14 @@ type unmarshalIntegrationOptions struct {
 }
 
 // Attach (definition remains the same)
-func (o *unmarshalIntegrationOptions) Attach(c *cobra.Command) {
+func (o *unmarshalIntegrationOptions) Attach(c *cobra.Command) error {
 	c.Flags().StringVar(&o.Name, "name", "", "User's name")
 	c.Flags().StringVar(&o.Email, "email", "", "User's email address")
 	c.Flags().IntVar(&o.Age, "age", 0, "User's age")
 	c.Flags().StringVar(&o.Status, "status", "", "User's status (active, inactive, pending)")
 	c.Flags().StringVar(&o.Justification, "justification", "", "Justification if status is pending")
+
+	return nil
 }
 
 func (o *unmarshalIntegrationOptions) Transform(ctx context.Context) error {
@@ -415,7 +477,9 @@ type ctxOptionsForContextTest struct {
 	DummyField string `flag:"dummy"`
 }
 
-func (o *ctxOptionsForContextTest) Attach(c *cobra.Command) {}
+func (o *ctxOptionsForContextTest) Attach(c *cobra.Command) error {
+	return nil
+}
 
 func (o *ctxOptionsForContextTest) Context(ctx context.Context) context.Context {
 	return context.WithValue(ctx, testContextKey("test-key"), o)
@@ -473,7 +537,7 @@ type TestDefineOptions struct {
 	IgnoreCustomStringType TestCustomString
 }
 
-func (o TestDefineOptions) Attach(c *cobra.Command)             {}
+func (o TestDefineOptions) Attach(c *cobra.Command) error       { return nil }
 func (o TestDefineOptions) Transform(ctx context.Context) error { return nil }
 func (o TestDefineOptions) Validate() []error                   { return nil }
 
@@ -1916,7 +1980,7 @@ type OrderingTestOptions struct {
 	Verbose  bool   `flag:"verbose" flagenv:"true" flagdescr:"verbose output"`
 }
 
-func (o *OrderingTestOptions) Attach(c *cobra.Command) {}
+func (o *OrderingTestOptions) Attach(c *cobra.Command) error { return nil }
 
 func testOrderingScenario(t *testing.T, setupFunc func(*cobra.Command, *OrderingTestOptions) error) {
 	// Setup test environment
@@ -2317,7 +2381,7 @@ func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
 	}
 }
 
-func (o *customDecodeHookOptions) Attach(c *cobra.Command) {}
+func (o *customDecodeHookOptions) Attach(c *cobra.Command) error { return nil }
 
 type mixedHooksOptions struct {
 	ServerMode ServerMode1   `flagcustom:"true" flag:"server-mode" flagdescr:"Server mode"`
@@ -2341,7 +2405,7 @@ func (m *mixedHooksOptions) DecodeServerMode(input any) (any, error) {
 	return ServerMode1(str), nil
 }
 
-func (o *mixedHooksOptions) Attach(c *cobra.Command) {}
+func (o *mixedHooksOptions) Attach(c *cobra.Command) error { return nil }
 
 type multiCustomOptions struct {
 	Mode1 ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
@@ -2394,7 +2458,7 @@ func (m *multiCustomOptions) DecodeMode2(input any) (any, error) {
 	}
 }
 
-func (m *multiCustomOptions) Attach(c *cobra.Command) {}
+func (m *multiCustomOptions) Attach(c *cobra.Command) error { return nil }
 
 func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 	setupTest := func() {
@@ -2706,7 +2770,7 @@ func (m *conflictingCustomType) DecodeMode(input any) (any, error) {
 	return input, nil
 }
 
-func (m *conflictingCustomType) Attach(c *cobra.Command) {}
+func (m *conflictingCustomType) Attach(c *cobra.Command) error { return nil }
 
 func TestDefine_CustomDecodeHook_Integration(t *testing.T) {
 	setupTest := func() {
