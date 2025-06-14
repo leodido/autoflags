@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/leodido/autoflags"
 	"github.com/spf13/cobra"
@@ -13,16 +14,19 @@ type Options struct {
 	Port     int
 }
 
-func (o *Options) Attach(c *cobra.Command) {
-	autoflags.Define(c, o)
+func (o *Options) Attach(c *cobra.Command) error {
+	return autoflags.Define(c, o)
 }
 
 func main() {
+	log.SetFlags(0)
 	opts := &Options{}
 	cli := &cobra.Command{Use: "myapp"}
 
 	// This single line creates all the options (flags, env vars)
-	opts.Attach(cli)
+	if err := opts.Attach(cli); err != nil {
+		log.Fatalln(err)
+	}
 
 	cli.PreRunE = func(c *cobra.Command, args []string) error {
 		return autoflags.Unmarshal(c, opts) // Populates struct from flags
@@ -34,5 +38,7 @@ func main() {
 		return nil
 	}
 
-	cli.Execute()
+	if err := cli.Execute(); err != nil {
+		log.Fatalln(err)
+	}
 }

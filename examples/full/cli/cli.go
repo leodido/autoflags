@@ -88,8 +88,8 @@ func (o *ServerOptions) DecodeTargetEnv(input any) (any, error) {
 }
 
 // Attach makes ServerOptions implement the Options interface
-func (o *ServerOptions) Attach(c *cobra.Command) {
-	autoflags.Define(c, o)
+func (o *ServerOptions) Attach(c *cobra.Command) error {
+	return autoflags.Define(c, o)
 }
 
 func makeSrvC() *cobra.Command {
@@ -121,11 +121,11 @@ func makeSrvC() *cobra.Command {
 		Use:   "version",
 		Short: "Print version information",
 		RunE: func(c *cobra.Command, args []string) error {
-			fmt.Fprintln(c.OutOrStdout(), "|---versionC.PersistentPreRunE")
+			fmt.Fprintln(c.OutOrStdout(), "|---versionC.RunE")
 			if err := commonOpts.FromContext(c.Context()); err != nil {
 				return err
 			}
-			fmt.Fprintln(c.OutOrStdout(), commonOpts)
+			fmt.Fprintln(c.OutOrStdout(), pretty(commonOpts))
 
 			return nil
 		},
@@ -176,8 +176,8 @@ func (o *UserConfig) Transform(ctx context.Context) error {
 }
 
 // Attach makes UserConfig implement the Options interface
-func (o *UserConfig) Attach(c *cobra.Command) {
-	autoflags.Define(c, o)
+func (o *UserConfig) Attach(c *cobra.Command) error {
+	return autoflags.Define(c, o)
 }
 
 func makeUsrC() *cobra.Command {
@@ -213,7 +213,7 @@ func makeUsrC() *cobra.Command {
 	}
 
 	opts.Attach(addC)
-	commonOpts.Attach(addC)
+	// commonOpts.Attach(addC)
 	usrC.AddCommand(addC)
 	// Setup of the usage text happens at autoflags.Define
 	// For the `usr` command we do it explicitly since it has no local flags
@@ -226,13 +226,13 @@ var _ autoflags.ContextOptions = (*UtilityFlags)(nil)
 
 type UtilityFlags struct {
 	Verbose int  `flagtype:"count" flagshort:"v" flaggroup:"Utility"`
-	DryRun  bool `flag:"dry-run" flaggroup:"Utility"`
+	DryRun  bool `flag:"dry-run" flaggroup:"Utility" flagenv:"true"`
 }
 
 type utilityFlagsKey struct{}
 
-func (f *UtilityFlags) Attach(c *cobra.Command) {
-	autoflags.Define(c, f)
+func (f *UtilityFlags) Attach(c *cobra.Command) error {
+	return autoflags.Define(c, f)
 }
 
 // Context implements the CommonOptions interface
@@ -260,6 +260,10 @@ func NewRootC() *cobra.Command {
 		Long:              "A demonstration of the autoflags library with beautiful CLI features",
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
+		// Parse its own flags first, then continue traversing down to find subcommands
+		// Useful for allowing context options not being attached to all the subcommands
+		// Eg, `go run main.go --dry-run usr add` would fail otherwise
+		TraverseChildren: true,
 	}
 
 	// Global persistent pre-run for config file support
