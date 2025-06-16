@@ -17,6 +17,7 @@
 #     maxconns: 50                     # Key matches field name
 #     db-url: "postgres://other..."    # Key matches flag tag
 #
+dry: t
 srv:
   host: "production-server"
   port: 8443
@@ -26,4 +27,8 @@ srv:
   db-url: postgres://user:pass@localhost/mydb
   database:
     maxconns: 3
-dry: t
+  deep-setting: xyz
+  deep:
+    deeper:
+      setting: abc
+      nodefault: val

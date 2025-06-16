@@ -22,6 +22,16 @@ const (
 	EnvProduction  Environment = "prod"
 )
 
+type EvenDeeper struct {
+	Setting   string `flag:"deeper-setting" default:"default-deeper-setting"`
+	NoDefault string
+}
+
+type Deeply struct {
+	Setting string `flag:"deep-setting" default:"default-deep-setting"`
+	Deeper  EvenDeeper
+}
+
 type ServerOptions struct {
 	// Basic flags
 	Host string `flag:"host" flagdescr:"Server host" default:"localhost"`
@@ -39,6 +49,8 @@ type ServerOptions struct {
 
 	// Custom type
 	TargetEnv Environment `flagcustom:"true" flag:"target-env" flagdescr:"Set the target environment"`
+
+	Deep Deeply
 }
 
 type DatabaseConfig struct {
