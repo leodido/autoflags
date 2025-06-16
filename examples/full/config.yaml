@@ -1,12 +1,29 @@
-# Config keys match the `flag` tag value
-# When a field doesn't have a `flag` tag, the config key is the struct field name
-# Nested structs can be configured using either dot-notation (database.maxconns: 3) or nested maps (database: { maxconns: 3 }), as long as the keys match the struct field names. If a nested field has a flag tag, it can only be configured using its value in the config (e.g., db-url: "...").
+# Configuration keys are flexible.
+# You can use either the `flag` tag value or the struct field name for any option.
+#
+# For example, for the 'LogFile' field which has a `flag:"log-file"` tag,
+# both of these keys are equivalent and will work:
+#
+#   log-file: /path/to/your.log   # This key matches the 'flag' tag.
+#   logfile: /path/to/your.log    # This key matches the 'LogFile' struct field.
+#
+# This flexibility also applies to nested structs.
+# You can use a nested map that contains either style of key, OR you can use a flattened key that matches the flag tag.
+# All of the following are valid ways to set database options:
+#
+#   db-url: "postgres://..."           # Works (flattened key matching flag tag)
+#   database.maxconns: 50              # Works (dot-notation key matching field path)
+#   database:                          # Works (nested map)
+#     maxconns: 50                     # Key matches field name
+#     db-url: "postgres://other..."    # Key matches flag tag
+#
 srv:
   host: "production-server"
   port: 8443
   apikey: "secret-api-key"
   log-level: "debug"
-  log-file: /var/log/mysrv.log
+  logfile: /var/log/mysrv.log
   db-url: postgres://user:pass@localhost/mydb
   database:
     maxconns: 3
+dry: t

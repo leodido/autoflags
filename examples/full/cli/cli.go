@@ -226,7 +226,7 @@ var _ autoflags.ContextOptions = (*UtilityFlags)(nil)
 
 type UtilityFlags struct {
 	Verbose int  `flagtype:"count" flagshort:"v" flaggroup:"Utility"`
-	DryRun  bool `flag:"dry-run" flaggroup:"Utility" flagenv:"true"`
+	DryRun  bool `flag:"dry" flaggroup:"Utility" flagenv:"true"`
 }
 
 type utilityFlagsKey struct{}
