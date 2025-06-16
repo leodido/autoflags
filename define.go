@@ -24,6 +24,9 @@ type defineContext struct {
 // globalAliasCache stores the mapping of a struct field's path to its `flag` tag alias.
 var globalAliasCache = &sync.Map{}
 
+// globalDefaultsCache stores the mapping of a default to its `flag` tag alias.
+var globalDefaultsCache = &sync.Map{}
+
 // WithExclusions sets flags to exclude from definition based on flag names or paths.
 //
 // Exclusions are case-insensitive and apply only to the specific command.
@@ -314,6 +317,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 			GetViper(c).SetDefault(path, defval)
 			// This is needed for the usage help messages
 			c.Flags().Lookup(name).DefValue = defval
+			globalDefaultsCache.Store(name, defval)
 		}
 
 		if alias != "" && path != alias {
