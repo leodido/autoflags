@@ -2,102 +2,124 @@ package autoflags
 
 import (
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"golang.org/x/exp/maps"
 )
 
-const (
-	usageTemplate = `Usage:{{if .Runnable}}
-  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
-
-Aliases:
-  {{.NameAndAliases}}{{end}}{{if .HasExample}}
-
-Examples:
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
-
-Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
-
-{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
-
-Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableLocalFlags}}
-
-%s{{end}}{{if .HasAvailableInheritedFlags}}
-
-Global Flags:
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
-
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
-`
-	noFlagsTemplate = `Usage:{{if .Runnable}}
-  {{.UseLine}}{{end}}{{if .HasAvailableSubCommands}}
-  {{.CommandPath}} [command]{{end}}{{if gt (len .Aliases) 0}}
-
-Aliases:
-  {{.NameAndAliases}}{{end}}{{if .HasExample}}
-
-Examples:
-{{.Example}}{{end}}{{if .HasAvailableSubCommands}}{{$cmds := .Commands}}{{if eq (len .Groups) 0}}
-
-Available Commands:{{range $cmds}}{{if (or .IsAvailableCommand (eq .Name "help"))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{else}}{{range $group := .Groups}}
-
-{{.Title}}{{range $cmds}}{{if (and (eq .GroupID $group.ID) (or .IsAvailableCommand (eq .Name "help")))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{if not .AllChildCommandsHaveGroup}}
-
-Additional Commands:{{range $cmds}}{{if (and (eq .GroupID "") (or .IsAvailableCommand (eq .Name "help")))}}
-  {{rpad .Name .NamePadding }} {{.Short}}{{end}}{{end}}{{end}}{{end}}{{end}}{{if .HasAvailableInheritedFlags}}
-
-Global Flags:
-{{.InheritedFlags.FlagUsages | trimTrailingWhitespaces}}{{end}}{{if .HasHelpSubCommands}}
-
-Additional help topics:{{range .Commands}}{{if .IsAdditionalHelpTopicCommand}}
-  {{rpad .CommandPath .CommandPathPadding}} {{.Short}}{{end}}{{end}}{{end}}{{if .HasAvailableSubCommands}}
-
-Use "{{.CommandPath}} [command] --help" for more information about a command.{{end}}
-`
-)
-
-// SetupUsage generates the flag usages of the flags local to the input command.
+// flagUsages generates a string containing the usage information for a set of flags.
 //
-// It also groups the flags by the FlagGroupAnnotation annotation.
+// It trims trailing whitespace from the final output.
+func flagUsages(f *pflag.FlagSet) string {
+	return strings.TrimRight(f.FlagUsages(), " \n") + "\n"
+}
+
+// rpad adds padding to the right of a string.
+func rpad(s string, padding int) string {
+	template := fmt.Sprintf("%%-%ds", padding)
+	return fmt.Sprintf(template, s)
+}
+
+// tmpl is a helper function that writes a string to the provided writer.
+func tmpl(w io.Writer, text string) error {
+	_, err := w.Write([]byte(text))
+	return err
+}
+
+// SetupUsage generates and sets a dynamic usage function for the command.
+//
+// It also groups flags based on the `flaggroup` annotation.
 func SetupUsage(c *cobra.Command) {
-	groups := Groups(c)
+	c.SetUsageFunc(func(c *cobra.Command) error {
+		var b strings.Builder
 
-	usages := ""
-	if lFlags, ok := groups[localGroupID]; ok {
-		usages += "Flags:\n"
-		usages += lFlags.FlagUsages()
-		delete(groups, localGroupID)
-	}
-
-	groupKeys := maps.Keys(groups)
-	sort.Strings(groupKeys)
-
-	for _, group := range groupKeys {
-		flags := groups[group]
-		if usages != "" {
-			usages += "\n"
+		// Usage Line
+		b.WriteString("Usage:")
+		if c.Runnable() {
+			b.WriteString("\n  ")
+			b.WriteString(c.UseLine())
 		}
-		usages += fmt.Sprintf("%s Flags:\n", group)
-		usages += flags.FlagUsages()
-	}
-	usages = strings.TrimSuffix(usages, "\n")
+		if c.HasAvailableSubCommands() {
+			b.WriteString("\n  ")
+			b.WriteString(c.CommandPath())
+			b.WriteString(" [command]")
+		}
+		b.WriteString("\n")
 
-	s := fmt.Sprintf(usageTemplate, usages)
-	if usages == "" {
-		s = noFlagsTemplate
-	}
+		// Aliases
+		if c.HasAvailableSubCommands() && len(c.Aliases) > 0 {
+			b.WriteString("\nAliases:\n  ")
+			b.WriteString(c.NameAndAliases())
+			b.WriteString("\n")
+		}
 
-	c.SetUsageTemplate(s)
+		// Examples
+		if len(c.Example) > 0 {
+			b.WriteString("\nExamples:\n")
+			b.WriteString(c.Example)
+			b.WriteString("\n")
+		}
+
+		// Available Commands
+		if c.HasAvailableSubCommands() {
+			b.WriteString("\nAvailable Commands:\n")
+			for _, cmd := range c.Commands() {
+				if !cmd.IsAvailableCommand() && cmd.Name() != "help" {
+					continue
+				}
+				b.WriteString(fmt.Sprintf("  %s %s\n", rpad(cmd.Name(), c.NamePadding()), cmd.Short))
+			}
+		}
+
+		// Local and grouped flags
+		groups := Groups(c)
+
+		// Print default "Flags" group first, if it exists
+		if lFlags, ok := groups[localGroupID]; ok && lFlags.HasFlags() {
+			b.WriteString("\nFlags:\n")
+			b.WriteString(flagUsages(lFlags))
+			delete(groups, localGroupID)
+		}
+
+		// Then print all other custom groups
+		groupKeys := maps.Keys(groups)
+		sort.Strings(groupKeys)
+
+		for _, groupName := range groupKeys {
+			if groupName == globalGroupID {
+				continue // Handle global flags last
+			}
+			flags := groups[groupName]
+			if flags.HasFlags() {
+				b.WriteString(fmt.Sprintf("\n%s Flags:\n", groupName))
+				b.WriteString(flagUsages(flags))
+			}
+		}
+
+		// Now, print the Global flags which were collected by the Groups() function
+		if gFlags, ok := groups[globalGroupID]; ok && gFlags.HasFlags() {
+			b.WriteString("\nGlobal Flags:\n")
+			b.WriteString(flagUsages(gFlags))
+		}
+
+		// Help Topics and "use" command
+		if c.HasHelpSubCommands() {
+			b.WriteString("\nAdditional help topics:\n")
+			for _, cmd := range c.Commands() {
+				if cmd.IsAdditionalHelpTopicCommand() {
+					b.WriteString(fmt.Sprintf("  %s %s\n", rpad(cmd.CommandPath(), c.CommandPathPadding()), cmd.Short))
+				}
+			}
+		}
+
+		if c.HasAvailableSubCommands() {
+			b.WriteString(fmt.Sprintf("\nUse \"%s [command] --help\" for more information about a command.\n", c.CommandPath()))
+		}
+
+		return tmpl(c.OutOrStderr(), b.String())
+	})
 }
