@@ -271,6 +271,155 @@ srv:
 				assert.ErrorContains(t, err, `parsing "a": invalid syntax`)
 			},
 		},
+		{
+			name:       "Key matches flag tag for top-level field",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  log-file: "/path/from/flag_tag"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"LogFile": "/path/from/flag_tag"`)
+			},
+		},
+		{
+			name:       "Key matches field name for top-level field",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  logfile: "/path/from/field_name"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"LogFile": "/path/from/field_name"`)
+			},
+		},
+		{
+			name:       "Key is flattened flag tag for a nested field (level 1)",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  db-url: "postgres://user:pass@flattened"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"URL": "postgres://user:pass@flattened"`)
+			},
+		},
+		{
+			name:       "Key is flattened flag tag for a deeply nested field (level 2)",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  deep-setting: "deep_value_from_flag_tag"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `    "Setting": "deep_value_from_flag_tag"`)
+				assert.Contains(t, output, `      "Setting": "default-deeper-setting"`)
+
+			},
+		},
+		{
+			name:       "Key is dot-notation path for a nested field",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  database.maxconns: 99
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"MaxConns": 99`)
+			},
+		},
+		{
+			name:       "Key is field name inside a nested map structure",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  database:
+    maxconns: 88
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `"MaxConns": 88`)
+			},
+		},
+		{
+			name:       "Deeply nested config value",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  deep:
+    deeper:
+      setting: "deepest_user_value"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `    "Setting": "default-deep-setting"`)
+				assert.Contains(t, output, `      "Setting": "deepest_user_value"`)
+			},
+		},
+		{
+			name:       "Flattened deeply nested config value is used",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  deeper-setting: "deepest_value_from_flat_key"
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `    "Setting": "default-deep-setting"`)
+				assert.Contains(t, output, `      "Setting": "deepest_value_from_flat_key"`)
+			},
+		},
+		{
+			name:       "More deeply nested struct paths",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  deep:
+    deeper:
+      setting: abc
+      nodefault: val
+    setting: xyz
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `    "Setting": "xyz"`)
+				assert.Contains(t, output, `      "Setting": "abc"`)
+				assert.Contains(t, output, `      "NoDefault": "val"`)
+			},
+		},
+		{
+			name:       "More deeply nested struct paths mixed with flag alias",
+			args:       []string{"srv", "-p", "1234"},
+			configPath: "/etc/full/config.yaml",
+			config: `
+srv:
+  deep:
+    deeper:
+      setting: abc
+      nodefault: val
+  deep-setting: xyz
+`,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, `    "Setting": "xyz"`)
+				assert.Contains(t, output, `      "Setting": "abc"`)
+				assert.Contains(t, output, `      "NoDefault": "val"`)
+			},
+		},
 	}
 
 	setupTest := func(t *testing.T, content string, path string) func() {
