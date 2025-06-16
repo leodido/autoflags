@@ -58,8 +58,24 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
 	vip.MergeConfigMap(configToMerge)
 
+	// Create the full alias-to-path map from its global cache
+	aliasToPathMap := make(map[string]string)
+	globalAliasCache.Range(func(k, v any) bool {
+		aliasToPathMap[k.(string)] = v.(string)
+
+		return true
+	})
+
+	// Create the defaults map from its global cache
+	defaultsMap := make(map[string]string)
+	globalDefaultsCache.Range(func(k, v any) bool {
+		defaultsMap[k.(string)] = v.(string)
+
+		return true
+	})
+
 	// Use `KeyRemappingHook` for smart config keys
-	hooks = append([]mapstructure.DecodeHookFunc{KeyRemappingHook()}, hooks...)
+	hooks = append([]mapstructure.DecodeHookFunc{KeyRemappingHook(aliasToPathMap, defaultsMap)}, hooks...)
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
@@ -121,15 +137,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 // KeyRemappingHook allows config keys to match either a field's name or its `flag` tag.
 //
 // It correctly handles flattened keys that point to nested struct fields.
-func KeyRemappingHook() mapstructure.DecodeHookFunc {
-	// Pre-calculate the mapping of alias -> path once
-	aliasToPathMap := make(map[string]string)
-	globalAliasCache.Range(func(key, value any) bool {
-		aliasToPathMap[key.(string)] = value.(string)
-
-		return true
-	})
-
+func KeyRemappingHook(aliasToPathMap map[string]string, defaultsMap map[string]string) mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
 		// Only when decoding a map into a struct...
 		if f.Kind() != reflect.Map || t.Kind() != reflect.Struct {
@@ -147,6 +155,10 @@ func KeyRemappingHook() mapstructure.DecodeHookFunc {
 			if strings.Contains(path, ".") {
 				// Check if the flattened alias key exists at this level
 				if aliasValue, ok := configMap[alias]; ok && aliasValue != "" {
+					// Do not override the user-provided value with the default value
+					if aliasDefaultValue, ok := defaultsMap[alias]; ok && aliasValue == aliasDefaultValue {
+						continue
+					}
 					pathParts := strings.Split(path, ".")
 
 					// Start at the top of the map
