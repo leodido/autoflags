@@ -50,7 +50,6 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 // and configuration files.
 //
 // It automatically handles decode hooks, validation, transformation, and context updates based on the options type.
-// NOTE: See https://github.com/spf13/viper/pull/1715
 func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookFunc) error {
 	scope := getScope(c)
 	vip := scope.viper()
@@ -58,6 +57,9 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	// Merging the config map (if any) from the global viper singleton instance
 	configToMerge := createConfigC(viper.AllSettings(), c.Name())
 	vip.MergeConfigMap(configToMerge)
+
+	// Use `KeyRemappingHook` for smart config keys
+	hooks = append([]mapstructure.DecodeHookFunc{KeyRemappingHook()}, hooks...)
 
 	// Look for decode hook annotation appending them to the list of hooks to use for unmarshalling
 	c.Flags().VisitAll(func(f *pflag.Flag) {
@@ -78,22 +80,11 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 		}
 	})
 
-	custonNameHook := viper.DecoderConfigOption(func(c *mapstructure.DecoderConfig) {
-		// The destination struct.
-		c.Result = opts
-
-		// This enables conversion of strings to bool, int, etc.
-		c.WeaklyTypedInput = true
-
-		// This is the custom matching logic that solves the problem.
-		c.MatchName = getNameMatcher()
-	})
-
 	decodeHook := viper.DecodeHook(mapstructure.ComposeDecodeHookFunc(
 		hooks...,
 	))
 
-	if err := vip.Unmarshal(opts, custonNameHook, decodeHook); err != nil {
+	if err := vip.Unmarshal(opts /*custonNameHook,*/, decodeHook); err != nil {
 		return fmt.Errorf("couldn't unmarshal config to options: %w", err)
 	}
 
@@ -127,26 +118,91 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	return nil
 }
 
-func getNameMatcher() func(mapKey, fieldName string) bool {
-	// Build the mapping of field names to their `flag` tag aliases.
-	fieldMappings := make(map[string]string)
-	globalFieldMappingsCache.Range(func(key, value interface{}) bool {
-		fieldMappings[key.(string)] = value.(string)
+// KeyRemappingHook allows config keys to match either a field's name or its `flag` tag.
+//
+// It correctly handles flattened keys that point to nested struct fields.
+func KeyRemappingHook() mapstructure.DecodeHookFunc {
+	// Pre-calculate the mapping of alias -> path once
+	aliasToPathMap := make(map[string]string)
+	globalAliasCache.Range(func(key, value any) bool {
+		aliasToPathMap[key.(string)] = value.(string)
+
 		return true
 	})
 
-	return func(mapKey, fieldName string) bool {
-		// First, check for a direct case-insensitive match (default behavior).
-		if strings.EqualFold(mapKey, fieldName) {
-			return true
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+		// Only when decoding a map into a struct...
+		if f.Kind() != reflect.Map || t.Kind() != reflect.Struct {
+			return data, nil
 		}
-		// If that fails, check if the mapKey matches the field's `flag` tag alias.
-		if alias, ok := fieldMappings[strings.ToLower(fieldName)]; ok {
-			if strings.EqualFold(mapKey, alias) {
-				return true
+
+		configMap, ok := data.(map[string]any)
+		if !ok {
+			return data, nil
+		}
+
+		// Hande flattened keys for nested structs
+		for alias, path := range aliasToPathMap {
+			// Find nested paths like "database.url"
+			if strings.Contains(path, ".") {
+				// Check if the flattened alias key exists at this level
+				if aliasValue, ok := configMap[alias]; ok && aliasValue != "" {
+					pathParts := strings.Split(path, ".")
+
+					// Start at the top of the map
+					currentMap := configMap
+
+					// Walk the path down, creating nested maps as needed
+					for i := range len(pathParts) - 1 {
+						part := pathParts[i]
+
+						var nextMap map[string]any
+						if val, ok := currentMap[part]; ok {
+							nextMap, _ = val.(map[string]any)
+						}
+						if nextMap == nil {
+							nextMap = make(map[string]any)
+							currentMap[part] = nextMap
+						}
+						// Move one level deeper
+						currentMap = nextMap
+					}
+
+					// At the deepest level, set the final key and value
+					finalKey := pathParts[len(pathParts)-1]
+					currentMap[finalKey] = aliasValue
+
+					// Delete the original flattened key as it has been moved
+					delete(configMap, alias)
+				}
 			}
 		}
-		return false
+
+		// For every field in the destination struct...
+		for i := range t.NumField() {
+			field := t.Field(i)
+			fieldNameKey := strings.ToLower(field.Name)
+			alias := field.Tag.Get("flag")
+
+			// When the alias exists and the config map has a value for that alias...
+			if alias != "" && alias != fieldNameKey {
+				if aliasValue, ok := configMap[alias]; ok && aliasValue != "" {
+					// Then, make the alias value available under the field name key.
+					configMap[fieldNameKey] = aliasValue
+
+					continue
+				}
+				if fieldNameVal, ok := configMap[fieldNameKey]; ok && fieldNameKey != "" {
+					// Or, make the field value available under the alias.
+					configMap[alias] = fieldNameVal
+
+					continue
+				}
+				// This ensures the decoder can find the value for this field name key or the alias.
+			}
+		}
+
+		return configMap, nil
 	}
 }
 
