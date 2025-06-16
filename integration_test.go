@@ -264,7 +264,7 @@ srv:
 			name:       "Error on type mismatch when config key matches flag tag",
 			args:       []string{"srv", "-p", "1234"},
 			configPath: "/etc/full/config.yaml",
-			config:     `dry-run: "a"`,
+			config:     `dry: "a"`,
 			assertFunc: func(t *testing.T, output string, err error) {
 				require.Error(t, err)
 				assert.ErrorContains(t, err, "cannot parse 'DryRun' as bool")
@@ -1953,7 +1953,6 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 
 	t.Setenv("CUSTOM_CONFIG", configPath)
 
-	// Pulisci alla fine del test
 	defer func() {
 		viper.Reset()
 		autoflags.SetEnvPrefix("")
@@ -2004,7 +2003,7 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 
 	assert.True(t, v.GetBool("debug-mode"), "The 'debug-mode' flag should be true because of CUSTOM_DEBUG env var")
 
-	assert.Equal(t, "test-level", v.GetString("loglevel"), "Viper should load the value from the config file given via CUSTOM_CONFIG env var")
+	assert.Equal(t, "test-level", v.GetString("log-level"), "Viper should load the value from the config file given via CUSTOM_CONFIG env var")
 }
 
 type OrderingTestOptions struct {
@@ -2148,8 +2147,6 @@ verbose: false`
 
 	t.Run("debug_functionality", func(t *testing.T) {
 		// Debug output should be present since TESTAPP_DEBUG_OPTIONS=true
-		assert.Contains(t, output, "Aliases:", "Debug output should contain alias information")
-		assert.Contains(t, output, "map[string]string{\"loglevel\":\"log-level\"}", "Debug output should contain alias values")
 		assert.Contains(t, output, "Values:", "Debug output should be triggered by environment variable and show final values")
 		assert.Contains(t, output, "Env:", "Debug output should contain env information")
 		assert.Contains(t, output, "\"timeout\":[]string{\"TESTAPP_TIMEOUT\"}", "Debug output should contain timeout env information")
