@@ -21,8 +21,8 @@ type defineContext struct {
 	comm       *cobra.Command
 }
 
-// globalFieldMappingsCache stores the mapping of a struct field's path to its `flag` tag alias.
-var globalFieldMappingsCache = &sync.Map{}
+// globalAliasCache stores the mapping of a struct field's path to its `flag` tag alias.
+var globalAliasCache = &sync.Map{}
 
 // WithExclusions sets flags to exclude from definition based on flag names or paths.
 //
@@ -317,12 +317,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		if alias != "" && path != alias {
-			globalFieldMappingsCache.Store(path, alias)
-
-			// Make the field name (path) an alias for the flag name (alias)
-			// Allows mapstructure to find values provided via the flag tag name in the config files
-			GetViper(c).RegisterAlias(path, alias)
-
+			globalAliasCache.Store(alias, path)
 		}
 
 		if len(envs) > 0 {
