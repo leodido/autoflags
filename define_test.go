@@ -1967,7 +1967,7 @@ func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "verb", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidShort", "Error should mention the field name")
-	assert.Contains(suite.T(), err.Error(), "field 'InvalidShort': shorthand flag 'verb' must be a single character", "Error should have correct message")
+	assert.Contains(suite.T(), err.Error(), "field 'flagShortTestOptions.InvalidShort': shorthand flag 'verb' must be a single character", "Error should have correct message")
 }
 
 type flagShortNestedStruct struct {
@@ -2625,4 +2625,153 @@ func TestDefine_CustomTypeConflict_StandardTypesAllowed(t *testing.T) {
 	// This should NOT error - standard types can have multiple custom fields
 	err := Define(cmd, opts)
 	require.NoError(t, err, "Multiple standard type fields with flagcustom should be allowed")
+}
+
+type duplOptsA struct {
+	Port int `flag:"port" flagdescr:"port number"`
+}
+
+func (o *duplOptsA) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplOptsB struct {
+	ServicePort int `flag:"port" flagdescr:"service port"`
+}
+
+func (o *duplOptsB) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplOptsC struct {
+	Field1 string `flag:"common-name" flagdescr:"field one"`
+	Field2 int    `flag:"common-name" flagdescr:"field two"`
+}
+
+func (o *duplOptsC) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplNestedOpts struct {
+	Value int `flag:"port" flagdescr:"nested port"`
+}
+
+type duplParentOpts struct {
+	Nest duplNestedOpts
+}
+
+func (o *duplParentOpts) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplConflictingOpts struct {
+	Port int `flag:"port" flagdescr:"top-level port"`
+}
+
+func (o *duplConflictingOpts) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplOptsWithComputed struct {
+	Port int `flagdescr:"computed port name"` // will be named "port"
+}
+
+func (o *duplOptsWithComputed) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplOptsWithExplicit struct {
+	ServicePort int `flag:"port" flagdescr:"explicit port name"`
+}
+
+func (o *duplOptsWithExplicit) Attach(c *cobra.Command) error { return Define(c, o) }
+
+type duplOptsD struct {
+	Port int `flag:"port" flagdescr:"port number"`
+}
+
+func (o *duplOptsD) Attach(c *cobra.Command) error { return nil }
+
+func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
+	suite.T().Run("should return error for simple duplicate across two Define calls", func(t *testing.T) {
+		c := &cobra.Command{Use: "test"}
+		opts1 := &duplOptsA{}
+		opts2 := &duplOptsB{}
+
+		// First definition should succeed
+		err1 := opts1.Attach(c)
+		require.NoError(t, err1)
+
+		// Second definition with the same flag name should fail
+		err2 := opts2.Attach(c)
+		require.Error(t, err2, "should fail due to duplicate flag")
+		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+
+		// Check the error content
+		var dupErr *autoflagserrors.DuplicateFlagError
+		require.True(t, errors.As(err2, &dupErr))
+		assert.Equal(t, "port", dupErr.FlagName)
+		assert.Equal(t, "duplOptsB.ServicePort", dupErr.NewFieldPath)
+		assert.Equal(t, "duplOptsA.Port", dupErr.ExistingFieldPath)
+	})
+
+	suite.T().Run("should return error for duplicate within a single struct", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		options := &duplOptsC{}
+
+		// Definition should fail because of the conflict within the same struct
+		err := options.Attach(cmd)
+		require.Error(t, err, "should fail due to duplicate flag within one struct")
+		require.ErrorIs(t, err, autoflagserrors.ErrDuplicateFlag)
+
+		var dupErr *autoflagserrors.DuplicateFlagError
+		require.True(t, errors.As(err, &dupErr))
+		assert.Equal(t, "common-name", dupErr.FlagName)
+		assert.Equal(t, "duplOptsC.Field2", dupErr.NewFieldPath)
+		assert.Equal(t, "duplOptsC.Field1", dupErr.ExistingFieldPath)
+	})
+
+	suite.T().Run("should return error for duplicate in nested struct", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		opts1 := &duplParentOpts{}
+		opts2 := &duplConflictingOpts{}
+
+		// First definition (with nested flag) should succeed
+		err1 := opts1.Attach(cmd)
+		require.NoError(t, err1)
+
+		// Second definition with conflicting flag should fail
+		err2 := opts2.Attach(cmd)
+		require.Error(t, err2, "should fail due to duplicate flag from nested struct")
+		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+
+		var dupErr *autoflagserrors.DuplicateFlagError
+		require.True(t, errors.As(err2, &dupErr))
+		assert.Equal(t, "port", dupErr.FlagName)
+		assert.Equal(t, "duplConflictingOpts.Port", dupErr.NewFieldPath)
+		assert.Equal(t, "duplParentOpts.Nest.Value", dupErr.ExistingFieldPath)
+	})
+
+	suite.T().Run("should return error for duplicate between computed and explicit name", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		opts1 := &duplOptsWithComputed{}
+		opts2 := &duplOptsWithExplicit{}
+
+		// First definition (computed name) should succeed
+		err1 := opts1.Attach(cmd)
+		require.NoError(t, err1)
+
+		// Second definition (explicit name) should fail
+		err2 := opts2.Attach(cmd)
+		require.Error(t, err2, "should fail due to duplicate between computed and explicit name")
+		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+
+		var dupErr *autoflagserrors.DuplicateFlagError
+		require.True(t, errors.As(err2, &dupErr))
+		assert.Equal(t, "port", dupErr.FlagName)
+		assert.Equal(t, "duplOptsWithExplicit.ServicePort", dupErr.NewFieldPath)
+		assert.Equal(t, "duplOptsWithComputed.Port", dupErr.ExistingFieldPath) // Path is lowercased
+	})
+
+	suite.T().Run("should not return error for different commands", func(t *testing.T) {
+		cmd1 := &cobra.Command{Use: "command1"}
+		cmd2 := &cobra.Command{Use: "command2"}
+		options := &duplOptsD{}
+
+		// Define on first command, should succeed
+		err1 := Define(cmd1, options)
+		require.NoError(t, err1)
+
+		// Define on second command, should also succeed as scopes are isolated
+		err2 := Define(cmd2, options)
+		require.NoError(t, err2)
+	})
 }
