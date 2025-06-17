@@ -435,6 +435,7 @@ srv:
 		// Return a cleanup function to reset Viper's state after the test.
 		return func() {
 			viper.Reset()
+			autoflags.ResetGlobals()
 		}
 	}
 
@@ -520,6 +521,7 @@ func (o *unmarshalIntegrationOptions) Validate(_ context.Context) []error {
 func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
+		autoflags.ResetGlobals()
 	}
 
 	t.Run("PreMoldTransformationFails", func(t *testing.T) {
@@ -726,6 +728,7 @@ func (o TestDefineOptions) Validate() []error                   { return nil }
 func TestDefine_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
+		autoflags.ResetGlobals()
 	}
 
 	cases := []struct {
@@ -905,6 +908,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 
 	teardownTest := func() {
 		viper.Reset()
+		autoflags.ResetGlobals()
 	}
 
 	t.Run("RootCommandValidation_Success", func(t *testing.T) {
