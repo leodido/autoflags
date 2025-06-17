@@ -252,6 +252,53 @@ func TestDuplicateFlagError_ErrorsAs(t *testing.T) {
 	assert.Equal(t, "Server.Port", fieldErr.Field())
 }
 
+func TestInvalidFlagNameError_ErrorMessage(t *testing.T) {
+	err := &InvalidFlagNameError{
+		FieldName: "MyField",
+		FlagName:  "invalid flag",
+	}
+
+	expected := "field 'MyField': generated flag name 'invalid flag' is invalid. Use only alphanumeric characters, dashes, and dots."
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestInvalidFlagNameError_FieldInterface(t *testing.T) {
+	err := &InvalidFlagNameError{
+		FieldName: "TestField",
+		FlagName:  "test-flag",
+	}
+
+	// Test that it implements DefinitionError interface
+	var fieldErr DefinitionError = err
+	assert.Equal(t, "TestField", fieldErr.Field())
+}
+
+func TestInvalidFlagNameError_ErrorsIs(t *testing.T) {
+	err := &InvalidFlagNameError{
+		FieldName: "TestField",
+		FlagName:  "invalid flag",
+	}
+
+	// Test errors.Is() functionality
+	assert.True(t, errors.Is(err, ErrInvalidFlagName))
+	assert.False(t, errors.Is(err, ErrInvalidShorthand))
+}
+
+func TestInvalidFlagNameError_ErrorsAs(t *testing.T) {
+	err := NewInvalidFlagNameError("TestField", "invalid-flag ")
+
+	// Test errors.As() functionality
+	var flagErr *InvalidFlagNameError
+	require.True(t, errors.As(err, &flagErr))
+	assert.Equal(t, "TestField", flagErr.FieldName)
+	assert.Equal(t, "invalid-flag ", flagErr.FlagName)
+
+	// Test DefinitionError interface extraction
+	var fieldErr DefinitionError
+	require.True(t, errors.As(err, &fieldErr))
+	assert.Equal(t, "TestField", fieldErr.Field())
+}
+
 func TestNewDuplicateFlagError_Constructor(t *testing.T) {
 	err := NewDuplicateFlagError("port", "Server.Port", "Database.Port")
 
@@ -317,6 +364,15 @@ func TestNewUnsupportedTypeError_Constructor(t *testing.T) {
 	assert.Equal(t, "ComplexField", typeErr.FieldName)
 	assert.Equal(t, "complex128", typeErr.FieldType)
 	assert.Equal(t, "not supported", typeErr.Message)
+}
+
+func TestNewInvalidFlagNameError_Constructor(t *testing.T) {
+	err := NewInvalidFlagNameError("MyField", "bad flag")
+
+	var flagErr *InvalidFlagNameError
+	require.True(t, errors.As(err, &flagErr))
+	assert.Equal(t, "MyField", flagErr.FieldName)
+	assert.Equal(t, "bad flag", flagErr.FlagName)
 }
 
 func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
@@ -403,6 +459,14 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 				ExistingFieldPath: "Old.Path.Port",
 			},
 			field: "New.Path.Port",
+		},
+		{
+			name: "InvalidFlagNameError",
+			err: &InvalidFlagNameError{
+				FieldName: "FlagField",
+				FlagName:  "invalid name",
+			},
+			field: "FlagField",
 		},
 	}
 
