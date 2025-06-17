@@ -2074,10 +2074,9 @@ func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
 }
 
 type exclusionsSpecialCasesOptions struct {
-	DashedFlag     string `flag:"flag-with-dashes" flagdescr:"flag with dashes"`
-	UnderscoreFlag string `flag:"flag_with_underscores" flagdescr:"flag with underscores"`
-	CamelCaseFlag  string `flag:"CamelCase"`
-	NumberFlag     string `flag:"flag123" flagdescr:"flag with numbers"`
+	DashedFlag    string `flag:"flag-with-dashes" flagdescr:"flag with dashes"`
+	CamelCaseFlag string `flag:"CamelCase"`
+	NumberFlag    string `flag:"flag123" flagdescr:"flag with numbers"`
 }
 
 func (o *exclusionsSpecialCasesOptions) Attach(c *cobra.Command) error { return nil }
@@ -2086,18 +2085,17 @@ func (suite *autoflagsSuite) TestWithExclusions_SpecialCharacters() {
 	opts := &exclusionsSpecialCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts, WithExclusions("flag-with-dashes", "flag_with_underscores", "camelcase"))
+	err := Define(cmd, opts, WithExclusions("flag-with-dashes", "flag_with_underscores", "camelcase"))
+	require.NoError(suite.T(), err)
 
 	flags := cmd.Flags()
 
 	// Flags with special characters should be properly excluded
 	dashedFlag := flags.Lookup("flag-with-dashes")
-	underscoreFlag := flags.Lookup("flag_with_underscores")
 	camelcaseFlag := flags.Lookup("CamelCase")
 	numberFlag := flags.Lookup("flag123")
 
 	require.Nil(suite.T(), dashedFlag, "--flag-with-dashes should be excluded")
-	require.Nil(suite.T(), underscoreFlag, "--flag_with_underscores should be excluded")
 	require.Nil(suite.T(), camelcaseFlag, "--CamelCase should be excluded")
 	require.NotNil(suite.T(), numberFlag, "flag123 should be created")
 }
@@ -2963,4 +2961,142 @@ func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
 		err2 := Define(cmd2, options)
 		require.NoError(t, err2)
 	})
+}
+
+type flagNameTestValidOpts struct {
+	Normal      string `flag:"normal-flag"`
+	WithNumbers string `flag:"flag123"`
+	WithDot     string `flag:"app.flag"`
+	Single      string `flag:"a"`
+}
+
+func (o *flagNameTestValidOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestSpaceOpts struct {
+	F string `flag:"invalid name"`
+}
+
+func (o *flagNameTestSpaceOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestUnderscoreOpts struct {
+	F string `flag:"invalid_name"`
+}
+
+func (o *flagNameTestUnderscoreOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestSpecialCharOpts struct {
+	F string `flag:"invalid$name"`
+}
+
+func (o *flagNameTestSpecialCharOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestLeadingDashOpts struct {
+	F string `flag:"-invalid"`
+}
+
+func (o *flagNameTestLeadingDashOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestLeadingDotOpts struct {
+	F string `flag:".invalid"`
+}
+
+func (o *flagNameTestLeadingDotOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestTrailingDashOpts struct {
+	F string `flag:"invalid-"`
+}
+
+func (o *flagNameTestTrailingDashOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestComputedUnderscoreOpts struct {
+	Invalid_Name string `flagdescr:"test"`
+}
+
+func (o *flagNameTestComputedUnderscoreOpts) Attach(c *cobra.Command) error { return nil }
+
+type flagNameTestNestedInvalidOpts struct {
+	Nest struct {
+		Invalid string `flag:"nested invalid"`
+	}
+}
+
+func (o *flagNameTestNestedInvalidOpts) Attach(c *cobra.Command) error { return nil }
+
+func (suite *autoflagsSuite) TestFlagNameValidation() {
+	testCases := []struct {
+		name        string
+		opts        Options // Corretto: ora usiamo l'interfaccia Options
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name:        "valid names",
+			opts:        &flagNameTestValidOpts{},
+			expectError: false,
+		},
+		{
+			name:        "name with space",
+			opts:        &flagNameTestSpaceOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'invalid name' is invalid",
+		},
+		{
+			name:        "name with underscore",
+			opts:        &flagNameTestUnderscoreOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'invalid_name' is invalid",
+		},
+		{
+			name:        "name with special char",
+			opts:        &flagNameTestSpecialCharOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'invalid$name' is invalid",
+		},
+		{
+			name:        "name with leading dash",
+			opts:        &flagNameTestLeadingDashOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name '-invalid' is invalid",
+		},
+		{
+			name:        "name with leading dot",
+			opts:        &flagNameTestLeadingDotOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name '.invalid' is invalid",
+		},
+		{
+			name:        "name with trailing dash",
+			opts:        &flagNameTestTrailingDashOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'invalid-' is invalid",
+		},
+		{
+			name:        "computed name with underscore",
+			opts:        &flagNameTestComputedUnderscoreOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'invalid_name' is invalid",
+		},
+		{
+			name:        "nested invalid name",
+			opts:        &flagNameTestNestedInvalidOpts{},
+			expectError: true,
+			errorMsg:    "generated flag name 'nested invalid' is invalid",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.T().Run(tc.name, func(t *testing.T) {
+			cmd := &cobra.Command{Use: "test"}
+			err := Define(cmd, tc.opts)
+
+			if tc.expectError {
+				require.Error(t, err)
+				// Verifica che l'errore sia del tipo corretto che abbiamo definito
+				require.ErrorIs(t, err, autoflagserrors.ErrInvalidFlagName)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
