@@ -58,7 +58,7 @@ var (
 	ErrConflictingType            = errors.New("conflicting struct field types")
 	ErrUnsupportedType            = errors.New("unsupported field type")
 	ErrDuplicateFlag              = errors.New("duplicate flag name")
-	// ErrInvalidFlagName            = errors.New("invalid flag name") // TODO: implement
+	ErrInvalidFlagName            = errors.New("invalid flag name")
 )
 
 // DefinitionError represents an error that occurred while processing a struct field's tags at definition time.
@@ -282,6 +282,31 @@ func (e *UnsupportedTypeError) Field() string {
 
 func (e *UnsupportedTypeError) Unwrap() error {
 	return ErrUnsupportedType
+}
+
+// InvalidFlagNameError represents an invalid flag name
+type InvalidFlagNameError struct {
+	FieldName string
+	FlagName  string
+}
+
+func (e *InvalidFlagNameError) Error() string {
+	return fmt.Sprintf("field '%s': generated flag name '%s' is invalid. Use only alphanumeric characters, dashes, and dots.", e.FieldName, e.FlagName)
+}
+
+func (e *InvalidFlagNameError) Field() string {
+	return e.FieldName
+}
+
+func (e *InvalidFlagNameError) Unwrap() error {
+	return ErrInvalidFlagName
+}
+
+func NewInvalidFlagNameError(fieldName, flagName string) error {
+	return &InvalidFlagNameError{
+		FieldName: fieldName,
+		FlagName:  flagName,
+	}
 }
 
 func NewDuplicateFlagError(flagName, newFieldPath, existingFieldPath string) error {
