@@ -22,7 +22,6 @@ func (s *stringValue) String() string {
 
 func (s *stringValue) Set(val string) error {
 	*s.s = val
-
 	return nil
 }
 
@@ -51,7 +50,6 @@ func (i *intValue) Set(val string) error {
 		return err
 	}
 	*i.i = v
-
 	return nil
 }
 
@@ -62,24 +60,33 @@ func (i *intValue) Type() string {
 var _ pflag.Value = (*intValue)(nil)
 
 // durationValue implements pflag.Value for a time.Duration.
-type durationValue time.Duration
+type durationValue struct {
+	d *time.Duration
+}
 
+// NewDuration creates a new durationValue.
 func NewDuration(val time.Duration, p *time.Duration) *durationValue {
-	*p = val
-	return (*durationValue)(p)
+	*p = val // Set the initial value
+	return &durationValue{d: p}
 }
 
 func (d *durationValue) Set(s string) error {
 	v, err := time.ParseDuration(s)
-	*d = durationValue(v)
+	if err != nil {
+		return err
+	}
+	// Only assign on success
+	*d.d = v
 
-	return err
+	return nil
 }
 
 func (d *durationValue) Type() string {
 	return "duration"
 }
 
-func (d *durationValue) String() string { return (*time.Duration)(d).String() }
+func (d *durationValue) String() string {
+	return d.d.String()
+}
 
 var _ pflag.Value = (*durationValue)(nil)
