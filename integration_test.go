@@ -3059,3 +3059,103 @@ func TestFlagCustom_Integration(t *testing.T) {
 		assert.Contains(t, e.Error(), "define hook second return value must be a string")
 	})
 }
+
+type ComprehensiveUsageOptions struct {
+	LocalFlag          string `flag:"local-flag" flagdescr:"A simple local flag"`
+	GroupedFlag        string `flag:"grouped-flag" flaggroup:"Group A" flagdescr:"A flag in Group A"`
+	AnotherGroupedFlag string `flag:"another-group" flaggroup:"Group Z" flagdescr:"A flag in Group Z to test sorting"`
+}
+
+func (o *ComprehensiveUsageOptions) Attach(c *cobra.Command) error {
+	return autoflags.Define(c, o)
+}
+
+func TestSetupUsage_Comprehensive(t *testing.T) {
+	rootCmd := &cobra.Command{
+		Use:     "root",
+		Short:   "A root command for testing",
+		Long:    "This is a longer description for the root command.",
+		Aliases: []string{"r", "rt"},
+		Example: "root --global-flag sub1",
+		// Command must be executable
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return nil
+		},
+	}
+
+	opts := &ComprehensiveUsageOptions{}
+	err := opts.Attach(rootCmd)
+	require.NoError(t, err)
+
+	// Manually adding a global flag
+	rootCmd.PersistentFlags().Bool("global-flag", false, "A global persistent flag")
+
+	// Executable sub-commands
+	subCmd1 := &cobra.Command{
+		Use:   "sub1",
+		Short: "The first subcommand",
+		RunE:  func(cmd *cobra.Command, args []string) error { return nil },
+	}
+	subCmd2 := &cobra.Command{
+		Use:   "sub2",
+		Short: "The second subcommand",
+		RunE:  func(cmd *cobra.Command, args []string) error { return nil },
+	}
+	hiddenCmd := &cobra.Command{
+		Use:    "hidden",
+		Short:  "A hidden subcommand",
+		Hidden: true,
+		RunE:   func(cmd *cobra.Command, args []string) error { return nil },
+	}
+	// Help topic (no run hook)
+	helpTopicCmd := &cobra.Command{
+		Use:   "help-topic",
+		Short: "Additional help topic information.",
+	}
+
+	rootCmd.AddCommand(subCmd1, subCmd2, hiddenCmd, helpTopicCmd)
+
+	autoflags.SetupUsage(rootCmd)
+
+	usageString := rootCmd.UsageString()
+
+	assert.Contains(t, usageString, "Usage:\n  root [flags]\n  root [command]\n", "Should show correct usage line")
+	assert.Contains(t, usageString, "\nAliases:\n  root, r, rt\n", "Should display aliases")
+	assert.Contains(t, usageString, "\nExamples:\nroot --global-flag sub1\n", "Should display examples without indentation")
+
+	availableCommandsSection := getSection(usageString, "Available Commands:")
+	assert.NotEmpty(t, availableCommandsSection, "Should have Available Commands section")
+	assert.Contains(t, availableCommandsSection, "sub1", "Should list sub1")
+	assert.Contains(t, availableCommandsSection, "sub2", "Should list sub2")
+	assert.NotContains(t, availableCommandsSection, "hidden", "Should NOT list hidden command")
+	assert.NotContains(t, availableCommandsSection, "help-topic", "Should not list help-topic as an available command")
+
+	helpTopicsSection := getSection(usageString, "Additional help topics:")
+	assert.NotEmpty(t, helpTopicsSection, "Should have Additional help topics section")
+	assert.Contains(t, helpTopicsSection, "help-topic", "Should list help-topic command")
+
+	assertFlagInDefaultGroup(t, usageString, "--local-flag")
+	assertFlagInGroup(t, usageString, "Group A", "--grouped-flag")
+	assertFlagInGroup(t, usageString, "Group Z", "--another-group")
+	assertFlagInGroup(t, usageString, "Global", "--global-flag")
+
+	// Groups ordering
+	posGroupA := strings.Index(usageString, "Group A Flags:")
+	posGroupZ := strings.Index(usageString, "Group Z Flags:")
+	assert.True(t, posGroupA > 0, "Group A section should exist")
+	assert.True(t, posGroupZ > 0, "Group Z section should exist")
+	assert.True(t, posGroupA < posGroupZ, "Group A should appear before Group Z")
+
+	assert.Contains(t, usageString, "\nUse \"root [command] --help\" for more information about a command.\n", "Should display the final help hint")
+}
+
+func getSection(usage, title string) string {
+	parts := strings.SplitSeq(usage, "\n\n")
+	for part := range parts {
+		if strings.HasPrefix(part, title) {
+			return part
+		}
+	}
+
+	return ""
+}
