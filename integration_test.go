@@ -19,8 +19,10 @@ import (
 	"github.com/leodido/autoflags"
 	autoflagserrors "github.com/leodido/autoflags/errors"
 	full_example_cli "github.com/leodido/autoflags/examples/full/cli"
+	"github.com/leodido/autoflags/values"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -2537,10 +2539,13 @@ type customDecodeHookOptions struct {
 	LogLevel   string      `flag:"log-level" flagdescr:"Logging level"`
 }
 
-func (o *customDecodeHookOptions) DefineServerMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
-	// Create a string flag with custom description
+func (o *customDecodeHookOptions) DefineServerMode(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
 	enhancedDesc := descr + " (development, staging, production)"
-	c.Flags().String(name, string(DevMode1), enhancedDesc)
+	fieldPtr := fieldValue.Addr().Interface().(*ServerMode1)
+	*fieldPtr = DevMode1
+
+	// Since ServerMode1 is a string type, we can cast its pointer to *string and use our existing stringValue helper.
+	return values.NewString((*string)(fieldPtr)), enhancedDesc
 }
 
 func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
@@ -2548,8 +2553,6 @@ func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
 	if !ok {
 		return input, nil // Not a string, pass through
 	}
-
-	// Custom transformation logic - normalize common aliases and add prefix
 	switch strings.ToLower(strings.TrimSpace(str)) {
 	case "dev", "develop", "development":
 		return ServerMode1("development"), nil
@@ -2564,7 +2567,7 @@ func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
 	}
 }
 
-func (o *customDecodeHookOptions) Attach(c *cobra.Command) error { return nil }
+func (o *customDecodeHookOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, o) }
 
 type mixedHooksOptions struct {
 	ServerMode ServerMode1   `flagcustom:"true" flag:"server-mode" flagdescr:"Server mode"`
@@ -2573,8 +2576,11 @@ type mixedHooksOptions struct {
 }
 
 // Implement the custom methods for ServerMode
-func (m *mixedHooksOptions) DefineServerMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
-	c.Flags().String(name, string(DevMode1), descr)
+func (m *mixedHooksOptions) DefineServerMode(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+	fieldPtr := fieldValue.Addr().Interface().(*ServerMode1)
+	*fieldPtr = DevMode1
+
+	return values.NewString((*string)(fieldPtr)), descr
 }
 
 func (m *mixedHooksOptions) DecodeServerMode(input any) (any, error) {
@@ -2588,7 +2594,7 @@ func (m *mixedHooksOptions) DecodeServerMode(input any) (any, error) {
 	return ServerMode1(str), nil
 }
 
-func (o *mixedHooksOptions) Attach(c *cobra.Command) error { return nil }
+func (o *mixedHooksOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, o) }
 
 type multiCustomOptions struct {
 	Mode1 ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
@@ -2596,10 +2602,12 @@ type multiCustomOptions struct {
 	Level string      `flag:"level" flagdescr:"Normal field"`
 }
 
-// Define methods for Mode1
-func (m *multiCustomOptions) DefineMode1(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+func (m *multiCustomOptions) DefineMode1(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
 	enhancedDesc := descr + " (first custom mode)"
-	c.Flags().String(name, string(DevMode1), enhancedDesc)
+	fieldPtr := fieldValue.Addr().Interface().(*ServerMode1)
+	*fieldPtr = DevMode1
+
+	return values.NewString((*string)(fieldPtr)), enhancedDesc
 }
 
 func (m *multiCustomOptions) DecodeMode1(input any) (any, error) {
@@ -2619,9 +2627,12 @@ func (m *multiCustomOptions) DecodeMode1(input any) (any, error) {
 	}
 }
 
-func (m *multiCustomOptions) DefineMode2(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+func (m *multiCustomOptions) DefineMode2(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
 	enhancedDesc := descr + " (second custom mode)"
-	c.Flags().String(name, string(StagingMode2), enhancedDesc)
+	fieldPtr := fieldValue.Addr().Interface().(*ServerMode2)
+	*fieldPtr = StagingMode2
+
+	return values.NewString((*string)(fieldPtr)), enhancedDesc
 }
 
 func (m *multiCustomOptions) DecodeMode2(input any) (any, error) {
@@ -2641,11 +2652,12 @@ func (m *multiCustomOptions) DecodeMode2(input any) (any, error) {
 	}
 }
 
-func (m *multiCustomOptions) Attach(c *cobra.Command) error { return nil }
+func (m *multiCustomOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, m) }
 
 func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
+		autoflags.ResetGlobals()
 	}
 
 	t.Run("CustomDecodeHook_FromConfig", func(t *testing.T) {
@@ -2653,19 +2665,15 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-custom-decode"}
 		opts := &customDecodeHookOptions{}
 
-		// Define the flags (this registers the custom decode hook)
 		err := autoflags.Define(cmd, opts)
 		require.NoError(t, err)
 
-		// Set config value (to a special value for testing reasons)that should trigger the custom decode hook
 		viper.Set("server-mode", "test_custom_decode")
 		viper.Set("log-level", "debug")
 
-		// Trigger the custom decode hook
 		err = autoflags.Unmarshal(cmd, opts)
 		require.NoError(t, err, "Unmarshal should succeed with custom decode hook")
 
-		// Verify the custom decode hook was called and transformed the value
 		assert.Equal(t, ServerMode1("CUSTOM_DECODE_CALLED"), opts.ServerMode, "Custom decode hook should have transformed the value")
 		assert.Equal(t, "debug", opts.LogLevel, "Other fields should work normally")
 	})
@@ -2933,7 +2941,8 @@ type nestedSameCustomType struct {
 	ModeAgain ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
 }
 
-func (m *nestedSameCustomType) DefineModeAgain(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+func (m *nestedSameCustomType) DefineModeAgain(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+	return nil, ""
 }
 
 func (m *nestedSameCustomType) DecodeModeAgain(input any) (any, error) {
@@ -2946,7 +2955,8 @@ type conflictingCustomType struct {
 	Nest  nestedSameCustomType
 }
 
-func (m *conflictingCustomType) DefineMode(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
+func (m *conflictingCustomType) DefineMode(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+	return nil, ""
 }
 
 func (m *conflictingCustomType) DecodeMode(input any) (any, error) {
@@ -2955,9 +2965,44 @@ func (m *conflictingCustomType) DecodeMode(input any) (any, error) {
 
 func (m *conflictingCustomType) Attach(c *cobra.Command) error { return nil }
 
-func TestDefine_CustomDecodeHook_Integration(t *testing.T) {
+type wrongDefineParamOptions struct {
+	CustomField string `flagcustom:"true"`
+}
+
+// Wrong signature: first parameter should be `name string`.
+func (o *wrongDefineParamOptions) DefineCustomField(p1 int, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+	return nil, ""
+}
+func (o *wrongDefineParamOptions) DecodeCustomField(i any) (any, error) { return i, nil }
+func (o *wrongDefineParamOptions) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+
+type wrongDefineReturn1Options struct {
+	CustomField string `flagcustom:"true"`
+}
+
+// Wrong signature: first return value should be `pflag.Value`.
+func (o *wrongDefineReturn1Options) DefineCustomField(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (string, string) {
+	return "", ""
+}
+func (o *wrongDefineReturn1Options) DecodeCustomField(i any) (any, error) { return i, nil }
+func (o *wrongDefineReturn1Options) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+
+type wrongDefineReturn2Options struct {
+	CustomField string `flagcustom:"true"`
+}
+
+// Wrong signature: second return value should be `string`.
+func (o *wrongDefineReturn2Options) DefineCustomField(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, int) {
+	fieldPtr := fieldValue.Addr().Interface().(*string)
+	return values.NewString(fieldPtr), 0
+}
+func (o *wrongDefineReturn2Options) DecodeCustomField(i any) (any, error) { return i, nil }
+func (o *wrongDefineReturn2Options) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+
+func TestFlagCustom_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
+		autoflags.ResetGlobals()
 	}
 
 	t.Run("MultipleFieldsWithSameCustomType", func(t *testing.T) {
@@ -2972,5 +3017,45 @@ func TestDefine_CustomDecodeHook_Integration(t *testing.T) {
 		assert.Contains(t, err.Error(), "create distinct custom types for each field")
 		assert.Contains(t, err.Error(), "Mode")
 		assert.Contains(t, err.Error(), "Nest.ModeAgain")
+	})
+
+	t.Run("DefineHook_WrongParameterType", func(t *testing.T) {
+		setupTest()
+		opts := &wrongDefineParamOptions{}
+		cmd := &cobra.Command{Use: "test"}
+
+		err := opts.Attach(cmd)
+		require.Error(t, err)
+		var e *autoflagserrors.InvalidDefineHookSignatureError
+		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
+
+		assert.Contains(t, e.Error(), "define hook parameter 0 has wrong type", "Error should complain about the first parameter")
+		assert.Contains(t, e.Error(), "expected string, got int", "Error should specify the expected and actual types")
+	})
+
+	t.Run("DefineHook_WrongFirstReturnValue", func(t *testing.T) {
+		setupTest()
+		opts := &wrongDefineReturn1Options{}
+		cmd := &cobra.Command{Use: "test"}
+
+		err := opts.Attach(cmd)
+		require.Error(t, err)
+		var e *autoflagserrors.InvalidDefineHookSignatureError
+		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
+
+		assert.Contains(t, e.Error(), "define hook first return value must be a pflag.Value")
+	})
+
+	t.Run("DefineHook_WrongSecondReturnValue", func(t *testing.T) {
+		setupTest()
+		opts := &wrongDefineReturn2Options{}
+		cmd := &cobra.Command{Use: "test"}
+
+		err := opts.Attach(cmd)
+		require.Error(t, err)
+		var e *autoflagserrors.InvalidDefineHookSignatureError
+		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
+
+		assert.Contains(t, e.Error(), "define hook second return value must be a string")
 	})
 }
