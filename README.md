@@ -275,12 +275,12 @@ autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
 
 ### 🪃 Custom Type Handlers
 
-Declare options (flags, env vars, config file keys) with custom types.
+Declare options (flags, env vars, config file keys) with custom types by implementing two methods on your options struct.
 
 Just implement two methods on your options structs:
 
-- `Define<FieldName>` for defining the custom flag, its description, etc.
-- `Decode<FieldName>` for converting any input to your custom type (or erroring out)
+- `Define<FieldName>`: return a `pflag.Value` that knows how to handle your custom type, along with an enhanced description.
+- `Decode<FieldName>`: decode the input into your custom type.
 
 ```go
 type Environment string
@@ -297,16 +297,37 @@ type ServerOptions struct {
 	TargetEnv Environment `flagcustom:"true" flag:"target-env" flagdescr:"Set the target environment"`
 }
 
-// DefineTargetEnv defines the custom flag for Environment with autocompletion
-func (o *ServerOptions) DefineTargetEnv(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) {
-	...
+// DefineTargetEnv returns a pflag.Value for the custom Environment type.
+func (o *ServerOptions) DefineTargetEnv(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+    enhancedDesc := descr + " {dev,staging,prod}"
+    fieldPtr := fieldValue.Addr().Interface().(*Environment)
+    *fieldPtr = "dev" // Set default
+
+    return autoflagsvalues.NewString((*string)(fieldPtr)), enhancedDesc
 }
 
-// DecodeTargetEnv converts string input to Environment type with validation
+// DecodeTargetEnv converts the string input to the Environment type.
 func (o *ServerOptions) DecodeTargetEnv(input any) (any, error) {
-	...
+	// ... (validation and conversion logic)
+    return EnvDevelopment, nil
+}
+
+// Attach handles flag definition and shell completion for our custom type.
+func (o *ServerOptions) Attach(c *cobra.Command) error {
+	if err := autoflags.Define(c, o); err != nil {
+        return err
+    }
+
+    // Register shell completion after the flag has been defined.
+    c.RegisterFlagCompletionFunc("target-env", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+        return []string{"dev", "staging", "prod"}, cobra.ShellCompDirectiveNoFileComp
+    })
+
+    return nil
 }
 ```
+
+In [values](/values/values.go) we provide `pflag.Value` implementations for standard types.
 
 See [full example](examples/full/cli/cli.go) for more details.
 
