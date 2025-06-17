@@ -192,6 +192,76 @@ func TestUnsupportedTypeError_ErrorsIs(t *testing.T) {
 	assert.False(t, errors.Is(err, ErrInvalidShorthand))
 }
 
+func TestDuplicateFlagError_ErrorMessage(t *testing.T) {
+	err := &DuplicateFlagError{
+		FlagName:          "port",
+		NewFieldPath:      "Server.Port",
+		ExistingFieldPath: "Database.Port",
+	}
+
+	expected := "field 'Server.Port': flag name 'port' is already in use by field 'Database.Port'"
+	assert.Equal(t, expected, err.Error())
+}
+
+func TestDuplicateFlagError_ContainsExpectedStrings(t *testing.T) {
+	err := &DuplicateFlagError{
+		FlagName:          "port",
+		NewFieldPath:      "Server.Port",
+		ExistingFieldPath: "Database.Port",
+	}
+
+	errorMsg := err.Error()
+	assert.Contains(t, errorMsg, "port")
+	assert.Contains(t, errorMsg, "Server.Port")
+	assert.Contains(t, errorMsg, "Database.Port")
+}
+
+func TestDuplicateFlagError_FieldInterface(t *testing.T) {
+	err := &DuplicateFlagError{
+		FlagName:     "port",
+		NewFieldPath: "Server.Port",
+	}
+
+	// Test that it implements DefinitionError interface
+	var fieldErr DefinitionError = err
+	assert.Equal(t, "Server.Port", fieldErr.Field())
+}
+
+func TestDuplicateFlagError_ErrorsIs(t *testing.T) {
+	err := &DuplicateFlagError{
+		FlagName: "port",
+	}
+
+	assert.True(t, errors.Is(err, ErrDuplicateFlag))
+	assert.False(t, errors.Is(err, ErrInvalidShorthand))
+}
+
+func TestDuplicateFlagError_ErrorsAs(t *testing.T) {
+	err := NewDuplicateFlagError("port", "Server.Port", "Database.Port")
+
+	// Test errors.As() functionality
+	var dupErr *DuplicateFlagError
+	require.True(t, errors.As(err, &dupErr))
+	assert.Equal(t, "port", dupErr.FlagName)
+	assert.Equal(t, "Server.Port", dupErr.NewFieldPath)
+	assert.Equal(t, "Database.Port", dupErr.ExistingFieldPath)
+
+	// Test DefinitionError interface extraction
+	var fieldErr DefinitionError
+	require.True(t, errors.As(err, &fieldErr))
+	assert.Equal(t, "Server.Port", fieldErr.Field())
+}
+
+func TestNewDuplicateFlagError_Constructor(t *testing.T) {
+	err := NewDuplicateFlagError("port", "Server.Port", "Database.Port")
+
+	var dupErr *DuplicateFlagError
+	require.True(t, errors.As(err, &dupErr))
+	assert.Equal(t, "port", dupErr.FlagName)
+	assert.Equal(t, "Server.Port", dupErr.NewFieldPath)
+	assert.Equal(t, "Database.Port", dupErr.ExistingFieldPath)
+}
+
 func TestNewInvalidBooleanTagError_Constructor(t *testing.T) {
 	err := NewInvalidBooleanTagError("TestField", "flagenv", "maybe")
 
@@ -324,6 +394,15 @@ func TestDefinitionError_Interface_MultipleTypes(t *testing.T) {
 				Message:   "not supported",
 			},
 			field: "UnsupportedField",
+		},
+		{
+			name: "DuplicateFlagError",
+			err: &DuplicateFlagError{
+				FlagName:          "port",
+				NewFieldPath:      "New.Path.Port",
+				ExistingFieldPath: "Old.Path.Port",
+			},
+			field: "New.Path.Port",
 		},
 	}
 
