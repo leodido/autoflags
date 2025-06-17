@@ -53,17 +53,37 @@ var (
 	ErrMissingDecodeHook          = errors.New("missing custom flag decoding hook")
 	ErrInvalidDefineHookSignature = errors.New("invalid define hook signature")
 	ErrInvalidDecodeHookSignature = errors.New("invalid decode hook signature")
-	ErrInvalidFlagName            = errors.New("invalid flag name")
 	ErrInvalidTagUsage            = errors.New("invalid tag usage")
 	ErrConflictingTags            = errors.New("conflicting struct tags")
 	ErrConflictingType            = errors.New("conflicting struct field types")
 	ErrUnsupportedType            = errors.New("unsupported field type")
+	ErrDuplicateFlag              = errors.New("duplicate flag name")
+	// ErrInvalidFlagName            = errors.New("invalid flag name") // TODO: implement
 )
 
 // DefinitionError represents an error that occurred while processing a struct field's tags at definition time.
 type DefinitionError interface {
 	error
 	Field() string
+}
+
+// DuplicateFlagError represents a flag name that is already in use.
+type DuplicateFlagError struct {
+	FlagName          string
+	NewFieldPath      string
+	ExistingFieldPath string
+}
+
+func (e *DuplicateFlagError) Error() string {
+	return fmt.Sprintf("field '%s': flag name '%s' is already in use by field '%s'", e.NewFieldPath, e.FlagName, e.ExistingFieldPath)
+}
+
+func (e *DuplicateFlagError) Field() string {
+	return e.NewFieldPath
+}
+
+func (e *DuplicateFlagError) Unwrap() error {
+	return ErrDuplicateFlag
 }
 
 // InvalidBooleanTagError represents an invalid boolean value in struct tags
@@ -262,6 +282,14 @@ func (e *UnsupportedTypeError) Field() string {
 
 func (e *UnsupportedTypeError) Unwrap() error {
 	return ErrUnsupportedType
+}
+
+func NewDuplicateFlagError(flagName, newFieldPath, existingFieldPath string) error {
+	return &DuplicateFlagError{
+		FlagName:          flagName,
+		NewFieldPath:      newFieldPath,
+		ExistingFieldPath: existingFieldPath,
+	}
 }
 
 func NewInvalidBooleanTagError(fieldName, tagName, tagValue string) error {
