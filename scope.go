@@ -7,6 +7,7 @@ import (
 	"maps"
 
 	"github.com/go-viper/mapstructure/v2"
+	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
 	spf13viper "github.com/spf13/viper"
 )
@@ -19,6 +20,7 @@ type scope struct {
 	v                 *spf13viper.Viper
 	boundEnvs         map[string]bool
 	customDecodeHooks map[string]mapstructure.DecodeHookFunc
+	definedFlags      map[string]string
 	mu                sync.RWMutex
 }
 
@@ -39,6 +41,7 @@ func getScope(c *cobra.Command) *scope {
 		v:                 spf13viper.New(),
 		boundEnvs:         make(map[string]bool),
 		customDecodeHooks: make(map[string]mapstructure.DecodeHookFunc),
+		definedFlags:      make(map[string]string),
 	}
 
 	// Attach to command context
@@ -95,4 +98,17 @@ func (s *scope) getCustomDecodeHook(hookName string) (hookFunc mapstructure.Deco
 	hookFunc, ok = s.customDecodeHooks[hookName]
 
 	return
+}
+
+// addDefinedFlag adds a flag to the set of defined flags for this scope, returning an error if it's a duplicate.
+func (s *scope) addDefinedFlag(name, fieldPath string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if existingPath, ok := s.definedFlags[name]; ok {
+		return autoflagserrors.NewDuplicateFlagError(name, fieldPath, existingPath)
+	}
+	s.definedFlags[name] = fieldPath
+
+	return nil
 }
