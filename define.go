@@ -3,6 +3,7 @@ package autoflags
 import (
 	"fmt"
 	"reflect"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -592,6 +593,11 @@ func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.T
 			} else {
 				flagName = strings.ToLower(structF.Name)
 			}
+
+			if !isValidFlagName(flagName) {
+				return autoflagserrors.NewInvalidFlagNameError(fieldName, flagName)
+			}
+
 			if err := s.addDefinedFlag(flagName, fieldName); err != nil {
 				return err
 			}
@@ -606,6 +612,12 @@ func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.T
 	}
 
 	return nil
+}
+
+var validFlagNameRegex = regexp.MustCompile(`^[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*$`)
+
+func isValidFlagName(name string) bool {
+	return validFlagNameRegex.MatchString(name)
 }
 
 // validateBooleanTag validates that a struct tag contains a valid boolean value
