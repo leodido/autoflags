@@ -57,7 +57,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	}
 
 	// Run input validation (on by default)
-	if err := validateStruct(o); err != nil {
+	if err := validateStruct(c, o); err != nil {
 		return err
 	}
 
@@ -473,14 +473,16 @@ func getFieldPath(structPath string, structField reflect.StructField) string {
 }
 
 // validateStruct checks the coherence of definitions in the given struct
-func validateStruct(o any) error {
+func validateStruct(c *cobra.Command, o any) error {
 	val, err := getValidValue(o)
 	if err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
+	s := getScope(c)
 
 	typeToFields := make(map[reflect.Type][]string)
-	if err := validateFields(val, "", typeToFields); err != nil {
+	typeName := val.Type().Name()
+	if err := validateFields(val, typeName, typeToFields, s); err != nil {
 		return fmt.Errorf("validation failed: %w", err)
 	}
 	for fieldType, fieldNames := range typeToFields {
@@ -493,7 +495,7 @@ func validateStruct(o any) error {
 }
 
 // validateFields recursively validates the struct fields
-func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]string) error {
+func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]string, s *scope) error {
 	for i := range val.NumField() {
 		field := val.Field(i)
 		structF := val.Type().Field(i)
@@ -574,9 +576,28 @@ func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.T
 			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagignore", "flagrequired"}, "mutually exclusive tags")
 		}
 
+		// Check for duplicate flags
+		if !isStructKind {
+			// Skip ignored fields from duplicate check
+			if flagIgnoreValue != nil && *flagIgnoreValue {
+				continue
+			}
+
+			alias := structF.Tag.Get("flag")
+			var flagName string
+			if alias != "" {
+				flagName = alias
+			} else {
+				flagName = strings.ToLower(structF.Name)
+			}
+			if err := s.addDefinedFlag(flagName, fieldName); err != nil {
+				return err
+			}
+		}
+
 		// Recursively validate children structs
 		if isStructKind {
-			if err := validateFields(field, fieldName, typeToFields); err != nil {
+			if err := validateFields(field, fieldName, typeToFields, s); err != nil {
 				return err
 			}
 		}
@@ -748,4 +769,9 @@ func signature(f any) string {
 	}
 
 	return buf.String()
+}
+
+func ResetGlobals() {
+	globalAliasCache = &sync.Map{}
+	globalDefaultsCache = &sync.Map{}
 }
