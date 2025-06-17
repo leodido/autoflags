@@ -10,6 +10,7 @@ import (
 
 	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // DefineOption configures the behavior of the Define function.
@@ -91,6 +92,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 			continue
 		}
 
+		// Only if the field is addressable
 		if !field.CanAddr() {
 			continue
 		}
@@ -149,8 +151,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 
 				if defineHookFunc.IsValid() {
 					// Call user's define hook
-					defineHookFunc.Call([]reflect.Value{
-						reflect.ValueOf(c),
+					results := defineHookFunc.Call([]reflect.Value{
 						reflect.ValueOf(name),
 						reflect.ValueOf(short),
 						reflect.ValueOf(descr),
@@ -158,8 +159,9 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 						reflect.ValueOf(field),
 					})
 
-					// FIXME: here we can verify the DefineX hook actually created a flag
-					// FIXME: it's probably better to change the signature of define hooks by requiring return types to use here to create the flag with c.Flags().VarP()
+					returnedValue := results[0].Interface().(pflag.Value)
+					returnedUsage := results[1].Interface().(string)
+					c.Flags().VarP(returnedValue, name, short, returnedUsage)
 
 					// Register user's decode hook (`Unmarshal` will call it)
 					if err := storeDecodeHookFunc(c, name, decodeHookFunc, f.Type); err != nil {
@@ -629,10 +631,20 @@ func validateDefineHookSignature(m reflect.Value) error {
 		return fmt.Errorf("define hook must have signature: %s", signature(fx))
 	}
 
+	// Check input types
 	for i := range actualType.NumIn() {
 		if actualType.In(i) != expectedType.In(i) {
 			return fmt.Errorf("define hook parameter %d has wrong type: expected %v, got %v", i, expectedType.In(i), actualType.In(i))
 		}
+	}
+
+	// Check return types
+	pflagValueType := reflect.TypeOf((*pflag.Value)(nil)).Elem()
+	if !actualType.Out(0).Implements(pflagValueType) {
+		return fmt.Errorf("define hook first return value must be a pflag.Value")
+	}
+	if actualType.Out(1).Kind() != reflect.String {
+		return fmt.Errorf("define hook second return value must be a string")
 	}
 
 	return nil
@@ -743,29 +755,25 @@ func signature(f any) string {
 	}
 
 	buf := strings.Builder{}
-	buf.WriteString("func (")
-	for i := 0; i < t.NumIn(); i++ {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(t.In(i).String())
+	buf.WriteString("func(")
+
+	// Input parameters
+	inParams := []string{}
+	for i := range t.NumIn() {
+		inParams = append(inParams, t.In(i).String())
 	}
+	buf.WriteString(strings.Join(inParams, ", "))
 	buf.WriteString(")")
+
+	// Output parameters
 	if numOut := t.NumOut(); numOut > 0 {
-		if numOut > 1 {
-			buf.WriteString(" (")
-		} else {
-			buf.WriteString(" ")
+		buf.WriteString(" (")
+		outParams := []string{}
+		for i := range t.NumOut() {
+			outParams = append(outParams, t.Out(i).String())
 		}
-		for i := 0; i < t.NumOut(); i++ {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			buf.WriteString(t.Out(i).String())
-		}
-		if numOut > 1 {
-			buf.WriteString(")")
-		}
+		buf.WriteString(strings.Join(outParams, ", "))
+		buf.WriteString(")")
 	}
 
 	return buf.String()
