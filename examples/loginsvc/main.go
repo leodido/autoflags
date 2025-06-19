@@ -22,7 +22,7 @@ import (
 
 // CommonOptions holds the global configuration and the computed state (Logger).
 type CommonOptions struct {
-	LogLevel zapcore.Level `flag:"loglevel" flagdescr:"Logging level (debug, info, error)" default:"info"`
+	LogLevel zapcore.Level `flag:"loglevel" flagdescr:"Logging level (debug, info, error)" default:"info" flagenv:"true"`
 	// The Logger is our "computed state". It's not a flag itself, but it's initialized based on the LogLevel flag.
 	Logger *zap.Logger `flagignore:"true"`
 }
@@ -53,17 +53,18 @@ func (o *CommonOptions) FromContext(ctx context.Context) error {
 }
 
 // Initialize creates the computed state (the logger).
-func (o *CommonOptions) Initialize() error {
-	cfg := zap.Config{
-		Level:            zap.NewAtomicLevelAt(o.LogLevel),
-		Encoding:         "json",
-		OutputPaths:      []string{"stdout"},
-		ErrorOutputPaths: []string{"stderr"},
-		EncoderConfig:    zapcore.EncoderConfig{MessageKey: "M", LevelKey: "L"},
-	}
-	logger, err := cfg.Build()
-	if err != nil {
-		return fmt.Errorf("could not initialize logger: %w", err)
+func (o *CommonOptions) Initialize(c *cobra.Command) error {
+	encoderCfg := zap.NewProductionEncoderConfig()
+	encoderCfg.MessageKey = "M"
+	encoderCfg.LevelKey = "L"
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(encoderCfg),
+		zapcore.AddSync(c.OutOrStdout()),
+		o.LogLevel,
+	)
+	logger := zap.New(core)
+	if logger == nil {
+		return fmt.Errorf("could not initialize logger")
 	}
 	o.Logger = logger
 
@@ -140,8 +141,10 @@ func makeUserAddCmd() *cobra.Command {
 			opts.Password = password
 
 			// Step 4: Use both the shared logger and local options.
-			commonOpts.Logger.Debug("Attempting to add user", zap.String("user", opts.Username))
+			c.Printf("level:%s\n", commonOpts.LogLevel.String())
+			commonOpts.Logger.Info("Attempting to add user", zap.String("user", opts.Username))
 			fmt.Fprintf(c.OutOrStdout(), "Added user '%s' with the provided password.\n", opts.Username)
+
 			return nil
 		},
 	}
@@ -166,8 +169,10 @@ func makeUserDeleteCmd() *cobra.Command {
 			if err := autoflags.Unmarshal(c, opts); err != nil {
 				return err
 			}
+			c.Printf("level:%s\n", commonOpts.LogLevel.String())
 			commonOpts.Logger.Warn("Attempting to delete user", zap.String("user", opts.Username))
 			fmt.Fprintf(c.OutOrStdout(), "Deleted user '%s'.\n", opts.Username)
+
 			return nil
 		},
 	}
@@ -205,12 +210,19 @@ func NewRootCmd() (*cobra.Command, error) {
 
 	// This hook runs for ALL command invocations after parsing but before execution.
 	rootCmd.PersistentPreRunE = func(c *cobra.Command, args []string) error {
+		_, configMessage, configErr := autoflags.UseConfigSimple(c)
+		if configErr != nil {
+			return configErr
+		}
+		if configMessage != "" {
+			c.Println(configMessage)
+		}
 		// Populate the master `commonOpts` from flags, env, and config file.
 		if err := autoflags.Unmarshal(c, commonOpts); err != nil {
 			return err
 		}
 		// Use the populated values to initialize the computed state (the logger).
-		if err := commonOpts.Initialize(); err != nil {
+		if err := commonOpts.Initialize(c); err != nil {
 			return err
 		}
 		// `Unmarshal` has already called `commonOpts.Context()` at this point, injecting our fully initialized master object into the context.
