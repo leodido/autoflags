@@ -42,7 +42,13 @@ jobs:
           env
 
       - name: Run tests
-        run: go test -v -race -covermode=atomic -coverprofile=coverage.out ./...
+        run: |
+          PKGS=$(go list ./... | tr '\n' ',')
+          echo "mode: atomic" > coverage.out
+          go test -v -race -covermode=atomic -coverprofile=lib.cover.out -coverpkg=$PKGS ./...
+          (cd examples/full && go test -v -race -covermode=atomic -coverprofile=full.cover.out -coverpkg=$PKGS ./...)
+          cat lib.cover.out | grep -v "mode: atomic" >> coverage.out
+          cat examples/full/full.cover.out | grep -v "mode: atomic" >> coverage.out
 
       - name: Upload coverage
         uses: codecov/codecov-action@18283e04ce6e62d37312384ff67231eb8fd56d24 # v5.4.3
