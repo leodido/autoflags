@@ -13,12 +13,13 @@ import (
 )
 
 type fullAppTestCase struct {
-	name       string
-	args       []string
-	envs       map[string]string
-	config     string
-	configPath string
-	assertFunc func(t *testing.T, output string, err error)
+	name        string
+	args        []string
+	envs        map[string]string
+	config      string
+	configPath  string
+	exitOnDebug bool
+	assertFunc  func(t *testing.T, output string, err error)
 }
 
 func TestFullApplication(t *testing.T) {
@@ -37,6 +38,50 @@ func TestFullApplication(t *testing.T) {
 			assertFunc: func(t *testing.T, output string, err error) {
 				require.NoError(t, err)
 				require.Contains(t, output, `"Port": 9876`)
+			},
+		},
+		{
+			name:        "Debug with ExitOnDebug=true should NOT run the subcommand Run hook",
+			args:        []string{"srv", "--debug-options", "-p", "3333"},
+			exitOnDebug: true,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Values:")
+				assert.NotContains(t, output, "|--srvC.RunE")
+			},
+		},
+		{
+			name:        "Debug with ExitOnDebug=true should NOT run the subcommand RunE hook",
+			args:        []string{"usr", "add", "--debug-options", "--email", "leodido@linux.com", "--age", "37"},
+			exitOnDebug: true,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "|-rootC.PersistentPreRunE")
+				assert.Contains(t, output, "Values:")
+				assert.Contains(t, output, "|---add.PreRunE")
+				assert.NotContains(t, output, "|---add.RunE")
+			},
+		},
+		{
+			name:        "Debug with ExitOnDebug=false should run the subcommands Run hook",
+			args:        []string{"srv", "--debug-options", "-p", "3333"},
+			exitOnDebug: false,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "Values:")
+				assert.Contains(t, output, "|--srvC.RunE")
+			},
+		},
+		{
+			name:        "Debug with ExitOnDebug=false should run the subcommand RunE hook",
+			args:        []string{"usr", "add", "--debug-options", "--email", "leodido@linux.com", "--age", "37"},
+			exitOnDebug: false,
+			assertFunc: func(t *testing.T, output string, err error) {
+				require.NoError(t, err)
+				assert.Contains(t, output, "|-rootC.PersistentPreRunE")
+				assert.Contains(t, output, "Values:")
+				assert.Contains(t, output, "|---add.PreRunE")
+				assert.Contains(t, output, "|---add.RunE")
 			},
 		},
 		{
@@ -412,7 +457,7 @@ srv:
 			cleanup := setupTest(t, tc.config, tc.configPath)
 			defer cleanup()
 
-			c, _ := NewRootC()
+			c, _ := NewRootC(tc.exitOnDebug)
 
 			// Capture output
 			var out bytes.Buffer
