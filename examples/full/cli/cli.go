@@ -131,10 +131,8 @@ func makeSrvC() *cobra.Command {
 
 			return nil
 		},
-		RunE: func(c *cobra.Command, args []string) error {
+		Run: func(c *cobra.Command, args []string) {
 			fmt.Fprintln(c.OutOrStdout(), "|--srvC.RunE")
-
-			return nil
 		},
 	}
 	opts.Attach(srvC)
@@ -272,7 +270,7 @@ func (f *UtilityFlags) FromContext(ctx context.Context) error {
 	return nil
 }
 
-func NewRootC() (*cobra.Command, error) {
+func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 	// Options implementing CommonOptions propagate automatically via commands context
 	commonOpts := &UtilityFlags{}
 
@@ -324,7 +322,7 @@ func NewRootC() (*cobra.Command, error) {
 		return nil, err
 	}
 	// This single line enables the debugging global flag
-	if err := autoflags.SetupDebug(rootC, autoflags.DebugOptions{}); err != nil {
+	if err := autoflags.SetupDebug(rootC, autoflags.DebugOptions{Exit: exitOnDebug}); err != nil {
 		return nil, err
 	}
 
