@@ -273,6 +273,72 @@ autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
 # map[string]interface {}{"apikey":"secret-api-key", "database":map[string]interface {}{"maxconns":3, "url":"postgres://user:pass@localhost/mydb"}, "db-url":"postgres://user:pass@localhost/mydb", "host":"production-server", "log-file":"/var/log/mysrv.log", "log-level":"debug", "logfile":"/var/log/mysrv.log", "loglevel":"debug", "port":3333, "target-env":"dev", "targetenv":"dev"}
 ```
 
+### ↪️ Sharing Options Between Commands
+
+In complex CLIs, multiple commands often need access to the same global configuration and shared resources (like a logger or a database connection). `autoflags` provides a powerful pattern using the [ContextOptions](/contract.go) interface to achieve this without resorting to global variables, by propagating a single "source of truth" through the command context.
+
+The pattern allows you to:
+
+- Populate a shared options struct once from flags, environment variables, or a config file.
+- Initialize "computed state" (like a logger) based on those options.
+- Share this single, fully-prepared "source of truth" with any subcommand that needs it.
+
+#### In a Nutshell
+
+Create a shared struct that implements the `ContextOptions` interface. This struct will hold both the configuration flags and the computed state (e.g., the logger).
+
+```go
+// This struct holds our shared state.
+type CommonOptions struct {
+    LogLevel zapcore.Level `flag:"loglevel" flagdescr:"Logging level" default:"info"`
+    Logger   *zap.Logger   `flagignore:"true"` // This field is computed, not a flag.
+}
+
+// The Context/FromContext methods enable the propagation pattern.
+func (o *CommonOptions) Context(ctx context.Context) context.Context { /* ... */ }
+func (o *CommonOptions) FromContext(ctx context.Context) error { /* ... */ }
+
+// Initialize is a custom method to create the computed state.
+func (o *CommonOptions) Initialize() error { /* ... */ }
+```
+
+Initialize the state in the root command. Use a `PersistentPreRunE` hook on your root command to populate your struct and initialize any resources.
+Invoking `autoflags.Unmarshal` will automatically inject the prepared object into the context for all subcommands to use.
+
+```go
+rootC.PersistentPreRunE = func(c *cobra.Command, args []string) error {
+	// Populate the master `commonOpts` from flags, env, and config file.
+	if err := autoflags.Unmarshal(c, commonOpts); err != nil {
+		return err
+	}
+	// Use the populated values to initialize the computed state (the logger).
+	if err := commonOpts.Initialize(); err != nil {
+		return err
+	}
+
+	return nil
+}
+```
+
+Finally, retrieve the state in subcommands. In your subcommand's `RunE`, simply call `.FromContext()` to retrieve the shared, initialized object.
+
+```go
+func(c *cobra.Command, args []string) error {
+    // Create a receiver and retrieve the master state from the context.
+    config := &CommonOptions{}
+    if err := config.FromContext(c.Context()); err != nil {
+        return err
+    }
+    config.Logger.Info("Executing subcommand...")
+
+    return nil
+},
+```
+
+This pattern ensures that subcommands remain decoupled while having access to a consistent, centrally-managed state.
+
+For a complete, runnable implementation of this pattern, see the loginsvc example located in the [/examples/loginsvc](/examples/loginsvc/) directory.
+
 ### 🪃 Custom Type Handlers
 
 Declare options (flags, env vars, config file keys) with custom types by implementing two methods on your options struct.
