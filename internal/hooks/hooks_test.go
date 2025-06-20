@@ -1,16 +1,48 @@
-package autoflags
+package internalhooks_test
 
 import (
 	"os"
 	"testing"
 	"time"
 
+	"github.com/leodido/autoflags"
+	internalenv "github.com/leodido/autoflags/internal/env"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap/zapcore"
 )
+
+type autoflagsSuite struct {
+	suite.Suite
+}
+
+func TestAutoflagsSuite(t *testing.T) {
+	suite.Run(t, new(autoflagsSuite))
+}
+
+func (suite *autoflagsSuite) SetupTest() {
+	// Reset viper state before each test to prevent test pollution
+	viper.Reset()
+	// Reset global prefix
+	autoflags.SetEnvPrefix("")
+}
+
+// createTempYAMLFile creates a temporary YAML files for testing
+func (suite *autoflagsSuite) createTempYAMLFile(content string) string {
+	tmpFile, err := os.CreateTemp("", "autoflags_test_*.yaml")
+	require.NoError(suite.T(), err)
+
+	_, err = tmpFile.WriteString(content)
+	require.NoError(suite.T(), err)
+
+	err = tmpFile.Close()
+	require.NoError(suite.T(), err)
+
+	return tmpFile.Name()
+}
 
 type zapcoreLevelOptions struct {
 	LogLevel zapcore.Level `default:"info" flagcustom:"true" flagdescr:"the logging level" flagenv:"true"`
@@ -23,7 +55,7 @@ func (suite *autoflagsSuite) TestHooks_DefineZapcoreLevelFlag() {
 	opts := &zapcoreLevelOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	err := Define(cmd, opts)
+	err := autoflags.Define(cmd, opts)
 
 	require.Nil(suite.T(), err)
 
@@ -49,8 +81,8 @@ func (suite *autoflagsSuite) TestHooks_ZapcoreLevelFromYAML() {
 	require.NoError(suite.T(), viper.ReadInConfig())
 
 	// Define flags and unmarshal
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), zapcore.DebugLevel, opts.LogLevel)
@@ -67,13 +99,13 @@ func (suite *autoflagsSuite) TestHooks_DurationFromFlag() {
 	opts := &durationOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value
 	err := cmd.Flags().Set("timeout", "45s")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 45*time.Second, opts.Timeout)
 }
@@ -90,8 +122,8 @@ func (suite *autoflagsSuite) TestHooks_DurationFromYAMLString() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	expected := 2*time.Minute + 30*time.Second
@@ -110,8 +142,8 @@ func (suite *autoflagsSuite) TestHooks_DurationFromYAMLNumber() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 5*time.Second, opts.Timeout)
@@ -142,8 +174,8 @@ func (suite *autoflagsSuite) TestHooks_DurationVariousFormats() {
 			viper.SetConfigFile(configFile)
 			require.NoError(t, viper.ReadInConfig())
 
-			Define(cmd, opts)
-			err := Unmarshal(cmd, opts)
+			autoflags.Define(cmd, opts)
+			err := autoflags.Unmarshal(cmd, opts)
 
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, opts.Timeout)
@@ -156,8 +188,8 @@ func (suite *autoflagsSuite) TestHooks_DurationDefault() {
 	opts := &durationOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 30*time.Second, opts.Timeout) // from default:"30s"
@@ -175,13 +207,13 @@ func (suite *autoflagsSuite) TestHooks_DurationFlagOverridesConfig() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value (should override config)
 	err := cmd.Flags().Set("timeout", "90s")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), 90*time.Second, opts.Timeout) // flag wins over config
@@ -198,13 +230,13 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFromFlag() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value (simulating command line)
 	err := cmd.Flags().Set("cgroups", "group1,group2,group3")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
 }
@@ -221,8 +253,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLCommaSeparated() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
@@ -243,8 +275,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFromYAMLArray() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
@@ -262,8 +294,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceEmptyString() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	// StringToSliceHookFunc with empty string results in []string{""}
@@ -282,8 +314,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceSingleValue() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"single-group"}, opts.Cgroups)
@@ -301,8 +333,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceWithSpaces() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group with spaces", "another group", "normal"}, opts.Cgroups)
@@ -313,7 +345,7 @@ func (suite *autoflagsSuite) TestHooks_StringSliceMultipleFlags() {
 	opts := &stringSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag multiple times
 	err := cmd.Flags().Set("cgroups", "group1")
@@ -323,7 +355,7 @@ func (suite *autoflagsSuite) TestHooks_StringSliceMultipleFlags() {
 	err = cmd.Flags().Set("cgroups", "group3")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group1", "group2", "group3"}, opts.Cgroups)
 }
@@ -340,13 +372,13 @@ func (suite *autoflagsSuite) TestHooks_StringSliceFlagOverridesConfig() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value (should override config)
 	err := cmd.Flags().Set("cgroups", "flag1,flag2,flag3")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	// Flag values should win over config values
@@ -365,8 +397,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceYAMLSpecialCharacters() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []string{"group-1_test", "group:2@domain", "group[3]"}, opts.Cgroups)
@@ -384,8 +416,8 @@ func (suite *autoflagsSuite) TestHooks_StringSliceEmptyAfterSplit() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	// Should include empty strings from the split
@@ -403,13 +435,13 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFromFlag() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value (simulating command line)
 	err := cmd.Flags().Set("ports", "8080,9090,3000")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
 }
@@ -426,8 +458,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLCommaSeparated() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
@@ -448,8 +480,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFromYAMLArray() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
@@ -467,8 +499,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceEmptyString() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	// StringToIntSliceHookFunc with empty string results in empty slice
@@ -487,8 +519,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceSingleValue() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080}, opts.Ports)
@@ -506,8 +538,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceWithSpaces() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
@@ -525,8 +557,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceNegativeNumbers() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{-1, 0, 8080, -9090}, opts.Ports)
@@ -537,7 +569,7 @@ func (suite *autoflagsSuite) TestHooks_IntSliceMultipleFlags() {
 	opts := &intSliceOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag multiple times
 	err := cmd.Flags().Set("ports", "8080")
@@ -547,7 +579,7 @@ func (suite *autoflagsSuite) TestHooks_IntSliceMultipleFlags() {
 	err = cmd.Flags().Set("ports", "3000")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 	assert.NoError(suite.T(), err)
 	assert.Equal(suite.T(), []int{8080, 9090, 3000}, opts.Ports)
 }
@@ -564,13 +596,13 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFlagOverridesConfig() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	// Set flag value (should override config)
 	err := cmd.Flags().Set("ports", "3000,4000,5000")
 	require.NoError(suite.T(), err)
 
-	err = Unmarshal(cmd, opts)
+	err = autoflags.Unmarshal(cmd, opts)
 
 	assert.NoError(suite.T(), err)
 	// Flag values should win over config values
@@ -589,8 +621,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceInvalidInteger() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
@@ -610,8 +642,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceFloatNumber() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
@@ -631,8 +663,8 @@ func (suite *autoflagsSuite) TestHooks_IntSliceOutOfRange() {
 	viper.SetConfigFile(configFile)
 	require.NoError(suite.T(), viper.ReadInConfig())
 
-	Define(cmd, opts)
-	err := Unmarshal(cmd, opts)
+	autoflags.Define(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.Error(suite.T(), err)
 	assert.Contains(suite.T(), err.Error(), "invalid integer")
@@ -648,9 +680,8 @@ func (o *requiredWithEnvRuntimeOptions) Attach(c *cobra.Command) error { return 
 
 func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 	suite.T().Run("required_flag_with_env_var_set", func(t *testing.T) {
-		// Clean slate for this test
-		SetEnvPrefix("AUTOFLAGS")
-		defer SetEnvPrefix("")
+		autoflags.SetEnvPrefix("AUTOFLAGS")
+		defer autoflags.SetEnvPrefix("")
 
 		// Set the environment variable that will be used
 		envVarName := "AUTOFLAGS_TEST_REQUIRED_ENV_FLAG"
@@ -668,7 +699,7 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 		opts := &requiredWithEnvRuntimeOptions{}
 		cmd := &cobra.Command{Use: "test"}
 
-		Define(cmd, opts)
+		autoflags.Define(cmd, opts)
 
 		// Verify both annotations are set
 		flags := cmd.Flags()
@@ -680,12 +711,12 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 		assert.NotNil(t, requiredAnnotation, "should have required annotation")
 		assert.Equal(t, []string{"true"}, requiredAnnotation)
 
-		envAnnotation := requiredEnvFlag.Annotations[flagEnvsAnnotation]
+		envAnnotation := requiredEnvFlag.Annotations[internalenv.FlagAnnotation]
 		assert.NotNil(t, envAnnotation, "should have env annotation")
 		assert.Contains(t, envAnnotation, envVarName, "should contain the correct env var name")
 
 		// Test that Unmarshal works with environment variable
-		err := Unmarshal(cmd, opts)
+		err := autoflags.Unmarshal(cmd, opts)
 		assert.NoError(t, err, "should unmarshal successfully with env var set")
 		assert.Equal(t, "env-value", opts.RequiredEnvFlag, "should get value from environment")
 
@@ -696,7 +727,7 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 		optionalRequiredAnnotation := optionalEnvFlag.Annotations[cobra.BashCompOneRequiredFlag]
 		assert.Nil(t, optionalRequiredAnnotation, "optional flag should not have required annotation")
 
-		optionalEnvAnnotation := optionalEnvFlag.Annotations[flagEnvsAnnotation]
+		optionalEnvAnnotation := optionalEnvFlag.Annotations[internalenv.FlagAnnotation]
 		assert.NotNil(t, optionalEnvAnnotation, "optional flag should have env annotation")
 	})
 }
@@ -704,9 +735,8 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvRuntimeBehavior() {
 func (suite *autoflagsSuite) TestFlagrequired_WithEnvMissingValue() {
 	// Test what happens when a required+env flag has no env var set and no flag provided
 	suite.T().Run("required_flag_with_no_env_var", func(t *testing.T) {
-		// Clean slate for this test
-		SetEnvPrefix("AUTOFLAGS")
-		defer SetEnvPrefix("")
+		autoflags.SetEnvPrefix("AUTOFLAGS")
+		defer autoflags.SetEnvPrefix("")
 
 		// Ensure the env vars are not set
 		envVarNames := []string{
@@ -733,11 +763,11 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvMissingValue() {
 		opts := &requiredWithEnvRuntimeOptions{}
 		cmd := &cobra.Command{Use: "test"}
 
-		Define(cmd, opts)
+		autoflags.Define(cmd, opts)
 
 		// Since the flag is required and no env var is set, this should work fine
 		// because autoflags doesn't enforce cobra's required flags during Unmarshal
-		err := Unmarshal(cmd, opts)
+		err := autoflags.Unmarshal(cmd, opts)
 		assert.NoError(t, err, "Unmarshal should succeed even with missing required flag")
 		assert.Equal(t, "", opts.RequiredEnvFlag, "should have empty value when no env var or flag set")
 
@@ -759,8 +789,8 @@ func (suite *autoflagsSuite) TestFlagrequired_WithEnvConfigFile() {
 		viper.SetConfigFile(configFile)
 		require.NoError(t, viper.ReadInConfig())
 
-		Define(cmd, opts)
-		err := Unmarshal(cmd, opts)
+		autoflags.Define(cmd, opts)
+		err := autoflags.Unmarshal(cmd, opts)
 
 		assert.NoError(t, err, "should unmarshal successfully with config file")
 		assert.Equal(t, "config-value", opts.RequiredEnvFlag, "should get value from config")
@@ -775,13 +805,13 @@ func (suite *autoflagsSuite) TestHooks_ZapcoreLevelFromYAML_InvalidLevel() {
 	opts := &zapcoreLevelOptions{}
 	cmd := &cobra.Command{Use: "testinvalidlevel"}
 
-	Define(cmd, opts)
+	autoflags.Define(cmd, opts)
 
 	viper.SetConfigFile(configFile)
 	errRead := viper.ReadInConfig()
 	require.NoError(suite.T(), errRead, "Failed to read test config file")
 
-	err := Unmarshal(cmd, opts)
+	err := autoflags.Unmarshal(cmd, opts)
 
 	assert.Error(suite.T(), err, "Unmarshal should return an error for invalid zapcore.Level")
 	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:", "Error should be wrapped by Unmarshal")

@@ -17,6 +17,8 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
+	"github.com/leodido/autoflags/config"
+	"github.com/leodido/autoflags/debug"
 	autoflagserrors "github.com/leodido/autoflags/errors"
 	"github.com/leodido/autoflags/values"
 	"github.com/spf13/afero"
@@ -498,7 +500,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "testapp"}
-		opts := autoflags.ConfigOptions{}
+		opts := config.Options{}
 
 		err := autoflags.SetupConfig(rootCmd, opts)
 		assert.NoError(t, err, "SetupConfig should succeed on root command")
@@ -509,7 +511,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "myapp"}
-		opts := autoflags.ConfigOptions{} // All defaults
+		opts := config.Options{} // All defaults
 
 		err := autoflags.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
@@ -530,7 +532,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "testapp"}
-		opts := autoflags.ConfigOptions{
+		opts := config.Options{
 			FlagName:   "settings",
 			ConfigName: "app-config",
 			EnvVar:     "CUSTOM_CONFIG_VAR",
@@ -557,7 +559,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "my-cli-tool"}
-		opts := autoflags.ConfigOptions{} // AppName should default to root command name
+		opts := config.Options{} // AppName should default to root command name
 
 		err := autoflags.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
@@ -577,7 +579,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		rootCmd := &cobra.Command{Use: "testapp"}
 		childCmd := &cobra.Command{Use: "subcmd"}
 		rootCmd.AddCommand(childCmd)
-		opts := autoflags.ConfigOptions{}
+		opts := config.Options{}
 
 		err := autoflags.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
@@ -603,12 +605,12 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "myapp"}
-		opts := autoflags.ConfigOptions{
+		opts := config.Options{
 			AppName:     "myapp",
 			FlagName:    "config",
 			ConfigName:  "settings",
 			EnvVar:      "MYAPP_SETTINGS",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathHomeHidden, autoflags.SearchPathWorkingDirHidden, autoflags.SearchPathCustom},
+			SearchPaths: []config.SearchPathType{config.SearchPathHomeHidden, config.SearchPathWorkingDirHidden, config.SearchPathCustom},
 			CustomPaths: []string{"/opt/myapp"},
 		}
 
@@ -631,7 +633,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "myapp"}
-		opts := autoflags.ConfigOptions{
+		opts := config.Options{
 			AppName: "myapp",
 		}
 
@@ -656,9 +658,9 @@ func TestSetupConfig_Integration(t *testing.T) {
 		defer teardownTest()
 
 		rootCmd := &cobra.Command{Use: "myapp"}
-		opts := autoflags.ConfigOptions{
+		opts := config.Options{
 			AppName:     "myapp",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom, autoflags.SearchPathHomeHidden},
+			SearchPaths: []config.SearchPathType{config.SearchPathCustom, config.SearchPathHomeHidden},
 			CustomPaths: []string{"/custom/{APP}/path1", "$PWD/path2"},
 		}
 
@@ -799,7 +801,7 @@ tty:
 				rootCmd.SetOut(&buf)
 				rootCmd.SetErr(&buf)
 
-				configOpts := autoflags.ConfigOptions{
+				configOpts := config.Options{
 					AppName: "testapp",
 				}
 
@@ -869,7 +871,7 @@ tty:
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -967,7 +969,7 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -1020,7 +1022,7 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -1085,9 +1087,9 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName:     "testapp",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			SearchPaths: []config.SearchPathType{config.SearchPathCustom},
 			CustomPaths: []string{"/custom/search/path"},
 		}
 
@@ -1155,9 +1157,9 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName:     "testapp",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			SearchPaths: []config.SearchPathType{config.SearchPathCustom},
 			CustomPaths: []string{"/custom/{APP}/path"},
 		}
 
@@ -1225,9 +1227,9 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName:     "testapp",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			SearchPaths: []config.SearchPathType{config.SearchPathCustom},
 			CustomPaths: []string{"$HOME/custom/path"},
 		}
 
@@ -1295,9 +1297,9 @@ jsonlogging: true`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName:     "testapp",
-			SearchPaths: []autoflags.SearchPathType{autoflags.SearchPathCustom},
+			SearchPaths: []config.SearchPathType{config.SearchPathCustom},
 			CustomPaths: []string{"$PWD/path"},
 		}
 
@@ -1365,7 +1367,7 @@ timeout: 30`
 		rootCmd.SetErr(&buf)
 
 		// Use minimal configuration options to test defaults
-		configOpts := autoflags.ConfigOptions{}
+		configOpts := config.Options{}
 
 		err = autoflags.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
@@ -1441,7 +1443,7 @@ timeout: 30`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -1520,7 +1522,7 @@ timeout: 30`
 		rootCmd.SetOut(&buf)
 		rootCmd.SetErr(&buf)
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName:  "myapp",
 			FlagName: "settings-file",
 			EnvVar:   "MYAPP_SETTINGS_FILE",
@@ -1576,7 +1578,7 @@ timeout: 30`
 			},
 		}
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -1627,7 +1629,7 @@ timeout: 30`
 			},
 		}
 
-		configOpts := autoflags.ConfigOptions{
+		configOpts := config.Options{
 			AppName: "testapp",
 		}
 
@@ -1656,7 +1658,7 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 		rootCmd.AddCommand(childCmd)
 
 		// SetupDebug should fail on child command regardless of when it's called
-		err := autoflags.SetupDebug(childCmd, autoflags.DebugOptions{})
+		err := autoflags.SetupDebug(childCmd, debug.Options{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "must be called on the root command")
 	})
@@ -1667,7 +1669,7 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 		rootCmd.AddCommand(childCmd)
 
 		// SetupConfig should fail on child command regardless of when it's called
-		err := autoflags.SetupConfig(childCmd, autoflags.ConfigOptions{})
+		err := autoflags.SetupConfig(childCmd, config.Options{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "must be called on the root command")
 	})
@@ -1709,11 +1711,11 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 	cmd.SetOut(io.Discard)
 	cmd.SetErr(io.Discard)
 
-	debugOpts := autoflags.DebugOptions{
+	debugOpts := debug.Options{
 		FlagName: "debug-mode",
 		EnvVar:   "CUSTOM_DEBUG",
 	}
-	configOpts := autoflags.ConfigOptions{
+	configOpts := config.Options{
 		AppName:    "customapp",
 		FlagName:   "settings",
 		ConfigName: "app-settings",
@@ -1983,10 +1985,10 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 		{
 			name: "SetupDebug_SetupConfig_Define",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
 
@@ -1996,23 +1998,23 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 		{
 			name: "SetupDebug_Define_SetupConfig",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
 				if err := autoflags.Define(cmd, opts); err != nil {
 					return err
 				}
 
-				return autoflags.SetupConfig(cmd, autoflags.ConfigOptions{})
+				return autoflags.SetupConfig(cmd, config.Options{})
 			},
 		},
 		{
 			name: "SetupConfig_SetupDebug_Define",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
 
@@ -2022,14 +2024,14 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 		{
 			name: "SetupConfig_Define_SetupDebug",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
 				if err := autoflags.Define(cmd, opts); err != nil {
 					return err
 				}
 
-				return autoflags.SetupDebug(cmd, autoflags.DebugOptions{})
+				return autoflags.SetupDebug(cmd, debug.Options{})
 			},
 		},
 		{
@@ -2038,11 +2040,11 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 				if err := autoflags.Define(cmd, opts); err != nil {
 					return err
 				}
-				if err := autoflags.SetupDebug(cmd, autoflags.DebugOptions{}); err != nil {
+				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
 
-				return autoflags.SetupConfig(cmd, autoflags.ConfigOptions{})
+				return autoflags.SetupConfig(cmd, config.Options{})
 			},
 		},
 		{
@@ -2051,10 +2053,10 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 				if err := autoflags.Define(cmd, opts); err != nil {
 					return err
 				}
-				if err := autoflags.SetupConfig(cmd, autoflags.ConfigOptions{}); err != nil {
+				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
-				return autoflags.SetupDebug(cmd, autoflags.DebugOptions{})
+				return autoflags.SetupDebug(cmd, debug.Options{})
 			},
 		},
 	}
@@ -2072,12 +2074,12 @@ func TestSetupFunctions_AppNameSync(t *testing.T) {
 	rootCmd := &cobra.Command{Use: "testapp"}
 
 	// Call SetupConfig first
-	err := autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{AppName: "myapp"})
+	err := autoflags.SetupConfig(rootCmd, config.Options{AppName: "myapp"})
 	require.NoError(t, err)
 	assert.Equal(t, "MYAPP", autoflags.EnvPrefix())
 
 	// Call SetupDebug after without app name
-	err = autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
+	err = autoflags.SetupDebug(rootCmd, debug.Options{})
 	require.NoError(t, err)
 	assert.Equal(t, "MYAPP", autoflags.EnvPrefix(), "should use the already set app name")
 }
@@ -2088,12 +2090,12 @@ func TestSetupFunctions_NoPrefix_NoAppName_EmptyCommandName(t *testing.T) {
 	rootCmd := &cobra.Command{Use: ""}
 
 	// Call SetupConfig first
-	err := autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{})
+	err := autoflags.SetupConfig(rootCmd, config.Options{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "couldn't determine the app name")
 
 	// Call SetupDebug after
-	err = autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
+	err = autoflags.SetupDebug(rootCmd, debug.Options{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "couldn't determine the app name")
 }

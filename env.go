@@ -2,22 +2,9 @@ package autoflags
 
 import (
 	"fmt"
-	"reflect"
-	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-)
-
-var (
-	envSep = "_"
-	envRep = strings.NewReplacer("-", envSep, ".", envSep)
-	prefix = ""
-)
-
-const (
-	flagEnvsAnnotation = "___leodido_autoflags_flagenvs"
+	internalenv "github.com/leodido/autoflags/internal/env"
 )
 
 // GetOrSetAppName resolves the app name consistently.
@@ -73,69 +60,15 @@ func GetOrSetAppName(name, cName string) string {
 // The prefix is automatically appended with an underscore when generating environment variable names.
 func SetEnvPrefix(str string) {
 	if str == "" {
-		prefix = ""
+		internalenv.Prefix = ""
 
 		return
 	}
 
-	prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(normEnv(str), envSep), envSep)
+	internalenv.Prefix = fmt.Sprintf("%s%s", strings.TrimSuffix(internalenv.NormEnv(str), internalenv.EnvSep), internalenv.EnvSep)
 }
 
 // EnvPrefix returns the current global environment variable prefix without the trailing underscore.
 func EnvPrefix() string {
-	return strings.TrimSuffix(prefix, envSep)
-}
-
-func normEnv(str string) string {
-	return envRep.Replace(strings.ToUpper(str))
-}
-
-func bindEnv(c *cobra.Command) {
-	s := getScope(c)
-
-	c.Flags().VisitAll(func(f *pflag.Flag) {
-		if envs, defineEnv := f.Annotations[flagEnvsAnnotation]; defineEnv {
-			// Only bind if we haven't already bound this env var for this command
-			if !s.isEnvBound(f.Name) {
-				s.setBound(f.Name)
-				input := []string{f.Name}
-				input = append(input, envs...)
-				s.viper().BindEnv(input...)
-			}
-		}
-	})
-}
-
-func getEnv(f reflect.StructField, inherit bool, path, alias, envPrefix string) ([]string, bool) {
-	ret := []string{}
-
-	env := f.Tag.Get("flagenv")
-	defineEnv, _ := strconv.ParseBool(env)
-
-	if defineEnv || inherit {
-		if f.Type.Kind() != reflect.Struct {
-			envPath := path
-			envAlias := alias
-
-			// Apply env prefix to current env variable
-			// But avoid double prefixing if the given prefix matches the global prefix (usually the CLI/app name)
-			if envPrefix != "" {
-				// Extract app name from prefix (remove trailing underscore and lowercase)
-				appName := strings.ToLower(strings.TrimSuffix(prefix, "_"))
-				if envPrefix != appName {
-					envPath = envPrefix + "." + path
-					if alias != "" {
-						envAlias = envPrefix + "." + alias
-					}
-				}
-			}
-
-			ret = append(ret, prefix+normEnv(envPath))
-			if alias != "" && path != alias {
-				ret = append(ret, prefix+normEnv(envAlias))
-			}
-		}
-	}
-
-	return ret, defineEnv
+	return strings.TrimSuffix(internalenv.Prefix, internalenv.EnvSep)
 }

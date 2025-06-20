@@ -1,4 +1,4 @@
-package autoflags
+package internalhooks
 
 import (
 	"fmt"
@@ -7,12 +7,13 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
+	internalscope "github.com/leodido/autoflags/internal/scope"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
 
 const (
-	flagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
+	FlagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
 )
 
 type DecodeHookFunc func(input any) (any, error)
@@ -22,7 +23,7 @@ type decodingAnnotation struct {
 	fx  mapstructure.DecodeHookFunc
 }
 
-var decodeHookRegistry = map[string]decodingAnnotation{
+var DecodeHookRegistry = map[string]decodingAnnotation{
 	"time.Duration": {
 		"StringToTimeDurationHookFunc",
 		mapstructure.StringToTimeDurationHookFunc(),
@@ -41,24 +42,24 @@ var decodeHookRegistry = map[string]decodingAnnotation{
 	},
 }
 
-// annotationToDecodeHookRegistry maps annotation names to decode hook functions
-var annotationToDecodeHookRegistry map[string]mapstructure.DecodeHookFunc
+// AnnotationToDecodeHookRegistry maps annotation names to decode hook functions
+var AnnotationToDecodeHookRegistry map[string]mapstructure.DecodeHookFunc
 
 func init() {
 	// Map annotations to decoding hook
-	annotationToDecodeHookRegistry = make(map[string]mapstructure.DecodeHookFunc)
-	for typename, data := range decodeHookRegistry {
-		if _, exists := annotationToDecodeHookRegistry[data.ann]; exists {
+	AnnotationToDecodeHookRegistry = make(map[string]mapstructure.DecodeHookFunc)
+	for typename, data := range DecodeHookRegistry {
+		if _, exists := AnnotationToDecodeHookRegistry[data.ann]; exists {
 			panic(fmt.Sprintf("duplicate annotation name '%s' found in decode hook registry (type: %s)", data.ann, typename))
 		}
 
-		annotationToDecodeHookRegistry[data.ann] = data.fx
+		AnnotationToDecodeHookRegistry[data.ann] = data.fx
 	}
 }
 
-func inferDecodeHooks(c *cobra.Command, name, typename string) bool {
-	if data, ok := decodeHookRegistry[typename]; ok {
-		_ = c.Flags().SetAnnotation(name, flagDecodeHookAnnotation, []string{data.ann})
+func InferDecodeHooks(c *cobra.Command, name, typename string) bool {
+	if data, ok := DecodeHookRegistry[typename]; ok {
+		_ = c.Flags().SetAnnotation(name, FlagDecodeHookAnnotation, []string{data.ann})
 
 		return true
 	}
@@ -122,8 +123,8 @@ func StringToIntSliceHookFunc(sep string) mapstructure.DecodeHookFunc {
 	}
 }
 
-func storeDecodeHookFunc(c *cobra.Command, flagname string, decodeM reflect.Value, target reflect.Type) error {
-	s := getScope(c)
+func StoreDecodeHookFunc(c *cobra.Command, flagname string, decodeM reflect.Value, target reflect.Type) error {
+	s := internalscope.Get(c)
 
 	// Wrap that adapts user method to mapstructure.DecodeHookFuncType signature
 	hookFunc := func(from reflect.Type, to reflect.Type, data any) (any, error) {
@@ -154,7 +155,7 @@ func storeDecodeHookFunc(c *cobra.Command, flagname string, decodeM reflect.Valu
 	}
 
 	k := fmt.Sprintf("customDecodeHook_%s_%s", c.Name(), flagname)
-	s.setCustomDecodeHook(k, hookFunc)
+	s.SetCustomDecodeHook(k, hookFunc)
 
-	return c.Flags().SetAnnotation(flagname, flagDecodeHookAnnotation, []string{k})
+	return c.Flags().SetAnnotation(flagname, FlagDecodeHookAnnotation, []string{k})
 }

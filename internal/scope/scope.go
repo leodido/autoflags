@@ -1,4 +1,4 @@
-package autoflags
+package internalscope
 
 import (
 	"context"
@@ -15,8 +15,8 @@ import (
 // autoflagsContextKey is used to store scope in command context
 type autoflagsContextKey struct{}
 
-// scope holds per-command state for autoflags
-type scope struct {
+// Scope holds per-command state for autoflags
+type Scope struct {
 	v                 *spf13viper.Viper
 	boundEnvs         map[string]bool
 	customDecodeHooks map[string]mapstructure.DecodeHookFunc
@@ -24,20 +24,20 @@ type scope struct {
 	mu                sync.RWMutex
 }
 
-// getScope retrieves or creates a scope for the given command
-func getScope(c *cobra.Command) *scope {
+// Get retrieves or creates a scope for the given command
+func Get(c *cobra.Command) *Scope {
 	ctx := c.Context()
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
 	// Check if command already has scope
-	if s, ok := ctx.Value(autoflagsContextKey{}).(*scope); ok {
+	if s, ok := ctx.Value(autoflagsContextKey{}).(*Scope); ok {
 		return s
 	}
 
 	// Create new scope (ensures isolation even with context inheritance)
-	s := &scope{
+	s := &Scope{
 		v:                 spf13viper.New(),
 		boundEnvs:         make(map[string]bool),
 		customDecodeHooks: make(map[string]mapstructure.DecodeHookFunc),
@@ -51,31 +51,31 @@ func getScope(c *cobra.Command) *scope {
 	return s
 }
 
-// viper returns the viper instance for the command
-func (s *scope) viper() *spf13viper.Viper {
+// Viper returns the viper instance for the command
+func (s *Scope) Viper() *spf13viper.Viper {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	return s.v
 }
 
-// isEnvBound checks if an environment variable is already bound for this command
-func (s *scope) isEnvBound(flagName string) bool {
+// IsEnvBound checks if an environment variable is already bound for this command
+func (s *Scope) IsEnvBound(flagName string) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	return s.boundEnvs[flagName]
 }
 
-// setBound marks an environment variable as bound for this command
-func (s *scope) setBound(flagName string) {
+// SetBound marks an environment variable as bound for this command
+func (s *Scope) SetBound(flagName string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.boundEnvs[flagName] = true
 }
 
-// getBoundEnvs is for testing purposes only
-func (s *scope) getBoundEnvs() map[string]bool {
+// GetBoundEnvs is for testing purposes only
+func (s *Scope) GetBoundEnvs() map[string]bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -86,13 +86,13 @@ func (s *scope) getBoundEnvs() map[string]bool {
 	return result
 }
 
-func (s *scope) setCustomDecodeHook(hookName string, hookFunc mapstructure.DecodeHookFunc) {
+func (s *Scope) SetCustomDecodeHook(hookName string, hookFunc mapstructure.DecodeHookFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.customDecodeHooks[hookName] = hookFunc
 }
 
-func (s *scope) getCustomDecodeHook(hookName string) (hookFunc mapstructure.DecodeHookFunc, ok bool) {
+func (s *Scope) GetCustomDecodeHook(hookName string) (hookFunc mapstructure.DecodeHookFunc, ok bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	hookFunc, ok = s.customDecodeHooks[hookName]
@@ -100,8 +100,8 @@ func (s *scope) getCustomDecodeHook(hookName string) (hookFunc mapstructure.Deco
 	return
 }
 
-// addDefinedFlag adds a flag to the set of defined flags for this scope, returning an error if it's a duplicate.
-func (s *scope) addDefinedFlag(name, fieldPath string) error {
+// AddDefinedFlag adds a flag to the set of defined flags for this scope, returning an error if it's a duplicate.
+func (s *Scope) AddDefinedFlag(name, fieldPath string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

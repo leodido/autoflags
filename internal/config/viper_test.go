@@ -1,11 +1,28 @@
-package autoflags
+package internalconfig
 
 import (
+	"testing"
+
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
 
-func newTestCmd(path string) *cobra.Command {
+type autoflagsSuite struct {
+	suite.Suite
+}
+
+func TestAutoflagsSuite(t *testing.T) {
+	suite.Run(t, new(autoflagsSuite))
+}
+
+func (suite *autoflagsSuite) SetupTest() {
+	// Reset viper state before each test to prevent test pollution
+	viper.Reset()
+}
+
+func (suite *autoflagsSuite) createTestC(path string) *cobra.Command {
 	rootC := &cobra.Command{Use: "app"}
 	parentC := rootC
 	ret := &cobra.Command{Use: path}
@@ -14,21 +31,21 @@ func newTestCmd(path string) *cobra.Command {
 	return ret
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_EmptyGlobalSettings() {
+func (suite *autoflagsSuite) TestMergeC_EmptyGlobalSettings() {
 	globalSettings := map[string]any{}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	assert.Empty(suite.T(), result, "should return empty map when global settings are empty")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
+func (suite *autoflagsSuite) TestMergeC_MissingCommandSection() {
 	globalSettings := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel":    "debug",
@@ -37,7 +54,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_MissingCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should include only top-level settings when command section is missing")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
+func (suite *autoflagsSuite) TestMergeC_WithCommandSection() {
 	globalSettings := map[string]any{
 		"loglevel":    "debug",
 		"jsonlogging": true,
@@ -47,7 +64,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
 		},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel":    "debug",
@@ -58,14 +75,14 @@ func (suite *autoflagsSuite) TestCreateConfigC_WithCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should merge top-level settings with promoted command-specific settings")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
+func (suite *autoflagsSuite) TestMergeC_CommandSectionNotMap() {
 	globalSettings := map[string]any{
 		"loglevel": "debug",
 		"dns":      "invalid-not-a-map",
 		"tty":      42,
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel": "debug",
@@ -75,7 +92,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionNotMap() {
 	assert.Equal(suite.T(), expected, result, "should include command section as-is when it's not a map")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel() {
+func (suite *autoflagsSuite) TestMergeC_CommandSectionOverridesTopLevel() {
 	globalSettings := map[string]any{
 		"freeze":   false,
 		"loglevel": "info",
@@ -86,7 +103,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel()
 		},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"freeze":   true,             // from dns section
@@ -96,7 +113,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_CommandSectionOverridesTopLevel()
 	assert.Equal(suite.T(), expected, result, "command-specific settings should override top-level settings")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
+func (suite *autoflagsSuite) TestMergeC_MultipleCommandSections() {
 	globalSettings := map[string]any{
 		"loglevel": "info",
 		"dns": map[string]any{
@@ -107,7 +124,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 		},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel": "info",
@@ -117,7 +134,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_MultipleCommandSections() {
 	assert.Equal(suite.T(), expected, result, "should only include the specific command section, excluding other command sections")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
+func (suite *autoflagsSuite) TestMergeC_NestedCommandConfigurations() {
 	globalSettings := map[string]any{
 		"shared-setting": "value",
 		"dns": map[string]any{
@@ -128,7 +145,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 		},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"shared-setting": "value",
@@ -140,13 +157,13 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedCommandConfigurations() {
 	assert.Equal(suite.T(), expected, result, "should preserve nested structures within command sections")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
+func (suite *autoflagsSuite) TestMergeC_EmptyCommandSection() {
 	globalSettings := map[string]any{
 		"loglevel": "debug",
 		"dns":      map[string]any{},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel": "debug",
@@ -154,13 +171,13 @@ func (suite *autoflagsSuite) TestCreateConfigC_EmptyCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should handle empty command sections gracefully")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
+func (suite *autoflagsSuite) TestMergeC_NilCommandSection() {
 	globalSettings := map[string]any{
 		"loglevel": "debug",
 		"dns":      nil,
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"loglevel": "debug",
@@ -169,7 +186,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NilCommandSection() {
 	assert.Equal(suite.T(), expected, result, "should handle nil command sections as non-maps")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
+func (suite *autoflagsSuite) TestMergeC_TypeConflicts() {
 	globalSettings := map[string]any{
 		"timeout": "30s", // string at top level
 		"dns": map[string]any{
@@ -177,7 +194,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
 		},
 	}
 
-	result := createConfigC(globalSettings, newTestCmd("dns"))
+	result := Merge(globalSettings, suite.createTestC("dns"))
 
 	expected := map[string]any{
 		"timeout": 30, // command section wins
@@ -185,7 +202,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_TypeConflicts() {
 	assert.Equal(suite.T(), expected, result, "command section should override top-level even with type conflicts")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommand() {
+func (suite *autoflagsSuite) TestMergeC_NestedSubcommand() {
 	globalSettings := map[string]any{
 		"toplevel": true,
 		"usr": map[string]any{
@@ -203,7 +220,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommand() {
 	rootCmd.AddCommand(usrCmd)
 	usrCmd.AddCommand(addCmd)
 
-	result := createConfigC(globalSettings, addCmd)
+	result := Merge(globalSettings, addCmd)
 
 	expected := map[string]any{
 		"toplevel": true,
@@ -213,7 +230,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommand() {
 	assert.Equal(suite.T(), expected, result, "should merge top-level and deepest subcommand settings, ignoring intermediate")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommandFallback() {
+func (suite *autoflagsSuite) TestMergeC_NestedSubcommandFallback() {
 	globalSettings := map[string]any{
 		"toplevel": true,
 		"usr": map[string]any{
@@ -229,7 +246,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommandFallback() {
 	rootCmd.AddCommand(usrCmd)
 	usrCmd.AddCommand(addCmd)
 
-	result := createConfigC(globalSettings, addCmd)
+	result := Merge(globalSettings, addCmd)
 
 	// Fallback only from root level settings
 	// Since 'add' is empty, it should not override the parent's settings
@@ -239,7 +256,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommandFallback() {
 	assert.Equal(suite.T(), expected, result, "should use the deepest path found, even if empty, not parent's settings")
 }
 
-func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommandFallbackFromParent() {
+func (suite *autoflagsSuite) TestMergeC_NestedSubcommandFallbackFromParent() {
 	globalSettings := map[string]any{
 		"toplevel": true,
 		"usr": map[string]any{
@@ -256,7 +273,7 @@ func (suite *autoflagsSuite) TestCreateConfigC_NestedSubcommandFallbackFromParen
 	rootCmd.AddCommand(usrCmd)
 	usrCmd.AddCommand(deleteCmd)
 
-	result := createConfigC(globalSettings, deleteCmd)
+	result := Merge(globalSettings, deleteCmd)
 
 	// Since 'usr.delete' doesn't exist, nor top-level config keys for 'delete' exist...
 	expected := map[string]any{

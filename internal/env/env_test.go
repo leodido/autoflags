@@ -1,11 +1,47 @@
-package autoflags
+package internalenv_test
 
 import (
 	"testing"
 
+	"github.com/leodido/autoflags"
+	internalenv "github.com/leodido/autoflags/internal/env"
+	internalscope "github.com/leodido/autoflags/internal/scope"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/suite"
 )
+
+type autoflagsSuite struct {
+	suite.Suite
+}
+
+func TestAutoflagsSuite(t *testing.T) {
+	suite.Run(t, new(autoflagsSuite))
+}
+
+func (suite *autoflagsSuite) SetupTest() {
+	// Reset viper state before each test to prevent test pollution
+	viper.Reset()
+	// Reset global prefix
+	autoflags.SetEnvPrefix("")
+}
+
+// createTestC creates a command with flags that have environment annotations
+func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][]string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use: name,
+	}
+
+	for flagName, envVars := range flagsWithEnvs {
+		cmd.Flags().String(flagName, "", "test flag")
+		if len(envVars) > 0 {
+			_ = cmd.Flags().SetAnnotation(flagName, internalenv.FlagAnnotation, envVars)
+		}
+	}
+
+	return cmd
+}
 
 func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
 	cmd := suite.createTestC("dns", map[string][]string{
@@ -13,11 +49,11 @@ func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
 		"cgroup": {"S4SONIC_DNS_CGROUP"},
 	})
 
-	bindEnv(cmd)
+	internalenv.BindEnv(cmd)
 
 	// Get the scope and check bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
+	scope := internalscope.Get(cmd)
+	boundEnvs := scope.GetBoundEnvs()
 
 	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should be marked as bound")
 	assert.True(suite.T(), boundEnvs["cgroup"], "cgroup flag should be marked as bound")
@@ -30,18 +66,18 @@ func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 	})
 
 	// First call
-	bindEnv(cmd)
+	internalenv.BindEnv(cmd)
 
 	// Add a new flag to simulate second call (like dnsOpts.Attach after commonOpts.Attach)
 	cmd.Flags().String("new-flag", "", "new test flag")
-	_ = cmd.Flags().SetAnnotation("new-flag", flagEnvsAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
+	_ = cmd.Flags().SetAnnotation("new-flag", internalenv.FlagAnnotation, []string{"S4SONIC_DNS_NEW_FLAG"})
 
 	// Second call should not bind existing flags again, but should bind new flag
-	bindEnv(cmd)
+	internalenv.BindEnv(cmd)
 
 	// Check bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
+	scope := internalscope.Get(cmd)
+	boundEnvs := scope.GetBoundEnvs()
 
 	// Check that existing flags are still marked as bound (no duplicates)
 	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should remain bound")
@@ -60,16 +96,16 @@ func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
 	})
 
 	// Bind for both commands
-	bindEnv(dnsCmd)
-	bindEnv(ttyCmd)
+	internalenv.BindEnv(dnsCmd)
+	internalenv.BindEnv(ttyCmd)
 
 	// Both commands should have their flags bound independently
-	dnsScope := getScope(dnsCmd)
-	dnsBoundEnvs := dnsScope.getBoundEnvs()
+	dnsScope := internalscope.Get(dnsCmd)
+	dnsBoundEnvs := dnsScope.GetBoundEnvs()
 	assert.True(suite.T(), dnsBoundEnvs["freeze"], "dns freeze flag should be bound")
 
-	ttyScope := getScope(ttyCmd)
-	ttyBoundEnvs := ttyScope.getBoundEnvs()
+	ttyScope := internalscope.Get(ttyCmd)
+	ttyBoundEnvs := ttyScope.GetBoundEnvs()
 	assert.True(suite.T(), ttyBoundEnvs["freeze"], "tty freeze flag should be bound")
 
 	// Commands should be isolated - verify they have separate scopes
@@ -84,11 +120,11 @@ func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 		"no-env": {},                     // No env annotation
 	})
 
-	bindEnv(cmd)
+	internalenv.BindEnv(cmd)
 
 	// Only flags with env annotations should be tracked
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
+	scope := internalscope.Get(cmd)
+	boundEnvs := scope.GetBoundEnvs()
 
 	assert.True(suite.T(), boundEnvs["freeze"], "freeze flag should be bound")
 	assert.False(suite.T(), boundEnvs["no-env"], "no-env flag should not be bound")
@@ -98,11 +134,11 @@ func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
 	cmd := &cobra.Command{Use: "empty"}
 
 	// Should not panic with empty command
-	bindEnv(cmd)
+	internalenv.BindEnv(cmd)
 
 	// Should have scope but no bound envs
-	scope := getScope(cmd)
-	boundEnvs := scope.getBoundEnvs()
+	scope := internalscope.Get(cmd)
+	boundEnvs := scope.GetBoundEnvs()
 
 	assert.NotNil(suite.T(), scope, "empty command should have a scope")
 	assert.Empty(suite.T(), boundEnvs, "empty command should have no bound flags")
@@ -119,7 +155,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 	}{
 		{
 			descr:          "provided name with no existing prefix",
-			setup:          func() { SetEnvPrefix("") },
+			setup:          func() { autoflags.SetEnvPrefix("") },
 			name:           "myapp",
 			cName:          "cmd",
 			expected:       "myapp",
@@ -127,7 +163,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "fallback to command name",
-			setup:          func() { SetEnvPrefix("") },
+			setup:          func() { autoflags.SetEnvPrefix("") },
 			name:           "",
 			cName:          "mycmd",
 			expected:       "mycmd",
@@ -135,7 +171,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "no given app name, use existing prefix",
-			setup:          func() { SetEnvPrefix("already-existing") },
+			setup:          func() { autoflags.SetEnvPrefix("already-existing") },
 			name:           "",
 			cName:          "cmd",
 			expected:       "ALREADY_EXISTING",
@@ -143,7 +179,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "no prefix, no given app name, no command name",
-			setup:          func() { SetEnvPrefix("") },
+			setup:          func() { autoflags.SetEnvPrefix("") },
 			name:           "",
 			cName:          "",
 			expected:       "",
@@ -151,7 +187,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "prefix, no given app name, no command name",
-			setup:          func() { SetEnvPrefix("prepre") },
+			setup:          func() { autoflags.SetEnvPrefix("prepre") },
 			name:           "",
 			cName:          "",
 			expected:       "PREPRE",
@@ -159,7 +195,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "uppercase prefix, no given app name, no command name",
-			setup:          func() { SetEnvPrefix("UPPERC") },
+			setup:          func() { autoflags.SetEnvPrefix("UPPERC") },
 			name:           "",
 			cName:          "",
 			expected:       "UPPERC",
@@ -170,9 +206,9 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 	for _, tt := range tests {
 		suite.T().Run(tt.descr, func(t *testing.T) {
 			tt.setup()
-			result := GetOrSetAppName(tt.name, tt.cName)
+			result := autoflags.GetOrSetAppName(tt.name, tt.cName)
 			assert.Equal(t, tt.expected, result)
-			assert.Equal(t, tt.expectedPrefix, EnvPrefix())
+			assert.Equal(t, tt.expectedPrefix, autoflags.EnvPrefix())
 		})
 	}
 }
