@@ -220,6 +220,54 @@ rootC.PersistentPreRunE = func(c *cobra.Command, args []string) error {
 }
 ```
 
+#### 📜 Configuration Is First-Class Citizen
+
+Configuration can mirror your command hierarchy.
+
+Settings can be global (at the top level) or specific to a command or subcommand. The most specific section always takes precedence.
+
+```yaml
+# Global settings apply to all commands unless overridden by a specific section.
+# `dryrun` matches the `DryRun` struct field name.
+dryrun: true
+verbose: 1 # A default verbosity level for all commands.
+
+# Config for the `srv` command (`full srv`)
+srv:
+  # `port` matches the `Port` field name.
+  port: 8433
+  # `log-level` matches the `flag:"log-level"` tag.
+  log-level: "warn"
+  # `logfile` matches the `LogFile` field name.
+  logfile: /var/log/mysrv.log
+
+  # Flattened keys can set options in nested structs.
+  # `db-url` (from `flag:"db-url"` tag) maps to ServerOptions.Database.URL.
+  db-url: "postgres://user:pass@db/prod"
+
+# Config for the `usr` command group.
+usr:
+  # This nested section matches the `usr add` command (`full usr add`).
+  # Its settings are ONLY applied to 'usr add'.
+  add:
+    name: "Config User"
+    email: "config.user@example.com"
+    age: 42
+	# Command specific override
+	dry: false
+
+# NOTE: Per the library's design, there is no other fallback other than from the top-level.
+# A command like 'usr delete' would ONLY use the global keys above (if those keys/flags are attached to it),
+# as an exact 'usr.delete' section is not defined.
+```
+
+This configuration system supports:
+
+- **Hierarchical Structure**: Nest keys to match your command path (e.g., `usr: { add: { ... } }`).
+- **Strict Precedence**: Only settings from the global scope and the exact command path section are merged. There is no automatic fallback to parent command sections.
+- **Flexible Keys**: Use either the struct field name (`lowercase(DryRun)`) or the flag tag (`flag:"log-level"`) as keys.
+- **Flattened Keys**: Set options in nested structs easily using a single, flattened key (e.g., `db-url`).
+
 ### ✅ Built-in Validation & Transformation
 
 Supports validation, transformation, and custom flag type definitions through simple interfaces.
@@ -283,7 +331,7 @@ The pattern allows you to:
 - Initialize "computed state" (like a logger) based on those options.
 - Share this single, fully-prepared "source of truth" with any subcommand that needs it.
 
-#### In a Nutshell
+#### 🍩 In a Nutshell
 
 Create a shared struct that implements the `ContextOptions` interface. This struct will hold both the configuration flags and the computed state (e.g., the logger).
 
@@ -396,15 +444,6 @@ func (o *ServerOptions) Attach(c *cobra.Command) error {
 In [values](/values/values.go) we provide `pflag.Value` implementations for standard types.
 
 See [full example](examples/full/cli/cli.go) for more details.
-
-### 📜 Configuration Is First-Class Citizen
-
-```yaml
-# Global settings
-# Command-specific overrides
-```
-
-TODO: complete
 
 ### 🎨 Beautiful, Organized Help Output
 
