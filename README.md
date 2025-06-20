@@ -193,7 +193,7 @@ The prefix of the environment variable name is the CLI name plus the command nam
 Easily set up configuration file discovery (flag, environment variable, and fallback paths) with a single line of code.
 
 ```go
-autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{AppName: "full"})
+autoflags.SetupConfig(rootCmd, config.Options{AppName: "full"})
 ```
 
 The line above:
@@ -297,7 +297,7 @@ See a full working example [here](examples/full/cli/cli.go).
 Create a `--debug-options` flag (plus a `FULL_DEBUG_OPTIONS` env var) for troubleshooting config/env/flags resolution.
 
 ```go
-autoflags.SetupDebug(rootCmd, autoflags.DebugOptions{})
+autoflags.SetupDebug(rootCmd, debug.Options{})
 ```
 
 ```bash
