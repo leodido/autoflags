@@ -21,12 +21,15 @@ func GetViper(c *cobra.Command) *viper.Viper {
 	return s.viper()
 }
 
-// createConfigC creates a configuration map for a specific command by merging
-// top-level settings with command-specific settings from the global configuration.
-func createConfigC(globalSettings map[string]any, commandName string) map[string]any {
+// createConfigC creates a configuration map for a specific command.
+//
+// It merges the top-level settings with command-specific settings (which can be nested) from the global configuration.
+func createConfigC(globalSettings map[string]any, c *cobra.Command) map[string]any {
 	configToMerge := make(map[string]any)
 
-	// First, add all top-level settings (for root command and shared config)
+	// First, add all top-level settings
+	// This is for root command
+	// It also serves as defaults that can be overridden by more specific command sections
 	for key, value := range globalSettings {
 		// Skip command-specific sections to avoid conflicts
 		if _, isMap := value.(map[string]any); !isMap {
@@ -34,13 +37,33 @@ func createConfigC(globalSettings map[string]any, commandName string) map[string
 		}
 	}
 
-	// Then, if there's a command-specific section, promote its contents to top level
-	if commandSettings, exists := globalSettings[commandName]; exists {
-		if commandMap, ok := commandSettings.(map[string]any); ok {
-			for key, value := range commandMap {
-				configToMerge[key] = value
+	var finalSettings map[string]any
+	subpathC := strings.Split(c.CommandPath(), " ")[1:]
+	currentLevel := globalSettings
+
+	for _, part := range subpathC {
+		if settings, ok := currentLevel[part]; ok {
+			if settingsMap, isMap := settings.(map[string]any); isMap {
+				// Move one level deeper for the next iteration
+				currentLevel = settingsMap
+				// Store the current level's settings as the most specific found so far
+				finalSettings = settingsMap
+			} else {
+				// The path is broken by a non-map value, so we stop.
+				finalSettings = nil // Invalidate to avoid merging partial path
+
+				break
 			}
+		} else {
+			// The path does not exist in the config, so we stop.
+			finalSettings = nil // Invalidate
+
+			break
 		}
+	}
+
+	for key, value := range finalSettings {
+		configToMerge[key] = value
 	}
 
 	return configToMerge
@@ -55,7 +78,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	vip := scope.viper()
 
 	// Merging the config map (if any) from the global viper singleton instance
-	configToMerge := createConfigC(viper.AllSettings(), c.Name())
+	configToMerge := createConfigC(viper.AllSettings(), c)
 	vip.MergeConfigMap(configToMerge)
 
 	// Create the full alias-to-path map from its global cache

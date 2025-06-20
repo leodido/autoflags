@@ -233,7 +233,8 @@ func makeUsrC() *cobra.Command {
 	}
 
 	opts.Attach(addC)
-	// commonOpts.Attach(addC)
+	commonOpts.Attach(addC)
+
 	usrC.AddCommand(addC)
 	// Setup of the usage text happens at autoflags.Define
 	// For the `usr` command we do it explicitly since it has no local flags
