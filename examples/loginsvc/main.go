@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/leodido/autoflags"
+	"github.com/leodido/autoflags/config"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -232,7 +233,7 @@ func NewRootCmd() (*cobra.Command, error) {
 
 	rootCmd.AddCommand(makeUserCmd())
 
-	if err := autoflags.SetupConfig(rootCmd, autoflags.ConfigOptions{}); err != nil {
+	if err := autoflags.SetupConfig(rootCmd, config.Options{}); err != nil {
 		return nil, err
 	}
 	return rootCmd, nil

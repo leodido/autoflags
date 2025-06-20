@@ -1,4 +1,4 @@
-package autoflags
+package internalscope_test
 
 import (
 	"context"
@@ -8,7 +8,9 @@ import (
 	"testing"
 	"time"
 
-	autoflagstesting "github.com/leodido/autoflags/testing"
+	"github.com/leodido/autoflags"
+	internalscope "github.com/leodido/autoflags/internal/scope"
+	internaltesting "github.com/leodido/autoflags/internal/testing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -26,7 +28,7 @@ func TestConcurrentCommandCreation(t *testing.T) {
 	const numCommandsPerGoroutine = 10
 
 	var wg sync.WaitGroup
-	results := make(chan *scope, numGoroutines*numCommandsPerGoroutine)
+	results := make(chan *internalscope.Scope, numGoroutines*numCommandsPerGoroutine)
 
 	// Create commands concurrently
 	for i := 0; i < numGoroutines; i++ {
@@ -40,10 +42,10 @@ func TestConcurrentCommandCreation(t *testing.T) {
 				opts := &TestOptions{Value: cmdName}
 
 				// This should be thread-safe
-				Define(cmd, opts)
+				autoflags.Define(cmd, opts)
 
 				// Get the scope and send it to results
-				scope := getScope(cmd)
+				scope := internalscope.Get(cmd)
 				results <- scope
 			}
 		}(i)
@@ -54,7 +56,7 @@ func TestConcurrentCommandCreation(t *testing.T) {
 	close(results)
 
 	// Collect all scopes
-	scopes := make([]*scope, 0, numGoroutines*numCommandsPerGoroutine)
+	scopes := make([]*internalscope.Scope, 0, numGoroutines*numCommandsPerGoroutine)
 	for scope := range results {
 		scopes = append(scopes, scope)
 	}
@@ -63,7 +65,7 @@ func TestConcurrentCommandCreation(t *testing.T) {
 	assert.Len(t, scopes, numGoroutines*numCommandsPerGoroutine)
 
 	// Verify all scopes are unique (no shared state)
-	scopeSet := make(map[*scope]bool)
+	scopeSet := make(map[*internalscope.Scope]bool)
 	for _, scope := range scopes {
 		assert.NotNil(t, scope)
 		assert.False(t, scopeSet[scope], "Found duplicate scope - indicates shared state")
@@ -73,7 +75,7 @@ func TestConcurrentCommandCreation(t *testing.T) {
 	// Verify each scope has its own viper instance
 	viperSet := make(map[*viper.Viper]bool)
 	for _, scope := range scopes {
-		viper := scope.viper()
+		viper := scope.Viper()
 		assert.NotNil(t, viper)
 		assert.False(t, viperSet[viper], "Found duplicate viper instance - indicates shared state")
 		viperSet[viper] = true
@@ -89,29 +91,29 @@ func TestCommandIsolation(t *testing.T) {
 		opts1 := &TestOptions{Value: "value1"}
 		opts2 := &TestOptions{Value: "value2"}
 
-		Define(cmd1, opts1)
-		Define(cmd2, opts2)
+		autoflags.Define(cmd1, opts1)
+		autoflags.Define(cmd2, opts2)
 
-		scope1 := getScope(cmd1)
-		scope2 := getScope(cmd2)
+		scope1 := internalscope.Get(cmd1)
+		scope2 := internalscope.Get(cmd2)
 
 		// Should have different scopes despite same command name
 		assert.NotSame(t, scope1, scope2, "Commands with same name should have different scopes")
 
 		// Should have different viper instances
-		viper1 := scope1.viper()
-		viper2 := scope2.viper()
+		viper1 := scope1.Viper()
+		viper2 := scope2.Viper()
 		assert.NotSame(t, viper1, viper2, "Commands should have different viper instances")
 
 		// Get initial state of second scope
-		initialBoundEnvs2 := scope2.getBoundEnvs()
+		initialBoundEnvs2 := scope2.GetBoundEnvs()
 
 		// Modify one scope's boundEnvs
-		scope1.setBound("test-flag")
+		scope1.SetBound("test-flag")
 
 		// Verify isolation
-		updatedBoundEnvs1 := scope1.getBoundEnvs()
-		updatedBoundEnvs2 := scope2.getBoundEnvs()
+		updatedBoundEnvs1 := scope1.GetBoundEnvs()
+		updatedBoundEnvs2 := scope2.GetBoundEnvs()
 
 		assert.True(t, updatedBoundEnvs1["test-flag"], "First scope should have bound env")
 		assert.False(t, updatedBoundEnvs2["test-flag"], "Second scope should not have bound env")
@@ -130,11 +132,11 @@ func TestCommandIsolation(t *testing.T) {
 		}
 		childCmd.SetContext(parentCtx)
 
-		Define(parentCmd, &TestOptions{})
-		Define(childCmd, &TestOptions{})
+		autoflags.Define(parentCmd, &TestOptions{})
+		autoflags.Define(childCmd, &TestOptions{})
 
-		parentScope := getScope(parentCmd)
-		childScope := getScope(childCmd)
+		parentScope := internalscope.Get(parentCmd)
+		childScope := internalscope.Get(childCmd)
 
 		// Even with context inheritance, should get different scopes
 		assert.NotSame(t, parentScope, childScope, "Child command should have different scope than parent")
@@ -143,18 +145,18 @@ func TestCommandIsolation(t *testing.T) {
 	// Test concurrent access to same command
 	t.Run("concurrent_same_command", func(t *testing.T) {
 		cmd := &cobra.Command{Use: "concurrent"}
-		Define(cmd, &TestOptions{})
+		autoflags.Define(cmd, &TestOptions{})
 
 		const numGoroutines = 50
 		var wg sync.WaitGroup
-		scopes := make([]*scope, numGoroutines)
+		scopes := make([]*internalscope.Scope, numGoroutines)
 
 		// Multiple goroutines getting scope from same command
 		for i := 0; i < numGoroutines; i++ {
 			wg.Add(1)
 			go func(index int) {
 				defer wg.Done()
-				scopes[index] = getScope(cmd)
+				scopes[index] = internalscope.Get(cmd)
 			}(i)
 		}
 
@@ -171,7 +173,7 @@ func TestCommandIsolation(t *testing.T) {
 }
 
 func TestMemoryCleanup(t *testing.T) {
-	if autoflagstesting.IsRaceOn() {
+	if internaltesting.IsRaceOn() {
 		t.Skip("Skipping memory test when race detector is on")
 	}
 	// This test verifies the pattern works and doesn't accumulate excessive memory
@@ -191,16 +193,16 @@ func TestMemoryCleanup(t *testing.T) {
 		cmd := &cobra.Command{Use: fmt.Sprintf("test%d", i)}
 		opts := &TestOptions{Value: fmt.Sprintf("value%d", i)}
 
-		Define(cmd, opts)
-		scope := getScope(cmd)
+		autoflags.Define(cmd, opts)
+		scope := internalscope.Get(cmd)
 
 		// Verify scope is created
 		assert.NotNil(t, scope)
-		assert.NotNil(t, scope.viper())
+		assert.NotNil(t, scope.Viper())
 
 		// Verify scope isolation by adding some data
-		scope.setBound(fmt.Sprintf("test-env-%d", i))
-		boundEnvs := scope.getBoundEnvs()
+		scope.SetBound(fmt.Sprintf("test-env-%d", i))
+		boundEnvs := scope.GetBoundEnvs()
 		assert.True(t, boundEnvs[fmt.Sprintf("test-env-%d", i)])
 
 		// Command and scope go out of scope here

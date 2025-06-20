@@ -253,8 +253,8 @@ usr:
     name: "Config User"
     email: "config.user@example.com"
     age: 42
-	# Command specific override
-	dry: false
+    # Command specific override
+    dry: false
 
 # NOTE: Per the library's design, there is no other fallback other than from the top-level.
 # A command like 'usr delete' would ONLY use the global keys above (if those keys/flags are attached to it),

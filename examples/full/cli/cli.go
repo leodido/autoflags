@@ -10,6 +10,8 @@ import (
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
 	"github.com/leodido/autoflags"
+	"github.com/leodido/autoflags/config"
+	"github.com/leodido/autoflags/debug"
 	"github.com/leodido/autoflags/values"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -319,11 +321,11 @@ func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 	rootC.AddCommand(makeUsrC())
 
 	// This single line enables the configuration file support
-	if err := autoflags.SetupConfig(rootC, autoflags.ConfigOptions{AppName: "full"}); err != nil {
+	if err := autoflags.SetupConfig(rootC, config.Options{AppName: "full"}); err != nil {
 		return nil, err
 	}
 	// This single line enables the debugging global flag
-	if err := autoflags.SetupDebug(rootC, autoflags.DebugOptions{Exit: exitOnDebug}); err != nil {
+	if err := autoflags.SetupDebug(rootC, debug.Options{Exit: exitOnDebug}); err != nil {
 		return nil, err
 	}
 

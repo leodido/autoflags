@@ -1,4 +1,4 @@
-package autoflags
+package internalusage
 
 import (
 	"github.com/spf13/cobra"
@@ -11,7 +11,7 @@ var (
 )
 
 const (
-	flagGroupAnnotation = "___leodido_autoflags_flaggroups"
+	FlagGroupAnnotation = "___leodido_autoflags_flaggroups"
 )
 
 // Groups returns a map of flag groups for the given command.
@@ -34,7 +34,7 @@ func Groups(c *cobra.Command) map[string]*pflag.FlagSet {
 		if len(f.Annotations) == 0 {
 			addTo(f, localGroupID)
 		} else {
-			if annotations, ok := f.Annotations[flagGroupAnnotation]; ok {
+			if annotations, ok := f.Annotations[FlagGroupAnnotation]; ok {
 				g := annotations[0]
 				if groups[g] == nil {
 					groups[g] = pflag.NewFlagSet(c.Name(), pflag.ContinueOnError)

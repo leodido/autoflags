@@ -3,13 +3,18 @@ package autoflags
 import (
 	"fmt"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"unsafe"
 
-	autoflagserrors "github.com/leodido/autoflags/errors"
+	internalenv "github.com/leodido/autoflags/internal/env"
+	internalhooks "github.com/leodido/autoflags/internal/hooks"
+	internalpath "github.com/leodido/autoflags/internal/path"
+	internalreflect "github.com/leodido/autoflags/internal/reflect"
+	internaltag "github.com/leodido/autoflags/internal/tag"
+	internalusage "github.com/leodido/autoflags/internal/usage"
+	internalvalidation "github.com/leodido/autoflags/internal/validation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -59,7 +64,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	}
 
 	// Run input validation (on by default)
-	if err := validateStruct(c, o); err != nil {
+	if err := internalvalidation.Struct(c, o); err != nil {
 		return err
 	}
 
@@ -72,7 +77,7 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 	// Bind flag values to struct field values
 	v.BindPFlags(c.Flags())
 	// Bind environment
-	bindEnv(c)
+	internalenv.BindEnv(c)
 	// Generate the usage message
 	SetupUsage(c)
 
@@ -81,9 +86,9 @@ func Define(c *cobra.Command, o Options, defineOpts ...DefineOption) error {
 
 func define(c *cobra.Command, o any, startingGroup string, structPath string, exclusions map[string]string, defineEnv bool, mandatory bool) error {
 	// Assuming validation already caught untyped nils...
-	val := getValue(o)
+	val := internalreflect.GetValue(o)
 	if !val.IsValid() {
-		val = getValue(getValuePtr(o).Interface())
+		val = internalreflect.GetValue(internalreflect.GetValuePtr(o).Interface())
 	}
 
 	for i := range val.NumField() {
@@ -99,7 +104,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		f := val.Type().Field(i)
-		path := getFieldPath(structPath, f)
+		path := internalpath.GetFieldPath(structPath, f)
 
 		// Check exclusions for struct path with command name validation (case-insensitive)
 		if cname, ok := exclusions[path]; ok && c.Name() == cname {
@@ -126,7 +131,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		if startingGroup != "" {
 			group = startingGroup
 		}
-		name := getName(path, alias)
+		name := internalpath.GetName(path, alias)
 
 		// Determine whether to represent hierarchy with the command name
 		// We assume that options that are not context options are subcommand-specific options
@@ -135,8 +140,8 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 			cName = c.Name()
 		}
 
-		envs, defineEnv := getEnv(f, defineEnv, path, alias, cName)
-		mandatory := isMandatory(f) || mandatory
+		envs, defineEnv := internalenv.GetEnv(f, defineEnv, path, alias, cName)
+		mandatory := internaltag.IsMandatory(f) || mandatory
 
 		kind := f.Type.Kind()
 
@@ -146,7 +151,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 			defineHookName := fmt.Sprintf("Define%s", f.Name)
 			decodeHookName := fmt.Sprintf("Decode%s", f.Name)
 
-			if structPtr := getValuePtr(o); structPtr.IsValid() {
+			if structPtr := internalreflect.GetValuePtr(o); structPtr.IsValid() {
 				defineHookFunc := structPtr.MethodByName(defineHookName)
 				decodeHookFunc := structPtr.MethodByName(decodeHookName)
 
@@ -165,7 +170,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 					c.Flags().VarP(returnedValue, name, short, returnedUsage)
 
 					// Register user's decode hook (`Unmarshal` will call it)
-					if err := storeDecodeHookFunc(c, name, decodeHookFunc, f.Type); err != nil {
+					if err := internalhooks.StoreDecodeHookFunc(c, name, decodeHookFunc, f.Type); err != nil {
 						return fmt.Errorf("couldn't register decode hook %s: %w", decodeHookName, err)
 					}
 
@@ -173,8 +178,8 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 				}
 				// The users set `flagcustom:"true"` but they didn't define a custom define hook
 				// We fallback to look up the hooks registries to avoid erroring out
-				if inferDefineHooks(c, name, short, descr, f, field) {
-					inferDecodeHooks(c, name, f.Type.String())
+				if internalhooks.InferDefineHooks(c, name, short, descr, f, field) {
+					internalhooks.InferDecodeHooks(c, name, f.Type.String())
 
 					goto definition_done
 				}
@@ -185,8 +190,8 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		// Check registry for known custom types
-		if inferDefineHooks(c, name, short, descr, f, field) {
-			if !inferDecodeHooks(c, name, f.Type.String()) {
+		if internalhooks.InferDefineHooks(c, name, short, descr, f, field) {
+			if !internalhooks.InferDecodeHooks(c, name, f.Type.String()) {
 				return fmt.Errorf("internal error: missing decode hook for built-in type %s", f.Type.String())
 			}
 
@@ -194,7 +199,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		// Skip custom types that aren't in registry
-		if !isStandardType(f.Type) && kind != reflect.Struct && kind != reflect.Slice {
+		if !internaltag.IsStandardType(f.Type) && kind != reflect.Struct && kind != reflect.Slice {
 			continue
 		}
 
@@ -301,7 +306,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 				ref := (*[]int)(unsafe.Pointer(field.UnsafeAddr()))
 				c.Flags().IntSliceVarP(ref, name, short, val, descr)
 			}
-			inferDecodeHooks(c, name, f.Type.String()) // FIXME: handle error?
+			internalhooks.InferDecodeHooks(c, name, f.Type.String()) // FIXME: handle error?
 
 		default:
 			continue
@@ -328,467 +333,16 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 		}
 
 		if len(envs) > 0 {
-			_ = c.Flags().SetAnnotation(name, flagEnvsAnnotation, envs)
+			_ = c.Flags().SetAnnotation(name, internalenv.FlagAnnotation, envs)
 		}
 
 		// Set the group annotation on the current flag
 		if group != "" {
-			_ = c.Flags().SetAnnotation(name, flagGroupAnnotation, []string{group})
+			_ = c.Flags().SetAnnotation(name, internalusage.FlagGroupAnnotation, []string{group})
 		}
 	}
 
 	return nil
-}
-
-func getName(name, alias string) string {
-	res := name
-	if alias != "" {
-		res = alias
-	}
-
-	return res
-}
-
-func getValue(o any) reflect.Value {
-	var ptr reflect.Value
-	var val reflect.Value
-
-	val = reflect.ValueOf(o)
-	// Check if the value is valid before trying to access its type, otherwise let the caller handle it
-	if !val.IsValid() {
-		return val
-	}
-	// When we get a pointer, we want to get the value pointed to.
-	// Otherwise, we need to get a pointer to the value we got.
-	if val.Type().Kind() == reflect.Ptr {
-		ptr = val
-		val = ptr.Elem()
-	} else {
-		ptr = reflect.New(reflect.TypeOf(o))
-		temp := ptr.Elem()
-		temp.Set(val)
-		val = temp
-	}
-
-	return val
-}
-
-func getValuePtr(o any) reflect.Value {
-	val := reflect.ValueOf(o)
-	// Check if the value is valid before trying to access its type, otherwise let the caller handle it
-	if !val.IsValid() {
-		return val
-	}
-	if val.Type().Kind() == reflect.Ptr {
-		// Create a new zero-valued instance of the pointed-to type
-		if val.IsNil() {
-			return reflect.New(val.Type().Elem())
-		}
-
-		return val
-	}
-
-	return reflect.New(reflect.TypeOf(o))
-}
-
-// getStructPtr is a helper that gets a pointer to a struct value.
-//
-// Similar to getValuePtr but works with reflect.Value directly.
-func getStructPtr(structValue reflect.Value) reflect.Value {
-	if !structValue.IsValid() {
-		return reflect.Value{}
-	}
-
-	// If it's already a pointer, handle appropriately
-	if structValue.Type().Kind() == reflect.Ptr {
-		if structValue.IsNil() {
-			// Create new instance of the pointed-to type
-			return reflect.New(structValue.Type().Elem())
-		}
-
-		return structValue
-	}
-
-	// For non-pointer values, try to get address if possible
-	if structValue.CanAddr() {
-		return structValue.Addr()
-	}
-
-	// Create a pointer to a copy if we can't get address
-	newPtr := reflect.New(structValue.Type())
-	newPtr.Elem().Set(structValue)
-
-	return newPtr
-}
-
-// getValidValue attempts to get a valid reflect.Value from the input object.
-//
-// It handles untyped nil as an error (no type information available).
-// For typed nil pointers, it uses a fallback approach to create zero values.
-//
-// Returns an error if no valid Value can be obtained.
-func getValidValue(o any) (reflect.Value, error) {
-	// Handle untyped nil
-	if o == nil {
-		return reflect.Value{}, autoflagserrors.NewInputError("nil", "cannot define flags from nil value")
-	}
-
-	val := getValue(o)
-	if !val.IsValid() {
-		// Try the fallback approach for cases like typed nil pointers
-		// This allows us to create zero values from type information
-		valPtr := getValuePtr(o)
-		if !valPtr.IsValid() {
-			// This should not happen for valid typed inputs
-			inputType := fmt.Sprintf("%T", o)
-
-			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "cannot obtain valid reflection value")
-		}
-
-		// Only call Interface() if we have a valid value
-		val = getValue(valPtr.Interface())
-		if !val.IsValid() {
-			// This should also not happen for valid inputs
-			inputType := fmt.Sprintf("%T", o)
-
-			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "fallback reflection approach failed")
-		}
-	}
-
-	return val, nil
-}
-
-func getFieldName(prefix string, structField reflect.StructField) string {
-	if prefix == "" {
-		return structField.Name
-	}
-	return prefix + "." + structField.Name
-}
-
-func getFieldPath(structPath string, structField reflect.StructField) string {
-	path := ""
-	if structPath == "" {
-		path = strings.ToLower(structField.Name)
-	} else {
-		path = fmt.Sprintf("%s.%s", structPath, strings.ToLower(structField.Name))
-	}
-	return path
-}
-
-// validateStruct checks the coherence of definitions in the given struct
-func validateStruct(c *cobra.Command, o any) error {
-	val, err := getValidValue(o)
-	if err != nil {
-		return fmt.Errorf("validation failed: %w", err)
-	}
-	s := getScope(c)
-
-	typeToFields := make(map[reflect.Type][]string)
-	typeName := val.Type().Name()
-	if err := validateFields(val, typeName, typeToFields, s); err != nil {
-		return fmt.Errorf("validation failed: %w", err)
-	}
-	for fieldType, fieldNames := range typeToFields {
-		if len(fieldNames) > 1 {
-			return autoflagserrors.NewConflictingTypeError(fieldType, fieldNames, "create distinct custom types for each field")
-		}
-	}
-
-	return nil
-}
-
-// validateFields recursively validates the struct fields
-func validateFields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]string, s *scope) error {
-	for i := range val.NumField() {
-		field := val.Field(i)
-		structF := val.Type().Field(i)
-
-		// Skip private fields
-		if !field.CanInterface() {
-			continue
-		}
-
-		fieldName := getFieldName(prefix, structF)
-		isStructKind := structF.Type.Kind() == reflect.Struct
-
-		// Validate flagshort tag
-		short := structF.Tag.Get("flagshort")
-		if short != "" && len(short) > 1 {
-			return autoflagserrors.NewInvalidShorthandError(fieldName, short)
-		}
-
-		// Ensure that flagshort is given to non-struct types
-		if short != "" && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagshort", "flagshort cannot be used on struct types")
-		}
-
-		// Validate flagcustom tag
-		flagCustomValue, flagCustomErr := validateBooleanTag(fieldName, "flagcustom", structF.Tag.Get("flagcustom"))
-		if flagCustomErr != nil {
-			return flagCustomErr
-		}
-
-		// Ensure that flagcustom is given to non-struct types
-		if flagCustomValue != nil && *flagCustomValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagcustom", "flagcustom cannot be used on struct types")
-		}
-
-		// Validate the define and decode hooks when flagcustom is true
-		if flagCustomValue != nil && *flagCustomValue && !isStructKind {
-			// Map current field name to its custom type
-			if !isStandardType(structF.Type) {
-				typeToFields[structF.Type] = append(typeToFields[structF.Type], fieldName)
-			}
-			// Extract the field name (without prefix) for hook lookup
-			parts := strings.Split(fieldName, ".")
-			methodFieldName := parts[len(parts)-1]
-
-			if err := validateCustomFlag(val, methodFieldName, structF.Type.String()); err != nil {
-				return err
-			}
-		}
-
-		// Validate flagenv tag (can be on struct fields for inheritance)
-		if _, err := validateBooleanTag(fieldName, "flagenv", structF.Tag.Get("flagenv")); err != nil {
-			return err
-		}
-
-		// Validate flagignore tag
-		flagIgnoreValue, flagIgnoreErr := validateBooleanTag(fieldName, "flagignore", structF.Tag.Get("flagignore"))
-		if flagIgnoreErr != nil {
-			return flagIgnoreErr
-		}
-
-		// Ensure that flagignore is given to non-struct types
-		if flagIgnoreValue != nil && *flagIgnoreValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagignore", "flagignore cannot be used on struct types")
-		}
-
-		// Validate flagrequired tag
-		flagRequiredValue, flagRequiredErr := validateBooleanTag(fieldName, "flagrequired", structF.Tag.Get("flagrequired"))
-		if flagRequiredErr != nil {
-			return flagRequiredErr
-		}
-
-		// Ensure that flagrequired is given to non-struct types
-		if flagRequiredValue != nil && *flagRequiredValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagrequired", "flagrequired cannot be used on struct types")
-		}
-
-		if flagRequiredValue != nil && flagIgnoreValue != nil && *flagRequiredValue && *flagIgnoreValue {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagignore", "flagrequired"}, "mutually exclusive tags")
-		}
-
-		// Check for duplicate flags
-		if !isStructKind {
-			// Skip ignored fields from duplicate check
-			if flagIgnoreValue != nil && *flagIgnoreValue {
-				continue
-			}
-
-			alias := structF.Tag.Get("flag")
-			var flagName string
-			if alias != "" {
-				flagName = alias
-			} else {
-				flagName = strings.ToLower(structF.Name)
-			}
-
-			if !isValidFlagName(flagName) {
-				return autoflagserrors.NewInvalidFlagNameError(fieldName, flagName)
-			}
-
-			if err := s.addDefinedFlag(flagName, fieldName); err != nil {
-				return err
-			}
-		}
-
-		// Recursively validate children structs
-		if isStructKind {
-			if err := validateFields(field, fieldName, typeToFields, s); err != nil {
-				return err
-			}
-		}
-	}
-
-	return nil
-}
-
-var validFlagNameRegex = regexp.MustCompile(`^[a-zA-Z0-9]+([.-][a-zA-Z0-9]+)*$`)
-
-func isValidFlagName(name string) bool {
-	return validFlagNameRegex.MatchString(name)
-}
-
-// validateBooleanTag validates that a struct tag contains a valid boolean value
-func validateBooleanTag(fieldName, tagName, tagValue string) (*bool, error) {
-	if tagValue == "" {
-		return nil, nil
-	}
-	val, err := strconv.ParseBool(tagValue)
-	if err != nil {
-		return nil, autoflagserrors.NewInvalidBooleanTagError(fieldName, tagName, tagValue)
-	}
-
-	return &val, nil
-}
-
-func validateDefineHookSignature(m reflect.Value) error {
-	expectedType := reflect.TypeOf((*DefineHookFunc)(nil)).Elem()
-	actualType := m.Type()
-
-	if actualType.NumIn() != expectedType.NumIn() || actualType.NumOut() != expectedType.NumOut() {
-		var fx DefineHookFunc
-
-		return fmt.Errorf("define hook must have signature: %s", signature(fx))
-	}
-
-	// Check input types
-	for i := range actualType.NumIn() {
-		if actualType.In(i) != expectedType.In(i) {
-			return fmt.Errorf("define hook parameter %d has wrong type: expected %v, got %v", i, expectedType.In(i), actualType.In(i))
-		}
-	}
-
-	// Check return types
-	pflagValueType := reflect.TypeOf((*pflag.Value)(nil)).Elem()
-	if !actualType.Out(0).Implements(pflagValueType) {
-		return fmt.Errorf("define hook first return value must be a pflag.Value")
-	}
-	if actualType.Out(1).Kind() != reflect.String {
-		return fmt.Errorf("define hook second return value must be a string")
-	}
-
-	return nil
-}
-
-func validateDecodeHookSignature(m reflect.Value) error {
-	expectedType := reflect.TypeOf((*DecodeHookFunc)(nil)).Elem()
-	actualType := m.Type()
-
-	if actualType.NumIn() != expectedType.NumIn() || actualType.NumOut() != expectedType.NumOut() {
-		var fx DecodeHookFunc
-
-		return fmt.Errorf("decode hook must have signature: %s", signature(fx))
-	}
-
-	if actualType.In(0) != expectedType.In(0) {
-		return fmt.Errorf("decode hook input parameter has wrong type: expected %v, got %v", expectedType.In(0), actualType.In(0))
-	}
-
-	if actualType.Out(0) != expectedType.Out(0) ||
-		actualType.Out(1) != expectedType.Out(1) {
-		return fmt.Errorf("decode hook must return (any, error)")
-	}
-
-	return nil
-}
-
-// validateCustomFlag validates that a custom flag has proper define and decode mechanisms
-func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) error {
-	// Get pointer to struct to access methods
-	structPtr := getStructPtr(structValue)
-	if !structPtr.IsValid() {
-		return fmt.Errorf("cannot get pointer to struct for field '%s'", fieldName)
-	}
-
-	// Check if struct has Define<FieldName> method
-	defineMethodName := fmt.Sprintf("Define%s", fieldName)
-	defineHookFunc := structPtr.MethodByName(defineMethodName)
-
-	// Check if struct has Decode<FieldName> method
-	decodeMethodName := fmt.Sprintf("Decode%s", fieldName)
-	decodeHookFunc := structPtr.MethodByName(decodeMethodName)
-
-	// Case 1: User has defined custom methods
-	if defineHookFunc.IsValid() {
-		// Must have corresponding decode method
-		if !decodeHookFunc.IsValid() {
-			return autoflagserrors.NewMissingDecodeHookError(fieldName, decodeMethodName)
-		}
-
-		// Validate signatures
-		if err := validateDefineHookSignature(defineHookFunc); err != nil {
-			return autoflagserrors.NewInvalidDefineHookSignatureError(fieldName, defineMethodName, err)
-		}
-		if err := validateDecodeHookSignature(decodeHookFunc); err != nil {
-			return autoflagserrors.NewInvalidDecodeHookSignatureError(fieldName, decodeMethodName, err)
-		}
-
-		return nil
-	}
-
-	// Check registries
-	_, inDefineRegistry := defineHookRegistry[fieldType]
-	_, inDecodeRegistry := decodeHookRegistry[fieldType]
-
-	// Case 2: Check registry
-	if inDefineRegistry {
-		if !inDecodeRegistry {
-			return fmt.Errorf("internal error: missing decode hook for built-in type %s", fieldType)
-		}
-
-		return nil
-	}
-
-	// Case 3: No define mechanism found
-	return autoflagserrors.NewMissingDefineHookError(fieldName, defineMethodName)
-}
-
-var standardTypes = func() map[reflect.Kind]reflect.Type {
-	types := make(map[reflect.Kind]reflect.Type)
-	for _, v := range []any{
-		"", int(0), bool(false), int8(0), int16(0), int32(0), int64(0),
-		uint(0), uint8(0), uint16(0), uint32(0), uint64(0),
-	} {
-		t := reflect.TypeOf(v)
-		types[t.Kind()] = t
-	}
-	return types
-}()
-
-func isStandardType(t reflect.Type) bool {
-	expected, exists := standardTypes[t.Kind()]
-
-	return exists && t == expected
-}
-
-func isMandatory(f reflect.StructField) bool {
-	val := f.Tag.Get("flagrequired")
-	req, _ := strconv.ParseBool(val)
-
-	return req
-}
-
-func signature(f any) string {
-	t := reflect.TypeOf(f)
-	if t.Kind() != reflect.Func {
-		return "<not a function>"
-	}
-
-	buf := strings.Builder{}
-	buf.WriteString("func(")
-
-	// Input parameters
-	inParams := []string{}
-	for i := range t.NumIn() {
-		inParams = append(inParams, t.In(i).String())
-	}
-	buf.WriteString(strings.Join(inParams, ", "))
-	buf.WriteString(")")
-
-	// Output parameters
-	if numOut := t.NumOut(); numOut > 0 {
-		buf.WriteString(" (")
-		outParams := []string{}
-		for i := range t.NumOut() {
-			outParams = append(outParams, t.Out(i).String())
-		}
-		buf.WriteString(strings.Join(outParams, ", "))
-		buf.WriteString(")")
-	}
-
-	return buf.String()
 }
 
 func ResetGlobals() {

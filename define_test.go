@@ -10,13 +10,34 @@ import (
 	"time"
 
 	autoflagserrors "github.com/leodido/autoflags/errors"
+	internalenv "github.com/leodido/autoflags/internal/env"
+	internalhooks "github.com/leodido/autoflags/internal/hooks"
+	internalreflect "github.com/leodido/autoflags/internal/reflect"
+	internalusage "github.com/leodido/autoflags/internal/usage"
 	"github.com/leodido/autoflags/values"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap/zapcore"
 )
+
+type autoflagsSuite struct {
+	suite.Suite
+}
+
+func TestAutoflagsSuite(t *testing.T) {
+	suite.Run(t, new(autoflagsSuite))
+}
+
+func (suite *autoflagsSuite) SetupTest() {
+	// Reset viper state before each test to prevent test pollution
+	viper.Reset()
+	// Reset global prefix
+	SetEnvPrefix("")
+}
 
 type configFlags struct {
 	LogLevel string `default:"info" flag:"log-level" flagdescr:"set the logging level" flaggroup:"Config"`
@@ -412,7 +433,7 @@ func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
 	assert.NotNil(suite.T(), flagWithEnv, "flag should exist")
 
 	// The critical test: verify annotation was set
-	envAnnotation := flagWithEnv.Annotations[flagEnvsAnnotation]
+	envAnnotation := flagWithEnv.Annotations[internalenv.FlagAnnotation]
 	assert.NotNil(suite.T(), envAnnotation, "annotation should be set when len(envs) > 0")
 	assert.Greater(suite.T(), len(envAnnotation), 0, "annotation should contain env vars")
 	assert.Contains(suite.T(), envAnnotation, "TEST_HAS_ENV", "should contain expected env var")
@@ -430,7 +451,7 @@ func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsEmpty() {
 	assert.NotNil(suite.T(), flagWithoutEnv, "flag should exist")
 
 	// The critical test: verify annotation was NOT set
-	envAnnotation := flagWithoutEnv.Annotations[flagEnvsAnnotation]
+	envAnnotation := flagWithoutEnv.Annotations[internalenv.FlagAnnotation]
 	assert.Nil(suite.T(), envAnnotation, "annotation should NOT be set when len(envs) == 0")
 }
 
@@ -651,7 +672,7 @@ func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
 	assert.NotNil(suite.T(), requiredGroupAnnotation, "required-group should have required annotation")
 	assert.Equal(suite.T(), []string{"true"}, requiredGroupAnnotation)
 
-	groupAnnotation := requiredGroupFlag.Annotations[flagGroupAnnotation]
+	groupAnnotation := requiredGroupFlag.Annotations[internalusage.FlagGroupAnnotation]
 	assert.NotNil(suite.T(), groupAnnotation, "required-group should have group annotation")
 	assert.Equal(suite.T(), []string{"TestGroup"}, groupAnnotation)
 
@@ -672,7 +693,7 @@ func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
 	assert.NotNil(suite.T(), requiredEnvAnnotation, "required-env should have required annotation")
 	assert.Equal(suite.T(), []string{"true"}, requiredEnvAnnotation)
 
-	envAnnotation := requiredEnvFlag.Annotations[flagEnvsAnnotation]
+	envAnnotation := requiredEnvFlag.Annotations[internalenv.FlagAnnotation]
 	assert.NotNil(suite.T(), envAnnotation, "required-env should have env annotation")
 }
 
@@ -1056,10 +1077,10 @@ func (suite *autoflagsSuite) TestFlagenv_ValidValues() {
 	noFlag := cmd.Flags().Lookup("no-env")
 
 	// Check environment annotations
-	trueEnvAnnotation := trueFlag.Annotations[flagEnvsAnnotation]
-	falseEnvAnnotation := falseFlag.Annotations[flagEnvsAnnotation]
-	emptyEnvAnnotation := emptyFlag.Annotations[flagEnvsAnnotation]
-	noEnvAnnotation := noFlag.Annotations[flagEnvsAnnotation]
+	trueEnvAnnotation := trueFlag.Annotations[internalenv.FlagAnnotation]
+	falseEnvAnnotation := falseFlag.Annotations[internalenv.FlagAnnotation]
+	emptyEnvAnnotation := emptyFlag.Annotations[internalenv.FlagAnnotation]
+	noEnvAnnotation := noFlag.Annotations[internalenv.FlagAnnotation]
 
 	// Only the true env should have environment binding
 	assert.NotNil(suite.T(), trueEnvAnnotation, "flagenv='true' should have env annotation")
@@ -1102,10 +1123,10 @@ func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	numberZeroFlag := cmd.Flags().Lookup("number-zero")
 
 	// strconv.ParseBool accepts these case variations and numbers
-	caseTrueAnnotation := caseTrueFlag.Annotations[flagEnvsAnnotation]
-	caseFalseAnnotation := caseFalseFlag.Annotations[flagEnvsAnnotation]
-	numberOneAnnotation := numberOneFlag.Annotations[flagEnvsAnnotation]
-	numberZeroAnnotation := numberZeroFlag.Annotations[flagEnvsAnnotation]
+	caseTrueAnnotation := caseTrueFlag.Annotations[internalenv.FlagAnnotation]
+	caseFalseAnnotation := caseFalseFlag.Annotations[internalenv.FlagAnnotation]
+	numberOneAnnotation := numberOneFlag.Annotations[internalenv.FlagAnnotation]
+	numberZeroAnnotation := numberZeroFlag.Annotations[internalenv.FlagAnnotation]
 
 	assert.NotNil(suite.T(), caseTrueAnnotation, "ParseBool should accept 'True' as true")
 	assert.Nil(suite.T(), caseFalseAnnotation, "ParseBool should accept 'FALSE' as false")
@@ -1245,7 +1266,7 @@ func (suite *autoflagsSuite) TestFlagenv_InteractionWithOtherTags_SuccessCase() 
 	// 1. Verify `flagenv:"true"` with `flagcustom:"true"`
 	customFlag := cmd.Flags().Lookup("env-with-custom")
 	require.NotNil(suite.T(), customFlag)
-	customEnvAnnotation, ok := customFlag.Annotations[flagEnvsAnnotation]
+	customEnvAnnotation, ok := customFlag.Annotations[internalenv.FlagAnnotation]
 	require.True(suite.T(), ok, "custom flag should have env annotation")
 	assert.Contains(suite.T(), customEnvAnnotation, "TEST_ENV_WITH_CUSTOM")
 	assert.Equal(suite.T(), "custom", customFlag.DefValue, "custom flag should have its custom default value")
@@ -1253,7 +1274,7 @@ func (suite *autoflagsSuite) TestFlagenv_InteractionWithOtherTags_SuccessCase() 
 	// 2. Verify `flagenv:"true"` with `flagrequired:"true"`
 	requiredFlag := cmd.Flags().Lookup("env-with-required")
 	require.NotNil(suite.T(), requiredFlag)
-	requiredEnvAnnotation, ok := requiredFlag.Annotations[flagEnvsAnnotation]
+	requiredEnvAnnotation, ok := requiredFlag.Annotations[internalenv.FlagAnnotation]
 	require.True(suite.T(), ok, "required flag should have env annotation")
 	assert.Contains(suite.T(), requiredEnvAnnotation, "TEST_ENV_WITH_REQUIRED")
 	requiredAnnotation := requiredFlag.Annotations[cobra.BashCompOneRequiredFlag]
@@ -1262,10 +1283,10 @@ func (suite *autoflagsSuite) TestFlagenv_InteractionWithOtherTags_SuccessCase() 
 	// 3. Verify `flagenv:"true"` with `flaggroup:"TestGroup"`
 	groupFlag := cmd.Flags().Lookup("env-with-group")
 	require.NotNil(suite.T(), groupFlag)
-	groupEnvAnnotation, ok := groupFlag.Annotations[flagEnvsAnnotation]
+	groupEnvAnnotation, ok := groupFlag.Annotations[internalenv.FlagAnnotation]
 	require.True(suite.T(), ok, "group flag should have env annotation")
 	assert.Contains(suite.T(), groupEnvAnnotation, "TEST_ENV_WITH_GROUP")
-	groupAnnotation := groupFlag.Annotations[flagGroupAnnotation]
+	groupAnnotation := groupFlag.Annotations[internalusage.FlagGroupAnnotation]
 	assert.Equal(suite.T(), []string{"TestGroup"}, groupAnnotation, "flag should still be in the correct group")
 }
 
@@ -1557,7 +1578,7 @@ func (suite *autoflagsSuite) TestFlagignore_InteractionWithOtherTags_SuccessCase
 	// 3. Verify `flagignore:"false"` allows other tags to work (e.g., flaggroup)
 	groupFlag := cmd.Flags().Lookup("in-group")
 	require.NotNil(suite.T(), groupFlag)
-	groupAnnotation := groupFlag.Annotations[flagGroupAnnotation]
+	groupAnnotation := groupFlag.Annotations[internalusage.FlagGroupAnnotation]
 	assert.Equal(suite.T(), []string{"TestGroup"}, groupAnnotation, "Flag should be in the correct group")
 }
 
@@ -2536,8 +2557,8 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDefineSignature() {
 	assert.Contains(suite.T(), err.Error(), "DefineCustomField", "Error should mention the hook name")
 	assert.Contains(suite.T(), err.Error(), "define hook", "Error should identify it as a define hook error")
 
-	var fx DefineHookFunc
-	require.Contains(suite.T(), err.Error(), signature(fx))
+	var fx internalhooks.DefineHookFunc
+	require.Contains(suite.T(), err.Error(), internalreflect.Signature(fx))
 }
 
 type wrongDecodeSignatureOptions struct {
@@ -2569,8 +2590,8 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDecodeSignature() {
 	assert.Contains(suite.T(), err.Error(), "DecodeCustomField", "Error should mention the hook name")
 	assert.Contains(suite.T(), err.Error(), "decode hook", "Error should identify it as a decode hook error")
 
-	var fx DecodeHookFunc
-	require.Contains(suite.T(), err.Error(), signature(fx))
+	var fx internalhooks.DecodeHookFunc
+	require.Contains(suite.T(), err.Error(), internalreflect.Signature(fx))
 }
 
 type wrongDecodeReturnOptions struct {

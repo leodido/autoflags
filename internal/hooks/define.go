@@ -1,4 +1,4 @@
-package autoflags
+package internalhooks
 
 import (
 	"fmt"
@@ -24,8 +24,8 @@ import (
 // description for the flag's usage message.
 type DefineHookFunc func(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string)
 
-// Registry for predefined flag definition functions
-var defineHookRegistry = map[string]DefineHookFunc{
+// DefineHookRegistry keeps track of the built-in flag definition functions
+var DefineHookRegistry = map[string]DefineHookFunc{
 	"zapcore.Level": DefineZapcoreLevelHookFunc(),
 	"time.Duration": DefineTimeDurationHookFunc(),
 }
@@ -74,9 +74,9 @@ func DefineZapcoreLevelHookFunc() DefineHookFunc {
 	}
 }
 
-// inferDefineHooks checks if there's a predefined flag definition function for the given type
-func inferDefineHooks(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) bool {
-	if defineFunc, ok := defineHookRegistry[structField.Type.String()]; ok {
+// InferDefineHooks checks if there's a predefined flag definition function for the given type
+func InferDefineHooks(c *cobra.Command, name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) bool {
+	if defineFunc, ok := DefineHookRegistry[structField.Type.String()]; ok {
 		value, usage := defineFunc(name, short, descr, structField, fieldValue)
 		c.Flags().VarP(value, name, short, usage)
 
