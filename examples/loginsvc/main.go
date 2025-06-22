@@ -9,8 +9,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/leodido/autoflags"
-	"github.com/leodido/autoflags/config"
+	"github.com/leodido/structcli"
+	"github.com/leodido/structcli/config"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -30,9 +30,9 @@ type CommonOptions struct {
 
 type commonOptionsKey struct{}
 
-// Attach is a convenience wrapper around autoflags.Define.
+// Attach is a convenience wrapper around structcli.Define.
 func (o *CommonOptions) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 // Context implements the "setter" part of the ContextOptions contract.
@@ -82,7 +82,7 @@ type AddUserOptions struct {
 }
 
 func (o *AddUserOptions) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 type DeleteUserOptions struct {
@@ -90,7 +90,7 @@ type DeleteUserOptions struct {
 }
 
 func (o *DeleteUserOptions) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 // -------------------------------------------------
@@ -130,7 +130,7 @@ func makeUserAddCmd() *cobra.Command {
 			}
 
 			// Step 2: Unmarshal local flags for this command.
-			if err := autoflags.Unmarshal(c, opts); err != nil {
+			if err := structcli.Unmarshal(c, opts); err != nil {
 				return err
 			}
 
@@ -167,7 +167,7 @@ func makeUserDeleteCmd() *cobra.Command {
 			if err := commonOpts.FromContext(c.Context()); err != nil {
 				return err
 			}
-			if err := autoflags.Unmarshal(c, opts); err != nil {
+			if err := structcli.Unmarshal(c, opts); err != nil {
 				return err
 			}
 			c.Printf("level:%s\n", commonOpts.LogLevel.String())
@@ -211,7 +211,7 @@ func NewRootCmd() (*cobra.Command, error) {
 
 	// This hook runs for ALL command invocations after parsing but before execution.
 	rootCmd.PersistentPreRunE = func(c *cobra.Command, args []string) error {
-		_, configMessage, configErr := autoflags.UseConfigSimple(c)
+		_, configMessage, configErr := structcli.UseConfigSimple(c)
 		if configErr != nil {
 			return configErr
 		}
@@ -219,7 +219,7 @@ func NewRootCmd() (*cobra.Command, error) {
 			c.Println(configMessage)
 		}
 		// Populate the master `commonOpts` from flags, env, and config file.
-		if err := autoflags.Unmarshal(c, commonOpts); err != nil {
+		if err := structcli.Unmarshal(c, commonOpts); err != nil {
 			return err
 		}
 		// Use the populated values to initialize the computed state (the logger).
@@ -233,7 +233,7 @@ func NewRootCmd() (*cobra.Command, error) {
 
 	rootCmd.AddCommand(makeUserCmd())
 
-	if err := autoflags.SetupConfig(rootCmd, config.Options{}); err != nil {
+	if err := structcli.SetupConfig(rootCmd, config.Options{}); err != nil {
 		return nil, err
 	}
 	return rootCmd, nil

@@ -1,14 +1,14 @@
-package autoflags
+package structcli
 
 import (
 	"fmt"
 	"io"
 	"os"
 
-	"github.com/leodido/autoflags/debug"
-	internalcmd "github.com/leodido/autoflags/internal/cmd"
-	internaldebug "github.com/leodido/autoflags/internal/debug"
-	internalenv "github.com/leodido/autoflags/internal/env"
+	"github.com/leodido/structcli/debug"
+	internalcmd "github.com/leodido/structcli/internal/cmd"
+	internaldebug "github.com/leodido/structcli/internal/debug"
+	internalenv "github.com/leodido/structcli/internal/env"
 	"github.com/spf13/cobra"
 )
 

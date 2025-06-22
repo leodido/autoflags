@@ -8,7 +8,7 @@ import (
 	"time"
 	"unsafe"
 
-	autoflagsvalues "github.com/leodido/autoflags/values"
+	structclivalues "github.com/leodido/structcli/values"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/thediveo/enumflag/v2"
@@ -35,7 +35,7 @@ func DefineTimeDurationHookFunc() DefineHookFunc {
 		val := fieldValue.Interface().(time.Duration)
 		ref := (*time.Duration)(unsafe.Pointer(fieldValue.UnsafeAddr()))
 
-		return autoflagsvalues.NewDuration(val, ref), descr
+		return structclivalues.NewDuration(val, ref), descr
 	}
 }
 

@@ -1,14 +1,14 @@
-package autoflags
+package structcli
 
 import (
 	"fmt"
 	"reflect"
 
 	"github.com/go-viper/mapstructure/v2"
-	autoflagserrors "github.com/leodido/autoflags/errors"
-	internalconfig "github.com/leodido/autoflags/internal/config"
-	internalhooks "github.com/leodido/autoflags/internal/hooks"
-	internalscope "github.com/leodido/autoflags/internal/scope"
+	structclierrors "github.com/leodido/structcli/errors"
+	internalconfig "github.com/leodido/structcli/internal/config"
+	internalhooks "github.com/leodido/structcli/internal/hooks"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -96,7 +96,7 @@ func Unmarshal(c *cobra.Command, opts Options, hooks ...mapstructure.DecodeHookF
 	// Automatically run options validation if feasible
 	if o, ok := opts.(ValidatableOptions); ok {
 		if validationErrors := o.Validate(c.Context()); validationErrors != nil {
-			return &autoflagserrors.ValidationError{
+			return &structclierrors.ValidationError{
 				ContextName: c.Name(),
 				Errors:      validationErrors,
 			}

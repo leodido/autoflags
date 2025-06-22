@@ -9,10 +9,10 @@ import (
 
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
-	"github.com/leodido/autoflags"
-	"github.com/leodido/autoflags/config"
-	"github.com/leodido/autoflags/debug"
-	"github.com/leodido/autoflags/values"
+	"github.com/leodido/structcli"
+	"github.com/leodido/structcli/config"
+	"github.com/leodido/structcli/debug"
+	"github.com/leodido/structcli/values"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.uber.org/zap/zapcore"
@@ -101,7 +101,7 @@ func (o *ServerOptions) DecodeTargetEnv(input any) (any, error) {
 
 // Attach makes ServerOptions implement the Options interface
 func (o *ServerOptions) Attach(c *cobra.Command) error {
-	if err := autoflags.Define(c, o); err != nil {
+	if err := structcli.Define(c, o); err != nil {
 		return err
 	}
 
@@ -126,7 +126,7 @@ func makeSrvC() *cobra.Command {
 		Long:  "Start the server with the specified configuration",
 		PreRunE: func(c *cobra.Command, args []string) error {
 			fmt.Fprintln(c.OutOrStdout(), "|--srvC.PreRunE")
-			if err := autoflags.Unmarshal(c, opts); err != nil {
+			if err := structcli.Unmarshal(c, opts); err != nil {
 				return err
 			}
 			fmt.Fprintln(c.OutOrStdout(), pretty(opts))
@@ -159,8 +159,8 @@ func makeSrvC() *cobra.Command {
 	return srvC
 }
 
-var _ autoflags.ValidatableOptions = (*UserConfig)(nil)
-var _ autoflags.TransformableOptions = (*UserConfig)(nil)
+var _ structcli.ValidatableOptions = (*UserConfig)(nil)
+var _ structcli.TransformableOptions = (*UserConfig)(nil)
 
 type UserConfig struct {
 	Email string `flag:"email" flagdescr:"User email" validate:"email"`
@@ -199,7 +199,7 @@ func (o *UserConfig) Transform(ctx context.Context) error {
 
 // Attach makes UserConfig implement the Options interface
 func (o *UserConfig) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 func makeUsrC() *cobra.Command {
@@ -224,7 +224,7 @@ func makeUsrC() *cobra.Command {
 			}
 			fmt.Fprintln(c.OutOrStdout(), pretty(commonOpts))
 
-			return autoflags.Unmarshal(c, opts)
+			return structcli.Unmarshal(c, opts)
 		},
 		RunE: func(c *cobra.Command, args []string) error {
 			fmt.Fprintln(c.OutOrStdout(), "|---add.RunE")
@@ -238,14 +238,14 @@ func makeUsrC() *cobra.Command {
 	commonOpts.Attach(addC)
 
 	usrC.AddCommand(addC)
-	// Setup of the usage text happens at autoflags.Define
+	// Setup of the usage text happens at structcli.Define
 	// For the `usr` command we do it explicitly since it has no local flags
-	autoflags.SetupUsage(usrC)
+	structcli.SetupUsage(usrC)
 
 	return usrC
 }
 
-var _ autoflags.ContextOptions = (*UtilityFlags)(nil)
+var _ structcli.ContextOptions = (*UtilityFlags)(nil)
 
 type UtilityFlags struct {
 	Verbose int  `flagtype:"count" flagshort:"v" flaggroup:"Utility"`
@@ -255,7 +255,7 @@ type UtilityFlags struct {
 type utilityFlagsKey struct{}
 
 func (f *UtilityFlags) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, f)
+	return structcli.Define(c, f)
 }
 
 // Context implements the CommonOptions interface
@@ -280,7 +280,7 @@ func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 	rootC := &cobra.Command{
 		Use:               "full",
 		Short:             "A beautiful CLI application",
-		Long:              "A demonstration of the autoflags library with beautiful CLI features",
+		Long:              "A demonstration of the structcli library with beautiful CLI features",
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
 		// Parse its own flags first, then continue traversing down to find subcommands
@@ -296,7 +296,7 @@ func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 		fmt.Fprintln(c.OutOrStdout(), "|-rootC.PersistentPreRunE")
 
 		// Load config file if found
-		_, configMessage, configErr := autoflags.UseConfigSimple(c)
+		_, configMessage, configErr := structcli.UseConfigSimple(c)
 		if configErr != nil {
 			return configErr
 		}
@@ -304,7 +304,7 @@ func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 			c.Println(configMessage)
 		}
 
-		if err := autoflags.Unmarshal(c, commonOpts); err != nil {
+		if err := structcli.Unmarshal(c, commonOpts); err != nil {
 			return err
 		}
 
@@ -321,11 +321,11 @@ func NewRootC(exitOnDebug bool) (*cobra.Command, error) {
 	rootC.AddCommand(makeUsrC())
 
 	// This single line enables the configuration file support
-	if err := autoflags.SetupConfig(rootC, config.Options{AppName: "full"}); err != nil {
+	if err := structcli.SetupConfig(rootC, config.Options{AppName: "full"}); err != nil {
 		return nil, err
 	}
 	// This single line enables the debugging global flag
-	if err := autoflags.SetupDebug(rootC, debug.Options{Exit: exitOnDebug}); err != nil {
+	if err := structcli.SetupDebug(rootC, debug.Options{Exit: exitOnDebug}); err != nil {
 		return nil, err
 	}
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/leodido/autoflags"
+	"github.com/leodido/structcli"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
@@ -15,7 +15,7 @@ type Options struct {
 }
 
 func (o *Options) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 func main() {
@@ -29,7 +29,7 @@ func main() {
 	}
 
 	cli.PreRunE = func(c *cobra.Command, args []string) error {
-		return autoflags.Unmarshal(c, opts) // Populates struct from flags/env
+		return structcli.Unmarshal(c, opts) // Populates struct from flags/env
 	}
 
 	cli.RunE = func(c *cobra.Command, args []string) error {

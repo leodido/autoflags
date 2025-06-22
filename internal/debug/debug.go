@@ -1,12 +1,12 @@
 package internaldebug
 
 import (
-	internalscope "github.com/leodido/autoflags/internal/scope"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 )
 
 const (
-	FlagAnnotation = "___leodido_autoflags_debugflagname"
+	FlagAnnotation = "___leodido_structcli_debugflagname"
 )
 
 // IsDebugActive checks if the debug option is set for the command c, either through a command-line flag or an environment variable.

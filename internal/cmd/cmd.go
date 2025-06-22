@@ -1,7 +1,7 @@
 package internalcmd
 
 import (
-	internaldebug "github.com/leodido/autoflags/internal/debug"
+	internaldebug "github.com/leodido/structcli/internal/debug"
 	"github.com/spf13/cobra"
 )
 

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/leodido/autoflags"
+	"github.com/leodido/structcli"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -443,7 +443,7 @@ srv:
 		// Return a cleanup function to reset Viper's state after the test.
 		return func() {
 			viper.Reset()
-			autoflags.ResetGlobals()
+			structcli.ResetGlobals()
 		}
 	}
 

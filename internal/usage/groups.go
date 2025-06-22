@@ -11,7 +11,7 @@ var (
 )
 
 const (
-	FlagGroupAnnotation = "___leodido_autoflags_flaggroups"
+	FlagGroupAnnotation = "___leodido_structcli_flaggroups"
 )
 
 // Groups returns a map of flag groups for the given command.

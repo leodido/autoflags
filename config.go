@@ -1,11 +1,11 @@
-package autoflags
+package structcli
 
 import (
 	"fmt"
 
-	"github.com/leodido/autoflags/config"
-	internalconfig "github.com/leodido/autoflags/internal/config"
-	internalenv "github.com/leodido/autoflags/internal/env"
+	"github.com/leodido/structcli/config"
+	internalconfig "github.com/leodido/structcli/internal/config"
+	internalenv "github.com/leodido/structcli/internal/env"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

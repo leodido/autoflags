@@ -1,4 +1,4 @@
-package autoflags_test
+package structcli_test
 
 import (
 	"bytes"
@@ -16,11 +16,11 @@ import (
 	"github.com/go-playground/mold/v4"
 	"github.com/go-playground/mold/v4/modifiers"
 	"github.com/go-playground/validator/v10"
-	"github.com/leodido/autoflags"
-	"github.com/leodido/autoflags/config"
-	"github.com/leodido/autoflags/debug"
-	autoflagserrors "github.com/leodido/autoflags/errors"
-	"github.com/leodido/autoflags/values"
+	"github.com/leodido/structcli"
+	"github.com/leodido/structcli/config"
+	"github.com/leodido/structcli/debug"
+	structclierrors "github.com/leodido/structcli/errors"
+	"github.com/leodido/structcli/values"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -105,7 +105,7 @@ func (o *unmarshalIntegrationOptions) Validate(_ context.Context) []error {
 func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 	}
 
 	t.Run("PreMoldTransformationFails", func(t *testing.T) {
@@ -114,10 +114,10 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		opts := &unmarshalIntegrationOptions{
 			SimulatePreMoldError: true,
 		}
-		errDefine := autoflags.Define(cmd, opts)
+		errDefine := structcli.Define(cmd, opts)
 		require.NoError(t, errDefine)
 
-		err := autoflags.Unmarshal(cmd, opts)
+		err := structcli.Unmarshal(cmd, opts)
 
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "couldn't transform options:")
@@ -129,17 +129,17 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-agefail"}
 		opts := &unmarshalIntegrationOptions{}
 
-		errDefine := autoflags.Define(cmd, opts)
+		errDefine := structcli.Define(cmd, opts)
 		require.NoError(t, errDefine)
 
 		viper.Set("email", "valid@example.com")
 		viper.Set("age", 5) // Invalid age
 
-		err := autoflags.Unmarshal(cmd, opts)
+		err := structcli.Unmarshal(cmd, opts)
 
 		require.Error(t, err, "Unmarshal should return an error for invalid age")
-		var valErr *autoflagserrors.ValidationError
-		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
+		var valErr *structclierrors.ValidationError
+		require.True(t, errors.As(err, &valErr), "Error should be of type *structcli.ValidationError")
 
 		assert.Equal(t, cmd.Name(), valErr.ContextName)
 
@@ -163,7 +163,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-reqif-fail"}
 		opts := &unmarshalIntegrationOptions{}
 
-		errDefine := autoflags.Define(cmd, opts)
+		errDefine := structcli.Define(cmd, opts)
 		require.NoError(t, errDefine)
 
 		viper.Set("email", "valid@example.com")
@@ -171,7 +171,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		viper.Set("status", "pending")
 		viper.Set("justification", "")
 
-		err := autoflags.Unmarshal(cmd, opts)
+		err := structcli.Unmarshal(cmd, opts)
 
 		assert.Error(t, err, "Unmarshal should return an error if Justification is missing when Status is pending")
 		assert.Contains(t, err.Error(), "invalid options")
@@ -183,17 +183,17 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-emailfail"}
 		opts := &unmarshalIntegrationOptions{}
 
-		errDefine := autoflags.Define(cmd, opts)
+		errDefine := structcli.Define(cmd, opts)
 		require.NoError(t, errDefine)
 
 		viper.Set("email", "  NOTANEMAIL@domain  ")
 		viper.Set("age", 25)
 
-		err := autoflags.Unmarshal(cmd, opts)
+		err := structcli.Unmarshal(cmd, opts)
 
-		var valErr *autoflagserrors.ValidationError
+		var valErr *structclierrors.ValidationError
 		require.Error(t, err, "Unmarshal should return an error for invalid email format")
-		require.True(t, errors.As(err, &valErr), "Error should be of type *autoflags.ValidationError")
+		require.True(t, errors.As(err, &valErr), "Error should be of type *structcli.ValidationError")
 
 		assert.Equal(t, cmd.Name(), valErr.ContextName, "ValidationError ContextName should match command name")
 
@@ -221,7 +221,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-success-libs"}
 		opts := &unmarshalIntegrationOptions{}
 
-		errDefine := autoflags.Define(cmd, opts)
+		errDefine := structcli.Define(cmd, opts)
 		require.NoError(t, errDefine)
 
 		viper.Set("name", "  Test User  ")
@@ -229,7 +229,7 @@ func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 		viper.Set("age", 42)
 		viper.Set("status", "inactive")
 
-		err := autoflags.Unmarshal(cmd, opts)
+		err := structcli.Unmarshal(cmd, opts)
 
 		assert.NoError(t, err, "Unmarshal should succeed")
 		assert.Equal(t, "Test User", opts.Name)
@@ -266,11 +266,11 @@ func (o *ctxOptionsForContextTest) FromContext(ctx context.Context) error {
 func TestUnmarshal_SetsContext_WhenContextOptions(t *testing.T) {
 	cmd := &cobra.Command{Use: "test-context"}
 	opts := &ctxOptionsForContextTest{}
-	require.Implements(t, (*autoflags.ContextOptions)(nil), opts)
+	require.Implements(t, (*structcli.ContextOptions)(nil), opts)
 
-	autoflags.Define(cmd, opts)
+	structcli.Define(cmd, opts)
 
-	err := autoflags.Unmarshal(cmd, opts)
+	err := structcli.Unmarshal(cmd, opts)
 	require.NoError(t, err)
 
 	finalCtx := cmd.Context()
@@ -312,12 +312,12 @@ func (o TestDefineOptions) Validate() []error                   { return nil }
 func TestDefine_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 	}
 
 	cases := []struct {
 		desc  string
-		input autoflags.Options
+		input structcli.Options
 	}{
 		{
 			"flags definition from struct reference",
@@ -340,11 +340,11 @@ func TestDefine_Integration(t *testing.T) {
 			}
 			c.SetErr(io.Discard)
 			c.SetOut(io.Discard)
-			errDefine := autoflags.Define(c, tc.input)
+			errDefine := structcli.Define(c, tc.input)
 			require.Nil(t, errDefine)
 
 			f := c.Flags()
-			vip := autoflags.GetViper(c)
+			vip := structcli.GetViper(c)
 			u := c.UsageString()
 
 			// Usage + Grouping
@@ -427,7 +427,7 @@ func TestDefine_Integration(t *testing.T) {
 			c.SetArgs([]string{"--testdefineconfigflags.endpoint=http://test.com", "--deep=1s", "-vv", "--verbose"})
 			notErr1 := c.Execute()
 			require.NoError(t, notErr1, "Execute() should work when mandatory flags are provided")
-			require.Equal(t, 3, autoflags.GetViper(c).GetInt("verbose"), "Single -v should set verbose to 3")
+			require.Equal(t, 3, structcli.GetViper(c).GetInt("verbose"), "Single -v should set verbose to 3")
 		})
 	}
 }
@@ -487,12 +487,12 @@ func TestSetupConfig_Integration(t *testing.T) {
 		os.Unsetenv("TESTCMD_CONFIG")
 		os.Unsetenv("MYAPP_SETTINGS")
 		// Reset the global prefix
-		autoflags.SetEnvPrefix("")
+		structcli.SetEnvPrefix("")
 	}
 
 	teardownTest := func() {
 		viper.Reset()
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 	}
 
 	t.Run("RootCommandValidation_Success", func(t *testing.T) {
@@ -502,7 +502,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		rootCmd := &cobra.Command{Use: "testapp"}
 		opts := config.Options{}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		assert.NoError(t, err, "SetupConfig should succeed on root command")
 	})
 
@@ -513,7 +513,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		rootCmd := &cobra.Command{Use: "myapp"}
 		opts := config.Options{} // All defaults
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		// Verify flag was created with defaults
@@ -538,7 +538,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 			EnvVar:     "CUSTOM_CONFIG_VAR",
 		}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		// Verify custom flag name
@@ -561,7 +561,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		rootCmd := &cobra.Command{Use: "my-cli-tool"}
 		opts := config.Options{} // AppName should default to root command name
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
@@ -581,7 +581,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 		rootCmd.AddCommand(childCmd)
 		opts := config.Options{}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
@@ -614,7 +614,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 			CustomPaths: []string{"/opt/myapp"},
 		}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		// Verify all components are set up correctly
@@ -637,7 +637,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 			AppName: "myapp",
 		}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
@@ -664,7 +664,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 			CustomPaths: []string{"/custom/{APP}/path1", "$PWD/path2"},
 		}
 
-		err := autoflags.SetupConfig(rootCmd, opts)
+		err := structcli.SetupConfig(rootCmd, opts)
 		require.NoError(t, err)
 
 		configFlag := rootCmd.PersistentFlags().Lookup("config")
@@ -683,7 +683,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 func TestConfigFlow_FileDiscovery(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		autoflags.SetEnvPrefix("")
+		structcli.SetEnvPrefix("")
 	}
 
 	setupMockEnvironment := func(t *testing.T) (fs afero.Fs, cleanup func()) {
@@ -775,7 +775,7 @@ tty:
 					Use: "testapp",
 					Run: func(cmd *cobra.Command, args []string) {
 						// Test config discovery inside the command execution
-						inUse, message, err := autoflags.UseConfig(func() bool { return true })
+						inUse, message, err := structcli.UseConfig(func() bool { return true })
 						require.NoError(t, err)
 
 						// Write results to buffer so we can check them
@@ -805,7 +805,7 @@ tty:
 					AppName: "testapp",
 				}
 
-				err = autoflags.SetupConfig(rootCmd, configOpts)
+				err = structcli.SetupConfig(rootCmd, configOpts)
 				require.NoError(t, err)
 
 				// Execute the command with the --config flag
@@ -845,7 +845,7 @@ tty:
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -875,7 +875,7 @@ tty:
 			AppName: "testapp",
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command WITHOUT --config flag and WITHOUT env var (should discover from search paths)
@@ -943,7 +943,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -973,7 +973,7 @@ jsonlogging: true`
 			AppName: "testapp",
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute with explicit --config flag (should take precedence over env var and search paths)
@@ -1004,7 +1004,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1026,7 +1026,7 @@ jsonlogging: true`
 			AppName: "testapp",
 		}
 
-		err := autoflags.SetupConfig(rootCmd, configOpts)
+		err := structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should not find any config)
@@ -1061,7 +1061,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1093,7 +1093,7 @@ jsonlogging: true`
 			CustomPaths: []string{"/custom/search/path"},
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should find config in custom search path)
@@ -1131,7 +1131,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1163,7 +1163,7 @@ jsonlogging: true`
 			CustomPaths: []string{"/custom/{APP}/path"},
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should find config in custom search path)
@@ -1201,7 +1201,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1233,7 +1233,7 @@ jsonlogging: true`
 			CustomPaths: []string{"$HOME/custom/path"},
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should find config in custom search path)
@@ -1271,7 +1271,7 @@ jsonlogging: true`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1303,7 +1303,7 @@ jsonlogging: true`
 			CustomPaths: []string{"$PWD/path"},
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should find config in custom search path)
@@ -1344,7 +1344,7 @@ timeout: 30`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1369,7 +1369,7 @@ timeout: 30`
 		// Use minimal configuration options to test defaults
 		configOpts := config.Options{}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command with default setup
@@ -1417,7 +1417,7 @@ timeout: 30`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1447,7 +1447,7 @@ timeout: 30`
 			AppName: "testapp",
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command WITHOUT --config flag (should discover from env var)
@@ -1496,7 +1496,7 @@ timeout: 30`
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
 				// Test config discovery inside the command execution
-				inUse, message, err := autoflags.UseConfig(func() bool { return true })
+				inUse, message, err := structcli.UseConfig(func() bool { return true })
 				require.NoError(t, err)
 
 				// Write results to buffer so we can check them
@@ -1528,7 +1528,7 @@ timeout: 30`
 			EnvVar:   "MYAPP_SETTINGS_FILE",
 		}
 
-		err = autoflags.SetupConfig(rootCmd, configOpts)
+		err = structcli.SetupConfig(rootCmd, configOpts)
 		require.NoError(t, err)
 
 		// Execute the command (should discover from custom env var)
@@ -1565,7 +1565,7 @@ timeout: 30`
 			Hidden: true, // This makes IsAvailableCommand() return false
 			Run: func(c *cobra.Command, args []string) {
 				// Test UseConfigSimple - should NOT load config for hidden command
-				inUse, message, err := autoflags.UseConfigSimple(c)
+				inUse, message, err := structcli.UseConfigSimple(c)
 				require.NoError(t, err)
 
 				if inUse {
@@ -1582,7 +1582,7 @@ timeout: 30`
 			AppName: "testapp",
 		}
 
-		err = autoflags.SetupConfig(hiddenC, configOpts)
+		err = structcli.SetupConfig(hiddenC, configOpts)
 		require.NoError(t, err)
 
 		hiddenC.SetOut(&resultBuf)
@@ -1614,7 +1614,7 @@ timeout: 30`
 			Hidden: false, // This makes IsAvailableCommand() return false
 			Run: func(c *cobra.Command, args []string) {
 				// Test UseConfigSimple - should NOT load config for hidden command
-				inUse, message, err := autoflags.UseConfigSimple(c)
+				inUse, message, err := structcli.UseConfigSimple(c)
 				require.NoError(t, err)
 
 				if inUse {
@@ -1633,7 +1633,7 @@ timeout: 30`
 			AppName: "testapp",
 		}
 
-		err = autoflags.SetupConfig(availableC, configOpts)
+		err = structcli.SetupConfig(availableC, configOpts)
 		require.NoError(t, err)
 
 		availableC.SetOut(&resultBuf)
@@ -1658,7 +1658,7 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 		rootCmd.AddCommand(childCmd)
 
 		// SetupDebug should fail on child command regardless of when it's called
-		err := autoflags.SetupDebug(childCmd, debug.Options{})
+		err := structcli.SetupDebug(childCmd, debug.Options{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "must be called on the root command")
 	})
@@ -1669,7 +1669,7 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 		rootCmd.AddCommand(childCmd)
 
 		// SetupConfig should fail on child command regardless of when it's called
-		err := autoflags.SetupConfig(childCmd, config.Options{})
+		err := structcli.SetupConfig(childCmd, config.Options{})
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "must be called on the root command")
 	})
@@ -1677,7 +1677,7 @@ func TestSetupOrdering_ErrorConditions(t *testing.T) {
 
 func TestSetupOrdering_CustomOptions(t *testing.T) {
 	viper.Reset()
-	autoflags.SetEnvPrefix("")
+	structcli.SetEnvPrefix("")
 
 	t.Setenv("CUSTOM_DEBUG", "true")
 
@@ -1692,7 +1692,7 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 
 	defer func() {
 		viper.Reset()
-		autoflags.SetEnvPrefix("")
+		structcli.SetEnvPrefix("")
 		os.Unsetenv("CUSTOM_CONFIG")
 		os.Unsetenv("CUSTOM_DEBUG")
 	}()
@@ -1701,11 +1701,11 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 	cmd := &cobra.Command{
 		Use: "customapp",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, _, err := autoflags.UseConfig(func() bool { return true }); err != nil {
+			if _, _, err := structcli.UseConfig(func() bool { return true }); err != nil {
 				return err
 			}
 
-			return autoflags.Unmarshal(cmd, opts)
+			return structcli.Unmarshal(cmd, opts)
 		},
 	}
 	cmd.SetOut(io.Discard)
@@ -1722,17 +1722,17 @@ func TestSetupOrdering_CustomOptions(t *testing.T) {
 		EnvVar:     "CUSTOM_CONFIG",
 	}
 
-	err = autoflags.SetupConfig(cmd, configOpts)
+	err = structcli.SetupConfig(cmd, configOpts)
 	require.NoError(t, err)
-	err = autoflags.Define(cmd, opts)
+	err = structcli.Define(cmd, opts)
 	require.NoError(t, err)
-	err = autoflags.SetupDebug(cmd, debugOpts)
+	err = structcli.SetupDebug(cmd, debugOpts)
 	require.NoError(t, err)
 
 	err = cmd.Execute()
 	require.NoError(t, err)
 
-	v := autoflags.GetViper(cmd)
+	v := structcli.GetViper(cmd)
 
 	persistentFlags := cmd.PersistentFlags()
 	assert.NotNil(t, persistentFlags.Lookup("debug-mode"))
@@ -1754,7 +1754,7 @@ func (o *OrderingTestOptions) Attach(c *cobra.Command) error { return nil }
 func testOrderingScenario(t *testing.T, setupFunc func(*cobra.Command, *OrderingTestOptions) error) {
 	// Setup test environment
 	viper.Reset()
-	autoflags.SetEnvPrefix("")
+	structcli.SetEnvPrefix("")
 
 	// Setup mock filesystem
 	fs := afero.NewMemMapFs()
@@ -1780,7 +1780,7 @@ func testOrderingScenario(t *testing.T, setupFunc func(*cobra.Command, *Ordering
 			}
 		}
 		viper.Reset()
-		autoflags.SetEnvPrefix("")
+		structcli.SetEnvPrefix("")
 	}()
 
 	// Set up test environment variables
@@ -1810,7 +1810,7 @@ verbose: false`
 		Use: "testapp",
 		Run: func(cmd *cobra.Command, args []string) {
 			// Test that config file discovery works
-			inUse, message, err := autoflags.UseConfig(func() bool { return true })
+			inUse, message, err := structcli.UseConfig(func() bool { return true })
 			require.NoError(t, err)
 
 			if inUse {
@@ -1823,10 +1823,10 @@ verbose: false`
 
 			// Test that debug functionality works
 			captureOut.WriteRune('\n')
-			autoflags.UseDebug(cmd, &captureOut)
+			structcli.UseDebug(cmd, &captureOut)
 
 			// Capture final values to verify environment variables took precedence
-			v := autoflags.GetViper(cmd)
+			v := structcli.GetViper(cmd)
 			captureOut.WriteString(":FINAL_LOG_LEVEL:")
 			captureOut.WriteString(v.GetString("log-level"))
 			captureOut.WriteString(":FINAL_TIMEOUT:")
@@ -1952,7 +1952,7 @@ verbose: false`
 		flagTestCmd := &cobra.Command{
 			Use: "testapp",
 			Run: func(cmd *cobra.Command, args []string) {
-				v := autoflags.GetViper(cmd)
+				v := structcli.GetViper(cmd)
 				captureOut.WriteString("FLAG_LOG_LEVEL:")
 				captureOut.WriteString(v.GetString("log-level"))
 				captureOut.WriteString(":FLAG_TIMEOUT:")
@@ -1985,78 +1985,78 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 		{
 			name: "SetupDebug_SetupConfig_Define",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
+				if err := structcli.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
+				if err := structcli.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
 
-				return autoflags.Define(cmd, opts)
+				return structcli.Define(cmd, opts)
 			},
 		},
 		{
 			name: "SetupDebug_Define_SetupConfig",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
+				if err := structcli.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.Define(cmd, opts); err != nil {
+				if err := structcli.Define(cmd, opts); err != nil {
 					return err
 				}
 
-				return autoflags.SetupConfig(cmd, config.Options{})
+				return structcli.SetupConfig(cmd, config.Options{})
 			},
 		},
 		{
 			name: "SetupConfig_SetupDebug_Define",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
+				if err := structcli.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
+				if err := structcli.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
 
-				return autoflags.Define(cmd, opts)
+				return structcli.Define(cmd, opts)
 			},
 		},
 		{
 			name: "SetupConfig_Define_SetupDebug",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
+				if err := structcli.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
-				if err := autoflags.Define(cmd, opts); err != nil {
+				if err := structcli.Define(cmd, opts); err != nil {
 					return err
 				}
 
-				return autoflags.SetupDebug(cmd, debug.Options{})
+				return structcli.SetupDebug(cmd, debug.Options{})
 			},
 		},
 		{
 			name: "Define_SetupDebug_SetupConfig",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.Define(cmd, opts); err != nil {
+				if err := structcli.Define(cmd, opts); err != nil {
 					return err
 				}
-				if err := autoflags.SetupDebug(cmd, debug.Options{}); err != nil {
+				if err := structcli.SetupDebug(cmd, debug.Options{}); err != nil {
 					return err
 				}
 
-				return autoflags.SetupConfig(cmd, config.Options{})
+				return structcli.SetupConfig(cmd, config.Options{})
 			},
 		},
 		{
 			name: "Define_SetupConfig_SetupDebug",
 			setup: func(cmd *cobra.Command, opts *OrderingTestOptions) error {
-				if err := autoflags.Define(cmd, opts); err != nil {
+				if err := structcli.Define(cmd, opts); err != nil {
 					return err
 				}
-				if err := autoflags.SetupConfig(cmd, config.Options{}); err != nil {
+				if err := structcli.SetupConfig(cmd, config.Options{}); err != nil {
 					return err
 				}
-				return autoflags.SetupDebug(cmd, debug.Options{})
+				return structcli.SetupDebug(cmd, debug.Options{})
 			},
 		},
 	}
@@ -2069,33 +2069,33 @@ func TestSetupOrdering_AllCombinations(t *testing.T) {
 }
 
 func TestSetupFunctions_AppNameSync(t *testing.T) {
-	autoflags.SetEnvPrefix("")
+	structcli.SetEnvPrefix("")
 
 	rootCmd := &cobra.Command{Use: "testapp"}
 
 	// Call SetupConfig first
-	err := autoflags.SetupConfig(rootCmd, config.Options{AppName: "myapp"})
+	err := structcli.SetupConfig(rootCmd, config.Options{AppName: "myapp"})
 	require.NoError(t, err)
-	assert.Equal(t, "MYAPP", autoflags.EnvPrefix())
+	assert.Equal(t, "MYAPP", structcli.EnvPrefix())
 
 	// Call SetupDebug after without app name
-	err = autoflags.SetupDebug(rootCmd, debug.Options{})
+	err = structcli.SetupDebug(rootCmd, debug.Options{})
 	require.NoError(t, err)
-	assert.Equal(t, "MYAPP", autoflags.EnvPrefix(), "should use the already set app name")
+	assert.Equal(t, "MYAPP", structcli.EnvPrefix(), "should use the already set app name")
 }
 
 func TestSetupFunctions_NoPrefix_NoAppName_EmptyCommandName(t *testing.T) {
-	autoflags.SetEnvPrefix("")
+	structcli.SetEnvPrefix("")
 
 	rootCmd := &cobra.Command{Use: ""}
 
 	// Call SetupConfig first
-	err := autoflags.SetupConfig(rootCmd, config.Options{})
+	err := structcli.SetupConfig(rootCmd, config.Options{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "couldn't determine the app name")
 
 	// Call SetupDebug after
-	err = autoflags.SetupDebug(rootCmd, debug.Options{})
+	err = structcli.SetupDebug(rootCmd, debug.Options{})
 	require.Error(t, err)
 	require.ErrorContains(t, err, "couldn't determine the app name")
 }
@@ -2149,7 +2149,7 @@ func (o *customDecodeHookOptions) DecodeServerMode(input any) (any, error) {
 	}
 }
 
-func (o *customDecodeHookOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, o) }
+func (o *customDecodeHookOptions) Attach(c *cobra.Command) error { return structcli.Define(c, o) }
 
 type mixedHooksOptions struct {
 	ServerMode ServerMode1   `flagcustom:"true" flag:"server-mode" flagdescr:"Server mode"`
@@ -2176,7 +2176,7 @@ func (m *mixedHooksOptions) DecodeServerMode(input any) (any, error) {
 	return ServerMode1(str), nil
 }
 
-func (o *mixedHooksOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, o) }
+func (o *mixedHooksOptions) Attach(c *cobra.Command) error { return structcli.Define(c, o) }
 
 type multiCustomOptions struct {
 	Mode1 ServerMode1 `flagcustom:"true" flagdescr:"First mode"`
@@ -2234,12 +2234,12 @@ func (m *multiCustomOptions) DecodeMode2(input any) (any, error) {
 	}
 }
 
-func (m *multiCustomOptions) Attach(c *cobra.Command) error { return autoflags.Define(c, m) }
+func (m *multiCustomOptions) Attach(c *cobra.Command) error { return structcli.Define(c, m) }
 
 func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 	}
 
 	t.Run("CustomDecodeHook_FromConfig", func(t *testing.T) {
@@ -2247,13 +2247,13 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-custom-decode"}
 		opts := &customDecodeHookOptions{}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		viper.Set("server-mode", "test_custom_decode")
 		viper.Set("log-level", "debug")
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err, "Unmarshal should succeed with custom decode hook")
 
 		assert.Equal(t, ServerMode1("CUSTOM_DECODE_CALLED"), opts.ServerMode, "Custom decode hook should have transformed the value")
@@ -2265,7 +2265,7 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-transform"}
 		opts := &customDecodeHookOptions{}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Test various input transformations
@@ -2289,12 +2289,12 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 				opts := &customDecodeHookOptions{}
 				cmd := &cobra.Command{Use: "testcmd-transform-" + tc.input}
 
-				err := autoflags.Define(cmd, opts)
+				err := structcli.Define(cmd, opts)
 				require.NoError(t, err)
 
 				viper.Set("server-mode", tc.input)
 
-				err = autoflags.Unmarshal(cmd, opts)
+				err = structcli.Unmarshal(cmd, opts)
 				require.NoError(t, err)
 
 				assert.Equal(t, tc.expected, opts.ServerMode, "Input '%s' should be transformed to '%s'", tc.input, tc.expected)
@@ -2307,13 +2307,13 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-error"}
 		opts := &customDecodeHookOptions{}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set invalid value that should cause decode hook to return error
 		viper.Set("server-mode", "invalid-mode")
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.Error(t, err, "Unmarshal should fail when custom decode hook returns error")
 		assert.Contains(t, err.Error(), "invalid server mode", "Error should come from custom decode hook")
 		assert.Contains(t, err.Error(), "couldn't unmarshal config to options", "Error should be wrapped by Unmarshal")
@@ -2324,7 +2324,7 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-flag-override"}
 		opts := &customDecodeHookOptions{}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set config value
@@ -2334,7 +2334,7 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		err = cmd.Flags().Set("server-mode", "staging")
 		require.NoError(t, err)
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Flag value should win and be processed by custom decode hook
@@ -2359,13 +2359,13 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		cmd := &cobra.Command{Use: "testcmd-env-override"}
 		opts := &customDecodeHookOptions{}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set config value (should be overridden by env var)
 		viper.Set("server-mode", "dev")
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Env var value should win and be processed by custom decode hook
@@ -2382,7 +2382,7 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 
 		// We need to manually register the custom hook for this test
 		// Since we can't add methods to a struct defined in a function
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set values for all types
@@ -2390,7 +2390,7 @@ func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 		viper.Set("log-level", "debug")  // Built-in zapcore.Level hook
 		viper.Set("server-mode", "test") // Custom hook
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Verify built-in hooks work
@@ -2411,18 +2411,18 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		opts := &customDecodeHookOptions{}
 
 		// Step 1: Define flags (this should register the custom decode hook in the scope)
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Step 2: Verify the hook was registered by checking scope
-		scope := autoflags.GetViper(cmd) // This gets us access to the scope indirectly
+		scope := structcli.GetViper(cmd) // This gets us access to the scope indirectly
 		require.NotNil(t, scope, "Should have a scope")
 
 		// Step 3: Set up config to trigger decode hook
 		viper.Set("server-mode", "test_custom_decode")
 
 		// Step 4: Call Unmarshal - this is where the scope.getCustomDecodeHook is called
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Step 5: Verify the custom decode hook was retrieved and executed
@@ -2437,7 +2437,7 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		cmd := &cobra.Command{Use: "multi-custom"}
 
 		// Define flags - this should register both custom decode hooks in the scope
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Verify both flags were created with custom descriptions
@@ -2457,7 +2457,7 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		viper.Set("mode2", "test2") // Should trigger Mode2 custom decode hook
 		viper.Set("level", "info")  // Normal field, no custom hook
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Verify both custom decode hooks were retrieved from scope and executed
@@ -2473,14 +2473,14 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		opts := &multiCustomOptions{}
 		cmd := &cobra.Command{Use: "multi-transform"}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set values that should be transformed differently by each hook
 		viper.Set("mode1", "production") // Mode1 hook adds "mode1_" prefix
 		viper.Set("mode2", "production") // Mode2 hook adds "mode2_" prefix
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Verify each hook applied its own transformation
@@ -2497,7 +2497,7 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		opts := &multiCustomOptions{}
 		cmd := &cobra.Command{Use: "multi-flags"}
 
-		err := autoflags.Define(cmd, opts)
+		err := structcli.Define(cmd, opts)
 		require.NoError(t, err)
 
 		// Set config values
@@ -2510,7 +2510,7 @@ func TestUnmarshal_CustomDecodeHook_ScopeRetrieval(t *testing.T) {
 		err = cmd.Flags().Set("mode2", "flag2")
 		require.NoError(t, err)
 
-		err = autoflags.Unmarshal(cmd, opts)
+		err = structcli.Unmarshal(cmd, opts)
 		require.NoError(t, err)
 
 		// Verify flags overrode config and were processed by respective custom hooks
@@ -2556,7 +2556,7 @@ func (o *wrongDefineParamOptions) DefineCustomField(p1 int, short, descr string,
 	return nil, ""
 }
 func (o *wrongDefineParamOptions) DecodeCustomField(i any) (any, error) { return i, nil }
-func (o *wrongDefineParamOptions) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+func (o *wrongDefineParamOptions) Attach(c *cobra.Command) error        { return structcli.Define(c, o) }
 
 type wrongDefineReturn1Options struct {
 	CustomField string `flagcustom:"true"`
@@ -2567,7 +2567,7 @@ func (o *wrongDefineReturn1Options) DefineCustomField(name, short, descr string,
 	return "", ""
 }
 func (o *wrongDefineReturn1Options) DecodeCustomField(i any) (any, error) { return i, nil }
-func (o *wrongDefineReturn1Options) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+func (o *wrongDefineReturn1Options) Attach(c *cobra.Command) error        { return structcli.Define(c, o) }
 
 type wrongDefineReturn2Options struct {
 	CustomField string `flagcustom:"true"`
@@ -2579,12 +2579,12 @@ func (o *wrongDefineReturn2Options) DefineCustomField(name, short, descr string,
 	return values.NewString(fieldPtr), 0
 }
 func (o *wrongDefineReturn2Options) DecodeCustomField(i any) (any, error) { return i, nil }
-func (o *wrongDefineReturn2Options) Attach(c *cobra.Command) error        { return autoflags.Define(c, o) }
+func (o *wrongDefineReturn2Options) Attach(c *cobra.Command) error        { return structcli.Define(c, o) }
 
 func TestFlagCustom_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 	}
 
 	t.Run("MultipleFieldsWithSameCustomType", func(t *testing.T) {
@@ -2593,9 +2593,9 @@ func TestFlagCustom_Integration(t *testing.T) {
 		opts := &conflictingCustomType{}
 		c := &cobra.Command{Use: "testcmd-custom-type"}
 
-		err := autoflags.Define(c, opts)
+		err := structcli.Define(c, opts)
 		require.Error(t, err)
-		require.ErrorIs(t, err, autoflagserrors.ErrConflictingType)
+		require.ErrorIs(t, err, structclierrors.ErrConflictingType)
 		assert.Contains(t, err.Error(), "create distinct custom types for each field")
 		assert.Contains(t, err.Error(), "Mode")
 		assert.Contains(t, err.Error(), "Nest.ModeAgain")
@@ -2608,7 +2608,7 @@ func TestFlagCustom_Integration(t *testing.T) {
 
 		err := opts.Attach(cmd)
 		require.Error(t, err)
-		var e *autoflagserrors.InvalidDefineHookSignatureError
+		var e *structclierrors.InvalidDefineHookSignatureError
 		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
 
 		assert.Contains(t, e.Error(), "define hook parameter 0 has wrong type", "Error should complain about the first parameter")
@@ -2622,7 +2622,7 @@ func TestFlagCustom_Integration(t *testing.T) {
 
 		err := opts.Attach(cmd)
 		require.Error(t, err)
-		var e *autoflagserrors.InvalidDefineHookSignatureError
+		var e *structclierrors.InvalidDefineHookSignatureError
 		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
 
 		assert.Contains(t, e.Error(), "define hook first return value must be a pflag.Value")
@@ -2635,7 +2635,7 @@ func TestFlagCustom_Integration(t *testing.T) {
 
 		err := opts.Attach(cmd)
 		require.Error(t, err)
-		var e *autoflagserrors.InvalidDefineHookSignatureError
+		var e *structclierrors.InvalidDefineHookSignatureError
 		require.ErrorAs(t, err, &e, "error should be of type InvalidDefineHookSignatureError")
 
 		assert.Contains(t, e.Error(), "define hook second return value must be a string")
@@ -2649,7 +2649,7 @@ type ComprehensiveUsageOptions struct {
 }
 
 func (o *ComprehensiveUsageOptions) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 func TestSetupUsage_Comprehensive(t *testing.T) {
@@ -2697,7 +2697,7 @@ func TestSetupUsage_Comprehensive(t *testing.T) {
 
 	rootCmd.AddCommand(subCmd1, subCmd2, hiddenCmd, helpTopicCmd)
 
-	autoflags.SetupUsage(rootCmd)
+	structcli.SetupUsage(rootCmd)
 
 	usageString := rootCmd.UsageString()
 

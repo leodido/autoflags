@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/leodido/autoflags"
-	internalscope "github.com/leodido/autoflags/internal/scope"
-	internaltesting "github.com/leodido/autoflags/internal/testing"
+	"github.com/leodido/structcli"
+	internalscope "github.com/leodido/structcli/internal/scope"
+	internaltesting "github.com/leodido/structcli/internal/testing"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -42,7 +42,7 @@ func TestConcurrentCommandCreation(t *testing.T) {
 				opts := &TestOptions{Value: cmdName}
 
 				// This should be thread-safe
-				autoflags.Define(cmd, opts)
+				structcli.Define(cmd, opts)
 
 				// Get the scope and send it to results
 				scope := internalscope.Get(cmd)
@@ -91,8 +91,8 @@ func TestCommandIsolation(t *testing.T) {
 		opts1 := &TestOptions{Value: "value1"}
 		opts2 := &TestOptions{Value: "value2"}
 
-		autoflags.Define(cmd1, opts1)
-		autoflags.Define(cmd2, opts2)
+		structcli.Define(cmd1, opts1)
+		structcli.Define(cmd2, opts2)
 
 		scope1 := internalscope.Get(cmd1)
 		scope2 := internalscope.Get(cmd2)
@@ -132,8 +132,8 @@ func TestCommandIsolation(t *testing.T) {
 		}
 		childCmd.SetContext(parentCtx)
 
-		autoflags.Define(parentCmd, &TestOptions{})
-		autoflags.Define(childCmd, &TestOptions{})
+		structcli.Define(parentCmd, &TestOptions{})
+		structcli.Define(childCmd, &TestOptions{})
 
 		parentScope := internalscope.Get(parentCmd)
 		childScope := internalscope.Get(childCmd)
@@ -145,7 +145,7 @@ func TestCommandIsolation(t *testing.T) {
 	// Test concurrent access to same command
 	t.Run("concurrent_same_command", func(t *testing.T) {
 		cmd := &cobra.Command{Use: "concurrent"}
-		autoflags.Define(cmd, &TestOptions{})
+		structcli.Define(cmd, &TestOptions{})
 
 		const numGoroutines = 50
 		var wg sync.WaitGroup
@@ -193,7 +193,7 @@ func TestMemoryCleanup(t *testing.T) {
 		cmd := &cobra.Command{Use: fmt.Sprintf("test%d", i)}
 		opts := &TestOptions{Value: fmt.Sprintf("value%d", i)}
 
-		autoflags.Define(cmd, opts)
+		structcli.Define(cmd, opts)
 		scope := internalscope.Get(cmd)
 
 		// Verify scope is created

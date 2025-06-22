@@ -1,4 +1,4 @@
-package autoflags
+package structcli
 
 import (
 	"context"
@@ -9,12 +9,12 @@ import (
 	"testing"
 	"time"
 
-	autoflagserrors "github.com/leodido/autoflags/errors"
-	internalenv "github.com/leodido/autoflags/internal/env"
-	internalhooks "github.com/leodido/autoflags/internal/hooks"
-	internalreflect "github.com/leodido/autoflags/internal/reflect"
-	internalusage "github.com/leodido/autoflags/internal/usage"
-	"github.com/leodido/autoflags/values"
+	structclierrors "github.com/leodido/structcli/errors"
+	internalenv "github.com/leodido/structcli/internal/env"
+	internalhooks "github.com/leodido/structcli/internal/hooks"
+	internalreflect "github.com/leodido/structcli/internal/reflect"
+	internalusage "github.com/leodido/structcli/internal/usage"
+	"github.com/leodido/structcli/values"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -24,15 +24,15 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-type autoflagsSuite struct {
+type structcliSuite struct {
 	suite.Suite
 }
 
-func TestAutoflagsSuite(t *testing.T) {
-	suite.Run(t, new(autoflagsSuite))
+func TestStructCLISuite(t *testing.T) {
+	suite.Run(t, new(structcliSuite))
 }
 
-func (suite *autoflagsSuite) SetupTest() {
+func (suite *structcliSuite) SetupTest() {
 	// Reset viper state before each test to prevent test pollution
 	viper.Reset()
 	// Reset global prefix
@@ -76,7 +76,7 @@ func (o uintTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o uintTestOptions) Transform(ctx context.Context) error { return nil }
 func (o uintTestOptions) Validate() []error                   { return nil }
 
-func (suite *autoflagsSuite) TestDefine_UintTypesSupport() {
+func (suite *structcliSuite) TestDefine_UintTypesSupport() {
 	opts := &uintTestOptions{
 		UintField:   500,
 		Uint8Field:  50,
@@ -141,7 +141,7 @@ func (o intTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o intTestOptions) Transform(ctx context.Context) error { return nil }
 func (o intTestOptions) Validate() []error                   { return nil }
 
-func (suite *autoflagsSuite) TestDefine_IntTypesSupport() {
+func (suite *structcliSuite) TestDefine_IntTypesSupport() {
 	opts := &intTestOptions{
 		IntField:   1000,
 		Int8Field:  42,
@@ -202,7 +202,7 @@ func (o countTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o countTestOptions) Transform(ctx context.Context) error { return nil }
 func (o countTestOptions) Validate() []error                   { return nil }
 
-func (suite *autoflagsSuite) TestDefine_CountFlagSupport() {
+func (suite *structcliSuite) TestDefine_CountFlagSupport() {
 	opts := &countTestOptions{Verbose: 0}
 	cmd := &cobra.Command{}
 
@@ -239,7 +239,7 @@ func (o sliceTestOptions) Attach(c *cobra.Command) error       { return nil }
 func (o sliceTestOptions) Transform(ctx context.Context) error { return nil }
 func (o sliceTestOptions) Validate() []error                   { return nil }
 
-func (suite *autoflagsSuite) TestDefine_SliceSupport() {
+func (suite *structcliSuite) TestDefine_SliceSupport() {
 	opts := &sliceTestOptions{
 		StringSliceField: []string{"default1", "default2"},
 		IntSliceField:    []int{1, 2, 3},
@@ -269,7 +269,7 @@ func (suite *autoflagsSuite) TestDefine_SliceSupport() {
 	assert.Equal(suite.T(), expectedInts, opts.IntSliceField, "int slice field should be updated")
 }
 
-func (suite *autoflagsSuite) TestDefine_NilPointerHandling() {
+func (suite *structcliSuite) TestDefine_NilPointerHandling() {
 	// Test with nil pointer: it should not panic and should create same flags as zero-valued struct
 	var nilOpts *testOptions = nil
 	cmd1 := &cobra.Command{}
@@ -354,7 +354,7 @@ func (o *comprehensiveCustomOptions) Attach(c *cobra.Command) error {
 	return nil
 }
 
-func (suite *autoflagsSuite) TestFlagcustom_ComprehensiveScenarios() {
+func (suite *structcliSuite) TestFlagcustom_ComprehensiveScenarios() {
 	opts := &comprehensiveCustomOptions{}
 
 	c := &cobra.Command{Use: "test"}
@@ -399,14 +399,14 @@ type structFieldOptions struct {
 
 func (o *structFieldOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagcustom_EdgeCases() {
+func (suite *structcliSuite) TestFlagcustom_EdgeCases() {
 	// Test struct fields (should be ignored)
 	structOpts := &structFieldOptions{}
 	c1 := &cobra.Command{Use: "test1"}
 	err := Define(c1, structOpts)
 
 	require.Error(suite.T(), err, "custom methods should not be called for struct fields")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidTagUsage)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrInvalidTagUsage)
 	require.Contains(suite.T(), err.Error(), "cannot be used on struct types")
 	assert.Contains(suite.T(), err.Error(), "Nest")
 	assert.False(suite.T(), structOpts.methodCalled, "custom methods should not be called for struct fields")
@@ -419,7 +419,7 @@ type envAnnotationsTestOptions struct {
 
 func (o *envAnnotationsTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
+func (suite *structcliSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
 	SetEnvPrefix("TEST")
 
 	opts := &envAnnotationsTestOptions{}
@@ -439,7 +439,7 @@ func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsNotEmpty() {
 	assert.Contains(suite.T(), envAnnotation, "TEST_HAS_ENV", "should contain expected env var")
 }
 
-func (suite *autoflagsSuite) TestEnvAnnotations_WhenEnvsEmpty() {
+func (suite *structcliSuite) TestEnvAnnotations_WhenEnvsEmpty() {
 	opts := &envAnnotationsTestOptions{}
 	c := &cobra.Command{Use: "test"}
 	Define(c, opts)
@@ -464,7 +464,7 @@ type requiredFlagsTestOptions struct {
 
 func (o *requiredFlagsTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_BasicFunctionality() {
+func (suite *structcliSuite) TestFlagrequired_BasicFunctionality() {
 	opts := &requiredFlagsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -516,7 +516,7 @@ type nestedRequiredStruct struct {
 
 func (o *nestedRequiredFlagsOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_NestedStructs() {
+func (suite *structcliSuite) TestFlagrequired_NestedStructs() {
 	opts := &nestedRequiredFlagsOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -555,7 +555,7 @@ type validBooleanRequiredOptions struct {
 
 func (o *validBooleanRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_ValidBooleanEdgeCases() {
+func (suite *structcliSuite) TestFlagrequired_ValidBooleanEdgeCases() {
 	opts := &validBooleanRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -586,7 +586,7 @@ type singleInvalidRequiredOption struct {
 
 func (o *singleInvalidRequiredOption) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_InvalidBooleanValue() {
+func (suite *structcliSuite) TestFlagrequired_InvalidBooleanValue() {
 	opts := &singleInvalidRequiredOption{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -608,7 +608,7 @@ type multipleTypesRequiredOptions struct {
 
 func (o *multipleTypesRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_MultipleTypes() {
+func (suite *structcliSuite) TestFlagrequired_MultipleTypes() {
 	opts := &multipleTypesRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -647,7 +647,7 @@ type requiredWithOtherTagsOptions struct {
 
 func (o *requiredWithOtherTagsOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_CombinedWithOtherTags() {
+func (suite *structcliSuite) TestFlagrequired_CombinedWithOtherTags() {
 	opts := &requiredWithOtherTagsOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -748,7 +748,7 @@ type canAddrTestOptions struct {
 
 func (o canAddrTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestDefine_NonAddressableFields() {
+func (suite *structcliSuite) TestDefine_NonAddressableFields() {
 	suite.T().Run("interface_with_embedded_struct", func(t *testing.T) {
 		// Create options with interface containing a struct
 		opts := &testOptionsWithInterface{
@@ -834,7 +834,7 @@ func (suite *autoflagsSuite) TestDefine_NonAddressableFields() {
 	})
 }
 
-func (suite *autoflagsSuite) TestDefine_CanAddrValidation() {
+func (suite *structcliSuite) TestDefine_CanAddrValidation() {
 	suite.T().Run("ensure_canaddr_prevents_panic", func(t *testing.T) {
 		// Use reflection to create a scenario that would panic without CanAddr() check
 		structValue := reflect.ValueOf(canAddrTestOptions{Field: "test"})
@@ -879,7 +879,7 @@ func (o *flagCustomTestOptions) DecodeValidCustom(input any) (any, error) {
 
 func (o *flagCustomTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagCustom_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagCustom_ShouldReturnError() {
 	opts := &flagCustomTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -910,7 +910,7 @@ func (o *validFlagCustomOptions) DecodeTrueCustom(input any) (any, error) {
 
 func (o *validFlagCustomOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagCustom_ValidValues() {
+func (suite *structcliSuite) TestFlagCustom_ValidValues() {
 	opts := &validFlagCustomOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -990,7 +990,7 @@ func (o *validEdgeCasesOptions) DecodeNumberOne(input any) (any, error) {
 
 func (o *validEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
+func (suite *structcliSuite) TestFlagCustom_EdgeCases_ValidValues() {
 	opts := &validEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1017,7 +1017,7 @@ func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ValidValues() {
 	assert.NotEqual(suite.T(), "CUSTOM_ONE", numberZeroFlag.DefValue, "ParseBool should accept '0' as false")
 }
 
-func (suite *autoflagsSuite) TestFlagCustom_EdgeCases_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagCustom_EdgeCases_ShouldReturnError() {
 	opts := &flagCustomEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1041,7 +1041,7 @@ type flagEnvTestOptions struct {
 
 func (o *flagEnvTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagenv_ShouldReturnError() {
 	opts := &flagEnvTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1062,7 +1062,7 @@ type validFlagEnvOptions struct {
 
 func (o *validFlagEnvOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_ValidValues() {
+func (suite *structcliSuite) TestFlagenv_ValidValues() {
 	opts := &validFlagEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1108,7 +1108,7 @@ type validEnvEdgeCasesOptions struct {
 
 func (o *validEnvEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
+func (suite *structcliSuite) TestFlagenv_EdgeCases_ValidValues() {
 	opts := &validEnvEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1134,7 +1134,7 @@ func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ValidValues() {
 	assert.Nil(suite.T(), numberZeroAnnotation, "ParseBool should accept '0' as false")
 }
 
-func (suite *autoflagsSuite) TestFlagenv_EdgeCases_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagenv_EdgeCases_ShouldReturnError() {
 	opts := &flagEnvEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1159,7 +1159,7 @@ type nestedEnvStruct struct {
 
 func (o *nestedFlagEnvOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_NestedStructs_WithValidation() {
+func (suite *structcliSuite) TestFlagenv_NestedStructs_WithValidation() {
 	opts := &nestedFlagEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1179,7 +1179,7 @@ type multipleInvalidEnvOptions struct {
 
 func (o *multipleInvalidEnvOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_MultipleInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagenv_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidEnvOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1222,7 +1222,7 @@ func (o *flagEnvCombinedOptions) DecodeInvalidEnvValid(input any) (any, error) {
 
 func (o *flagEnvCombinedOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_CombinedWithOtherTags_FailureCase() {
+func (suite *structcliSuite) TestFlagenv_CombinedWithOtherTags_FailureCase() {
 	opts := &flagEnvCombinedOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1255,7 +1255,7 @@ func (o *validFlagEnvInteractionOptions) DecodeEnvWithCustom(input any) (any, er
 
 func (o *validFlagEnvInteractionOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_InteractionWithOtherTags_SuccessCase() {
+func (suite *structcliSuite) TestFlagenv_InteractionWithOtherTags_SuccessCase() {
 	opts := &validFlagEnvInteractionOptions{}
 	cmd := &cobra.Command{Use: "test"}
 	SetEnvPrefix("TEST") // Set a prefix for predictable env var names
@@ -1296,7 +1296,7 @@ type bothInvalidOptions struct {
 
 func (o *bothInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagenv_BothInvalid_ReturnsFirstError() {
 	opts := &bothInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1313,7 +1313,7 @@ type errorMessageOptions struct {
 
 func (o *errorMessageOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() {
+func (suite *structcliSuite) TestFlagenv_ErrorMessages_ContainExpectedContent() {
 	opts := &errorMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1340,7 +1340,7 @@ type flagIgnoreTestOptions struct {
 
 func (o *flagIgnoreTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagignore_ShouldReturnError() {
 	opts := &flagIgnoreTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1361,7 +1361,7 @@ type validFlagIgnoreOptions struct {
 
 func (o *validFlagIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_ValidValues() {
+func (suite *structcliSuite) TestFlagignore_ValidValues() {
 	opts := &validFlagIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1391,7 +1391,7 @@ type validIgnoreEdgeCasesOptions struct {
 
 func (o *validIgnoreEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ValidValues() {
+func (suite *structcliSuite) TestFlagignore_EdgeCases_ValidValues() {
 	opts := &validIgnoreEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1421,7 +1421,7 @@ type flagIgnoreEdgeCasesOptions struct {
 
 func (o *flagIgnoreEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_EdgeCases_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagignore_EdgeCases_ShouldReturnError() {
 	opts := &flagIgnoreEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1444,7 +1444,7 @@ type flagIgnoreStructFieldOptions struct {
 
 func (o *flagIgnoreStructFieldOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_OnStruct_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagignore_OnStruct_ShouldReturnError() {
 	opts := &flagIgnoreStructFieldOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1468,7 +1468,7 @@ type nestedIgnoreStruct struct {
 
 func (o *nestedFlagIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_NestedStructs_WithValidation() {
+func (suite *structcliSuite) TestFlagignore_NestedStructs_WithValidation() {
 	opts := &nestedFlagIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1488,7 +1488,7 @@ type multipleInvalidIgnoreOptions struct {
 
 func (o *multipleInvalidIgnoreOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_MultipleInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagignore_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidIgnoreOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1520,7 +1520,7 @@ func (o *flagIgnoreCombinedOptions) DecodeIgnoreWithCustom(input any) (any, erro
 
 func (o *flagIgnoreCombinedOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_CombinedWithOtherTags_FailureCase() {
+func (suite *structcliSuite) TestFlagignore_CombinedWithOtherTags_FailureCase() {
 	opts := &flagIgnoreCombinedOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1553,7 +1553,7 @@ func (o *validFlagIgnoreInteractionOptions) DecodeIgnoreWithCustom(input any) (a
 func (o *validFlagIgnoreInteractionOptions) Attach(c *cobra.Command) error { return nil }
 
 // New test to verify the correct behavior of valid `flagignore` tags.
-func (suite *autoflagsSuite) TestFlagignore_InteractionWithOtherTags_SuccessCase() {
+func (suite *structcliSuite) TestFlagignore_InteractionWithOtherTags_SuccessCase() {
 	opts := &validFlagIgnoreInteractionOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1588,7 +1588,7 @@ type allThreeInvalidOptions struct {
 
 func (o *allThreeInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_AllThreeInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagignore_AllThreeInvalid_ReturnsFirstError() {
 	opts := &allThreeInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1605,7 +1605,7 @@ type errorIgnoreMessageOptions struct {
 
 func (o *errorIgnoreMessageOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagignore_ErrorMessages_ContainExpectedContent() {
+func (suite *structcliSuite) TestFlagignore_ErrorMessages_ContainExpectedContent() {
 	opts := &errorIgnoreMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1632,7 +1632,7 @@ type flagRequiredTestOptions struct {
 
 func (o *flagRequiredTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagrequired_ShouldReturnError() {
 	opts := &flagRequiredTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1653,7 +1653,7 @@ type validFlagRequiredOptions struct {
 
 func (o *validFlagRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_ValidValues() {
+func (suite *structcliSuite) TestFlagrequired_ValidValues() {
 	opts := &validFlagRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1690,7 +1690,7 @@ type validRequiredEdgeCasesOptions struct {
 
 func (o *validRequiredEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ValidValues() {
+func (suite *structcliSuite) TestFlagrequired_EdgeCases_ValidValues() {
 	opts := &validRequiredEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1722,7 +1722,7 @@ type flagRequiredConflicting struct {
 
 func (o *flagRequiredConflicting) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_Conflicting_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagrequired_Conflicting_ShouldReturnError() {
 	opts := &flagRequiredConflicting{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1730,7 +1730,7 @@ func (suite *autoflagsSuite) TestFlagrequired_Conflicting_ShouldReturnError() {
 	err := Define(cmd, opts)
 
 	require.Error(suite.T(), err, "Should return error for flagrequired together with flagignore")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrConflictingTags)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrConflictingTags)
 	assert.Contains(suite.T(), err.Error(), "flagrequired", "Error should mention flagrequired")
 	assert.Contains(suite.T(), err.Error(), "flagignore", "Error should mention flagignore")
 	assert.Contains(suite.T(), err.Error(), "mutually exclusive", "Error should mention that flagrequied and flagignore are mutually exclusive")
@@ -1746,7 +1746,7 @@ type flagRequiredEdgeCasesOptions struct {
 
 func (o *flagRequiredEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_EdgeCases_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagrequired_EdgeCases_ShouldReturnError() {
 	opts := &flagRequiredEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1771,7 +1771,7 @@ type nestedValidInvalidRequiredStruct struct {
 
 func (o *nestedFlagRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_NestedStructs_WithValidation() {
+func (suite *structcliSuite) TestFlagrequired_NestedStructs_WithValidation() {
 	opts := &nestedFlagRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1791,7 +1791,7 @@ type multipleInvalidRequiredOptions struct {
 
 func (o *multipleInvalidRequiredOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_MultipleInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagrequired_MultipleInvalid_ReturnsFirstError() {
 	opts := &multipleInvalidRequiredOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1809,7 +1809,7 @@ type allFourInvalidOptions struct {
 
 func (o *allFourInvalidOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_AllFourInvalid_ReturnsFirstError() {
+func (suite *structcliSuite) TestFlagrequired_AllFourInvalid_ReturnsFirstError() {
 	opts := &allFourInvalidOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1826,7 +1826,7 @@ type errorRequiredMessageOptions struct {
 
 func (o *errorRequiredMessageOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagrequired_ErrorMessages_ContainExpectedContent() {
+func (suite *structcliSuite) TestFlagrequired_ErrorMessages_ContainExpectedContent() {
 	opts := &errorRequiredMessageOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1848,7 +1848,7 @@ type exclusionsNestedStruct struct {
 	ExcludedNested string `flag:"excluded-nested" flagdescr:"should be excluded"`
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_BasicExclusion() {
+func (suite *structcliSuite) TestWithExclusions_BasicExclusion() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1887,7 +1887,7 @@ type exclusionsTestOptions struct {
 
 func (o *exclusionsTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestWithExclusions_MultipleExclusions() {
+func (suite *structcliSuite) TestWithExclusions_MultipleExclusions() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1910,7 +1910,7 @@ func (suite *autoflagsSuite) TestWithExclusions_MultipleExclusions() {
 	assert.Nil(suite.T(), noAlias, "--alias-flag should not be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_CaseInsensitive() {
+func (suite *structcliSuite) TestWithExclusions_CaseInsensitive() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1928,7 +1928,7 @@ func (suite *autoflagsSuite) TestWithExclusions_CaseInsensitive() {
 	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_NestedStructFlags() {
+func (suite *structcliSuite) TestWithExclusions_NestedStructFlags() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1949,7 +1949,7 @@ func (suite *autoflagsSuite) TestWithExclusions_NestedStructFlags() {
 	assert.NotNil(suite.T(), normalFlag, "normal-flag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_NestedPath() {
+func (suite *structcliSuite) TestWithExclusions_NestedPath() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1974,7 +1974,7 @@ type exclusionsAliasTestOptions struct {
 
 func (o *exclusionsAliasTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestWithExclusions_AliasExclusion() {
+func (suite *structcliSuite) TestWithExclusions_AliasExclusion() {
 	opts := &exclusionsAliasTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -1992,7 +1992,7 @@ func (suite *autoflagsSuite) TestWithExclusions_AliasExclusion() {
 	assert.NotNil(suite.T(), normalFlag, "normalflag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_PathVsAlias() {
+func (suite *structcliSuite) TestWithExclusions_PathVsAlias() {
 	opts := &exclusionsAliasTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2010,7 +2010,7 @@ func (suite *autoflagsSuite) TestWithExclusions_PathVsAlias() {
 	assert.NotNil(suite.T(), normalFlag, "normalflag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_CommandSpecific() {
+func (suite *structcliSuite) TestWithExclusions_CommandSpecific() {
 	opts := &exclusionsTestOptions{}
 	cmd1 := &cobra.Command{Use: "command1"}
 	cmd2 := &cobra.Command{Use: "command2"}
@@ -2037,7 +2037,7 @@ func (suite *autoflagsSuite) TestWithExclusions_CommandSpecific() {
 	assert.NotNil(suite.T(), normalFlag2, "normal-flag should be created in command2")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_EmptyExclusions() {
+func (suite *structcliSuite) TestWithExclusions_EmptyExclusions() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2056,7 +2056,7 @@ func (suite *autoflagsSuite) TestWithExclusions_EmptyExclusions() {
 	assert.NotNil(suite.T(), aliasFlag, "alias-flag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_NoExclusionsOption() {
+func (suite *structcliSuite) TestWithExclusions_NoExclusionsOption() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2075,7 +2075,7 @@ func (suite *autoflagsSuite) TestWithExclusions_NoExclusionsOption() {
 	assert.NotNil(suite.T(), aliasFlag, "alias-flag should be created")
 }
 
-func (suite *autoflagsSuite) TestWithExclusions_DuplicateExclusions() {
+func (suite *structcliSuite) TestWithExclusions_DuplicateExclusions() {
 	opts := &exclusionsTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2102,7 +2102,7 @@ type exclusionsSpecialCasesOptions struct {
 
 func (o *exclusionsSpecialCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestWithExclusions_SpecialCharacters() {
+func (suite *structcliSuite) TestWithExclusions_SpecialCharacters() {
 	opts := &exclusionsSpecialCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2131,7 +2131,7 @@ type flagShortTestOptions struct {
 
 func (o *flagShortTestOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
 	opts := &flagShortTestOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2139,7 +2139,7 @@ func (suite *autoflagsSuite) TestFlagshort_AlwaysValidated_ShouldReturnError() {
 	err := Define(cmd, opts)
 
 	require.Error(suite.T(), err, "Should always return error for invalid flagshort value")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrInvalidShorthand)
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "verb", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "InvalidShort", "Error should mention the field name")
@@ -2156,7 +2156,7 @@ type flagShortStructFieldOptions struct {
 
 func (o *flagShortStructFieldOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagshort_OnStruct_ShouldReturnError() {
+func (suite *structcliSuite) TestFlagshort_OnStruct_ShouldReturnError() {
 	opts := &flagShortStructFieldOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2179,7 +2179,7 @@ type flagShortEdgeCasesOptions struct {
 
 func (o *flagShortEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError() {
+func (suite *structcliSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError() {
 	opts := &flagShortEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2187,7 +2187,7 @@ func (suite *autoflagsSuite) TestFlagshort_EdgeCases_InvalidValues_AlwaysError()
 	err := Define(cmd, opts)
 
 	require.Error(suite.T(), err, "Should always return error for multi-character flagshort values")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrInvalidShorthand)
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	// Should contain one of the invalid values
 	errorContainsInvalid := strings.Contains(err.Error(), "ab") ||
@@ -2204,7 +2204,7 @@ type validShortEdgeCasesOptions struct {
 
 func (o *validShortEdgeCasesOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagshort_EdgeCases_ValidValues() {
+func (suite *structcliSuite) TestFlagshort_EdgeCases_ValidValues() {
 	opts := &validShortEdgeCasesOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2235,14 +2235,14 @@ type nestedShortStruct struct {
 
 func (o *nestedFlagShortOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
+func (suite *structcliSuite) TestFlagshort_NestedStructs_AlwaysValidated() {
 	opts := &nestedFlagShortOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
 	err := Define(cmd, opts)
 
 	require.Error(suite.T(), err, "Should always return error for invalid nested flagshort value")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrInvalidShorthand)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrInvalidShorthand)
 	assert.Contains(suite.T(), err.Error(), "shorthand", "Error should mention shorthand")
 	assert.Contains(suite.T(), err.Error(), "invalid", "Error should mention the invalid value")
 	assert.Contains(suite.T(), err.Error(), "NestedStruct.InvalidNestedShort", "Error should mention the nested field name")
@@ -2256,7 +2256,7 @@ type simpleValidOptions struct {
 
 func (o simpleValidOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestDefine_InvalidValueFallback() {
+func (suite *structcliSuite) TestDefine_InvalidValueFallback() {
 	suite.T().Run("nil_interface_returns_error", func(t *testing.T) {
 		// Test with a nil interface (not a nil pointer to a specific type)
 		var nilInterface Options
@@ -2325,7 +2325,7 @@ func (suite *autoflagsSuite) TestDefine_InvalidValueFallback() {
 	})
 }
 
-func (suite *autoflagsSuite) TestDefine_GetValueEdgeCases() {
+func (suite *structcliSuite) TestDefine_GetValueEdgeCases() {
 	suite.T().Run("zero_value_struct", func(t *testing.T) {
 		// Test with a zero-valued struct (not pointer)
 		opts := simpleValidOptions{} // zero value, not pointer
@@ -2366,7 +2366,7 @@ func (suite *autoflagsSuite) TestDefine_GetValueEdgeCases() {
 	})
 }
 
-func (suite *autoflagsSuite) TestDefine_ReflectionEdgeCases() {
+func (suite *structcliSuite) TestDefine_ReflectionEdgeCases() {
 	suite.T().Run("interface_containing_nil_pointer", func(t *testing.T) {
 		// Create an interface that contains a nil pointer
 		var nilPtr *simpleValidOptions = nil
@@ -2415,7 +2415,7 @@ func (suite *autoflagsSuite) TestDefine_ReflectionEdgeCases() {
 
 				if tc.shouldError {
 					require.Error(t, err, "should return error for %s", tc.name)
-					require.ErrorIs(t, err, autoflagserrors.ErrInputValue)
+					require.ErrorIs(t, err, structclierrors.ErrInputValue)
 				} else {
 					require.NoError(t, err, "should succeed for %s", tc.name)
 				}
@@ -2424,7 +2424,7 @@ func (suite *autoflagsSuite) TestDefine_ReflectionEdgeCases() {
 	})
 }
 
-func (suite *autoflagsSuite) TestDefine_NilPointerHandling_Extended() {
+func (suite *structcliSuite) TestDefine_NilPointerHandling_Extended() {
 	suite.T().Run("nil_interface_vs_nil_pointer", func(t *testing.T) {
 		// Test the difference between nil interface and nil pointer
 		var nilInterface Options = nil           // untyped nil - should error
@@ -2493,7 +2493,7 @@ func (o *missingDecodeHookOptions) DefineCustomField(name, short, descr string, 
 
 func (o *missingDecodeHookOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDecodeHook() {
+func (suite *structcliSuite) TestValidateCustomFlag_MissingDecodeHook() {
 	opts := &missingDecodeHookOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2517,7 +2517,7 @@ func (o *missingDefineHookOptions) DecodeCustomField(input any) (any, error) {
 
 func (o *missingDefineHookOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDefineHook() {
+func (suite *structcliSuite) TestValidateCustomFlag_MissingDefineHook() {
 	opts := &missingDefineHookOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2525,7 +2525,7 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_MissingDefineHook() {
 	err := Define(cmd, opts)
 
 	require.Error(suite.T(), err, "Should return error when define hook is missing")
-	require.ErrorIs(suite.T(), err, autoflagserrors.ErrMissingDefineHook)
+	require.ErrorIs(suite.T(), err, structclierrors.ErrMissingDefineHook)
 	assert.Contains(suite.T(), err.Error(), "missing define hook", "Error should mention missing define hook")
 	assert.Contains(suite.T(), err.Error(), "DefineCustomField", "Error should mention the expected define hook name")
 	assert.Contains(suite.T(), err.Error(), "CustomField", "Error should mention the field name")
@@ -2545,7 +2545,7 @@ func (o *wrongDefineSignatureOptions) DecodeCustomField(input any) (any, error) 
 
 func (o *wrongDefineSignatureOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDefineSignature() {
+func (suite *structcliSuite) TestValidateCustomFlag_WrongDefineSignature() {
 	opts := &wrongDefineSignatureOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2578,7 +2578,7 @@ func (o *wrongDecodeSignatureOptions) DecodeCustomField(wrongParam string, anoth
 
 func (o *wrongDecodeSignatureOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDecodeSignature() {
+func (suite *structcliSuite) TestValidateCustomFlag_WrongDecodeSignature() {
 	opts := &wrongDecodeSignatureOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2612,7 +2612,7 @@ func (o *wrongDecodeReturnOptions) DecodeCustomField(input any) string {
 
 func (o *wrongDecodeReturnOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_WrongDecodeReturnSignature() {
+func (suite *structcliSuite) TestValidateCustomFlag_WrongDecodeReturnSignature() {
 	opts := &wrongDecodeReturnOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2641,7 +2641,7 @@ func (o *correctHooksOptions) DecodeCustomField(input any) (any, error) {
 
 func (o *correctHooksOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_CorrectHooks() {
+func (suite *structcliSuite) TestValidateCustomFlag_CorrectHooks() {
 	opts := &correctHooksOptions{}
 	cmd := &cobra.Command{Use: "test"}
 
@@ -2656,7 +2656,7 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_CorrectHooks() {
 	assert.Equal(suite.T(), "default", flag.DefValue, "Flag should have default value from define hook")
 }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_ErrorTypes() {
+func (suite *structcliSuite) TestValidateCustomFlag_ErrorTypes() {
 	suite.T().Run("missing_decode_hook_error_type", func(t *testing.T) {
 		opts := &missingDecodeHookOptions{}
 		cmd := &cobra.Command{Use: "test"}
@@ -2666,7 +2666,7 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_ErrorTypes() {
 		require.Error(t, err)
 
 		// Should be wrapped in a MissingDecodeHookError
-		var missingErr *autoflagserrors.MissingDecodeHookError
+		var missingErr *structclierrors.MissingDecodeHookError
 		assert.True(t, errors.As(err, &missingErr), "Should be MissingDecodeHookError type")
 		if missingErr != nil {
 			assert.Equal(t, "CustomField", missingErr.FieldName)
@@ -2683,7 +2683,7 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_ErrorTypes() {
 		require.Error(t, err)
 
 		// Should be wrapped in an InvalidDefineHookSignatureError
-		var defineErr *autoflagserrors.InvalidDefineHookSignatureError
+		var defineErr *structclierrors.InvalidDefineHookSignatureError
 		assert.True(t, errors.As(err, &defineErr), "Should be InvalidDefineHookSignatureError type")
 		if defineErr != nil {
 			assert.Equal(t, "CustomField", defineErr.FieldName)
@@ -2700,7 +2700,7 @@ func (suite *autoflagsSuite) TestValidateCustomFlag_ErrorTypes() {
 		require.Error(t, err)
 
 		// Should be wrapped in an InvalidDecodeHookSignatureError
-		var decodeErr *autoflagserrors.InvalidDecodeHookSignatureError
+		var decodeErr *structclierrors.InvalidDecodeHookSignatureError
 		assert.True(t, errors.As(err, &decodeErr), "Should be InvalidDecodeHookSignatureError type")
 		if decodeErr != nil {
 			assert.Equal(t, "CustomField", decodeErr.FieldName)
@@ -2757,7 +2757,7 @@ type parentOptions struct {
 
 func (o *parentOptions) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestValidateCustomFlag_EdgeCases() {
+func (suite *structcliSuite) TestValidateCustomFlag_EdgeCases() {
 	suite.T().Run("multiple_custom_fields", func(t *testing.T) {
 		// Test struct with multiple custom fields where one is wrong
 
@@ -2888,7 +2888,7 @@ type duplOptsD struct {
 
 func (o *duplOptsD) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
+func (suite *structcliSuite) TestDefine_DuplicateFlags() {
 	suite.T().Run("should return error for simple duplicate across two Define calls", func(t *testing.T) {
 		c := &cobra.Command{Use: "test"}
 		opts1 := &duplOptsA{}
@@ -2901,10 +2901,10 @@ func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
 		// Second definition with the same flag name should fail
 		err2 := opts2.Attach(c)
 		require.Error(t, err2, "should fail due to duplicate flag")
-		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+		require.ErrorIs(t, err2, structclierrors.ErrDuplicateFlag)
 
 		// Check the error content
-		var dupErr *autoflagserrors.DuplicateFlagError
+		var dupErr *structclierrors.DuplicateFlagError
 		require.True(t, errors.As(err2, &dupErr))
 		assert.Equal(t, "port", dupErr.FlagName)
 		assert.Equal(t, "duplOptsB.ServicePort", dupErr.NewFieldPath)
@@ -2918,9 +2918,9 @@ func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
 		// Definition should fail because of the conflict within the same struct
 		err := options.Attach(cmd)
 		require.Error(t, err, "should fail due to duplicate flag within one struct")
-		require.ErrorIs(t, err, autoflagserrors.ErrDuplicateFlag)
+		require.ErrorIs(t, err, structclierrors.ErrDuplicateFlag)
 
-		var dupErr *autoflagserrors.DuplicateFlagError
+		var dupErr *structclierrors.DuplicateFlagError
 		require.True(t, errors.As(err, &dupErr))
 		assert.Equal(t, "common-name", dupErr.FlagName)
 		assert.Equal(t, "duplOptsC.Field2", dupErr.NewFieldPath)
@@ -2939,9 +2939,9 @@ func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
 		// Second definition with conflicting flag should fail
 		err2 := opts2.Attach(cmd)
 		require.Error(t, err2, "should fail due to duplicate flag from nested struct")
-		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+		require.ErrorIs(t, err2, structclierrors.ErrDuplicateFlag)
 
-		var dupErr *autoflagserrors.DuplicateFlagError
+		var dupErr *structclierrors.DuplicateFlagError
 		require.True(t, errors.As(err2, &dupErr))
 		assert.Equal(t, "port", dupErr.FlagName)
 		assert.Equal(t, "duplConflictingOpts.Port", dupErr.NewFieldPath)
@@ -2960,9 +2960,9 @@ func (suite *autoflagsSuite) TestDefine_DuplicateFlags() {
 		// Second definition (explicit name) should fail
 		err2 := opts2.Attach(cmd)
 		require.Error(t, err2, "should fail due to duplicate between computed and explicit name")
-		require.ErrorIs(t, err2, autoflagserrors.ErrDuplicateFlag)
+		require.ErrorIs(t, err2, structclierrors.ErrDuplicateFlag)
 
-		var dupErr *autoflagserrors.DuplicateFlagError
+		var dupErr *structclierrors.DuplicateFlagError
 		require.True(t, errors.As(err2, &dupErr))
 		assert.Equal(t, "port", dupErr.FlagName)
 		assert.Equal(t, "duplOptsWithExplicit.ServicePort", dupErr.NewFieldPath)
@@ -3043,7 +3043,7 @@ type flagNameTestNestedInvalidOpts struct {
 
 func (o *flagNameTestNestedInvalidOpts) Attach(c *cobra.Command) error { return nil }
 
-func (suite *autoflagsSuite) TestFlagNameValidation() {
+func (suite *structcliSuite) TestFlagNameValidation() {
 	testCases := []struct {
 		name        string
 		opts        Options // Corretto: ora usiamo l'interfaccia Options
@@ -3113,7 +3113,7 @@ func (suite *autoflagsSuite) TestFlagNameValidation() {
 			if tc.expectError {
 				require.Error(t, err)
 				// Verifica che l'errore sia del tipo corretto che abbiamo definito
-				require.ErrorIs(t, err, autoflagserrors.ErrInvalidFlagName)
+				require.ErrorIs(t, err, structclierrors.ErrInvalidFlagName)
 				assert.Contains(t, err.Error(), tc.errorMsg)
 			} else {
 				require.NoError(t, err)

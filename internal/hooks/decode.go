@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/go-viper/mapstructure/v2"
-	internalscope "github.com/leodido/autoflags/internal/scope"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
 
 const (
-	FlagDecodeHookAnnotation = "___leodido_autoflags_flagdecodehooks"
+	FlagDecodeHookAnnotation = "___leodido_structcli_flagdecodehooks"
 )
 
 type DecodeHookFunc func(input any) (any, error)

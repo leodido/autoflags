@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"strings"
 
-	autoflagserrors "github.com/leodido/autoflags/errors"
+	structclierrors "github.com/leodido/structcli/errors"
 )
 
 func GetValue(o any) reflect.Value {
@@ -89,7 +89,7 @@ func GetStructPtr(structValue reflect.Value) reflect.Value {
 func GetValidValue(o any) (reflect.Value, error) {
 	// Handle untyped nil
 	if o == nil {
-		return reflect.Value{}, autoflagserrors.NewInputError("nil", "cannot define flags from nil value")
+		return reflect.Value{}, structclierrors.NewInputError("nil", "cannot define flags from nil value")
 	}
 
 	val := GetValue(o)
@@ -101,7 +101,7 @@ func GetValidValue(o any) (reflect.Value, error) {
 			// This should not happen for valid typed inputs
 			inputType := fmt.Sprintf("%T", o)
 
-			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "cannot obtain valid reflection value")
+			return reflect.Value{}, structclierrors.NewInputError(inputType, "cannot obtain valid reflection value")
 		}
 
 		// Only call Interface() if we have a valid value
@@ -110,7 +110,7 @@ func GetValidValue(o any) (reflect.Value, error) {
 			// This should also not happen for valid inputs
 			inputType := fmt.Sprintf("%T", o)
 
-			return reflect.Value{}, autoflagserrors.NewInputError(inputType, "fallback reflection approach failed")
+			return reflect.Value{}, structclierrors.NewInputError(inputType, "fallback reflection approach failed")
 		}
 	}
 

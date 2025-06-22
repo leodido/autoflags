@@ -7,8 +7,8 @@ import (
 	"maps"
 
 	"github.com/go-viper/mapstructure/v2"
-	internalpath "github.com/leodido/autoflags/internal/path"
-	internaltag "github.com/leodido/autoflags/internal/tag"
+	internalpath "github.com/leodido/structcli/internal/path"
+	internaltag "github.com/leodido/structcli/internal/tag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )

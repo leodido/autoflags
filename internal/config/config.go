@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/leodido/autoflags/config"
+	"github.com/leodido/structcli/config"
 	"github.com/spf13/viper"
 )
 

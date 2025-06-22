@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/leodido/autoflags"
+	"github.com/leodido/structcli"
 	"github.com/spf13/afero"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -122,7 +122,7 @@ func TestLoginSvcApplication(t *testing.T) {
 		// Use an in-memory filesystem for tests
 		fs := afero.NewMemMapFs()
 		viper.SetFs(fs)
-		autoflags.ResetGlobals()
+		structcli.ResetGlobals()
 
 		if content != "" && path != "" {
 			require.NoError(t, fs.MkdirAll(filepath.Dir(path), 0755))
@@ -132,7 +132,7 @@ func TestLoginSvcApplication(t *testing.T) {
 		// Return a cleanup function
 		return func() {
 			viper.Reset()
-			autoflags.ResetGlobals()
+			structcli.ResetGlobals()
 		}
 	}
 

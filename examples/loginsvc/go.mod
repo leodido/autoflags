@@ -1,4 +1,4 @@
-module github.com/leodido/autoflags/examples/loginsvc
+module github.com/leodido/structcli/examples/loginsvc
 
 go 1.24
 

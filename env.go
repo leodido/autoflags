@@ -1,10 +1,10 @@
-package autoflags
+package structcli
 
 import (
 	"fmt"
 	"strings"
 
-	internalenv "github.com/leodido/autoflags/internal/env"
+	internalenv "github.com/leodido/structcli/internal/env"
 )
 
 // GetOrSetAppName resolves the app name consistently.

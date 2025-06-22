@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	autoflagserrors "github.com/leodido/autoflags/errors"
-	internalhooks "github.com/leodido/autoflags/internal/hooks"
-	internalpath "github.com/leodido/autoflags/internal/path"
-	internalreflect "github.com/leodido/autoflags/internal/reflect"
-	internalscope "github.com/leodido/autoflags/internal/scope"
-	internaltag "github.com/leodido/autoflags/internal/tag"
+	structclierrors "github.com/leodido/structcli/errors"
+	internalhooks "github.com/leodido/structcli/internal/hooks"
+	internalpath "github.com/leodido/structcli/internal/path"
+	internalreflect "github.com/leodido/structcli/internal/reflect"
+	internalscope "github.com/leodido/structcli/internal/scope"
+	internaltag "github.com/leodido/structcli/internal/tag"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -23,7 +23,7 @@ func IsValidBoolTag(fieldName, tagName, tagValue string) (*bool, error) {
 	}
 	val, err := strconv.ParseBool(tagValue)
 	if err != nil {
-		return nil, autoflagserrors.NewInvalidBooleanTagError(fieldName, tagName, tagValue)
+		return nil, structclierrors.NewInvalidBooleanTagError(fieldName, tagName, tagValue)
 	}
 
 	return &val, nil
@@ -44,7 +44,7 @@ func Struct(c *cobra.Command, o any) error {
 	}
 	for fieldType, fieldNames := range typeToFields {
 		if len(fieldNames) > 1 {
-			return autoflagserrors.NewConflictingTypeError(fieldType, fieldNames, "create distinct custom types for each field")
+			return structclierrors.NewConflictingTypeError(fieldType, fieldNames, "create distinct custom types for each field")
 		}
 	}
 
@@ -68,12 +68,12 @@ func Fields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]st
 		// Validate flagshort tag
 		short := structF.Tag.Get("flagshort")
 		if short != "" && len(short) > 1 {
-			return autoflagserrors.NewInvalidShorthandError(fieldName, short)
+			return structclierrors.NewInvalidShorthandError(fieldName, short)
 		}
 
 		// Ensure that flagshort is given to non-struct types
 		if short != "" && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagshort", "flagshort cannot be used on struct types")
+			return structclierrors.NewInvalidTagUsageError(fieldName, "flagshort", "flagshort cannot be used on struct types")
 		}
 
 		// Validate flagcustom tag
@@ -84,7 +84,7 @@ func Fields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]st
 
 		// Ensure that flagcustom is given to non-struct types
 		if flagCustomValue != nil && *flagCustomValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagcustom", "flagcustom cannot be used on struct types")
+			return structclierrors.NewInvalidTagUsageError(fieldName, "flagcustom", "flagcustom cannot be used on struct types")
 		}
 
 		// Validate the define and decode hooks when flagcustom is true
@@ -115,7 +115,7 @@ func Fields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]st
 
 		// Ensure that flagignore is given to non-struct types
 		if flagIgnoreValue != nil && *flagIgnoreValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagignore", "flagignore cannot be used on struct types")
+			return structclierrors.NewInvalidTagUsageError(fieldName, "flagignore", "flagignore cannot be used on struct types")
 		}
 
 		// Validate flagrequired tag
@@ -126,11 +126,11 @@ func Fields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]st
 
 		// Ensure that flagrequired is given to non-struct types
 		if flagRequiredValue != nil && *flagRequiredValue && isStructKind {
-			return autoflagserrors.NewInvalidTagUsageError(fieldName, "flagrequired", "flagrequired cannot be used on struct types")
+			return structclierrors.NewInvalidTagUsageError(fieldName, "flagrequired", "flagrequired cannot be used on struct types")
 		}
 
 		if flagRequiredValue != nil && flagIgnoreValue != nil && *flagRequiredValue && *flagIgnoreValue {
-			return autoflagserrors.NewConflictingTagsError(fieldName, []string{"flagignore", "flagrequired"}, "mutually exclusive tags")
+			return structclierrors.NewConflictingTagsError(fieldName, []string{"flagignore", "flagrequired"}, "mutually exclusive tags")
 		}
 
 		// Check for duplicate flags
@@ -149,7 +149,7 @@ func Fields(val reflect.Value, prefix string, typeToFields map[reflect.Type][]st
 			}
 
 			if !internaltag.IsValidFlagName(flagName) {
-				return autoflagserrors.NewInvalidFlagNameError(fieldName, flagName)
+				return structclierrors.NewInvalidFlagNameError(fieldName, flagName)
 			}
 
 			if err := s.AddDefinedFlag(flagName, fieldName); err != nil {
@@ -239,15 +239,15 @@ func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) 
 	if defineHookFunc.IsValid() {
 		// Must have corresponding decode method
 		if !decodeHookFunc.IsValid() {
-			return autoflagserrors.NewMissingDecodeHookError(fieldName, decodeMethodName)
+			return structclierrors.NewMissingDecodeHookError(fieldName, decodeMethodName)
 		}
 
 		// Validate signatures
 		if err := validateDefineHookSignature(defineHookFunc); err != nil {
-			return autoflagserrors.NewInvalidDefineHookSignatureError(fieldName, defineMethodName, err)
+			return structclierrors.NewInvalidDefineHookSignatureError(fieldName, defineMethodName, err)
 		}
 		if err := validateDecodeHookSignature(decodeHookFunc); err != nil {
-			return autoflagserrors.NewInvalidDecodeHookSignatureError(fieldName, decodeMethodName, err)
+			return structclierrors.NewInvalidDecodeHookSignatureError(fieldName, decodeMethodName, err)
 		}
 
 		return nil
@@ -267,5 +267,5 @@ func validateCustomFlag(structValue reflect.Value, fieldName, fieldType string) 
 	}
 
 	// Case 3: No define mechanism found
-	return autoflagserrors.NewMissingDefineHookError(fieldName, defineMethodName)
+	return structclierrors.NewMissingDefineHookError(fieldName, defineMethodName)
 }

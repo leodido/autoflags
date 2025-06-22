@@ -3,7 +3,7 @@ package main
 import (
 	"log"
 
-	full_example_cli "github.com/leodido/autoflags/examples/full/cli"
+	full_example_cli "github.com/leodido/structcli/examples/full/cli"
 )
 
 func main() {

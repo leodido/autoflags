@@ -7,15 +7,15 @@ import (
 	"maps"
 
 	"github.com/go-viper/mapstructure/v2"
-	autoflagserrors "github.com/leodido/autoflags/errors"
+	structclierrors "github.com/leodido/structcli/errors"
 	"github.com/spf13/cobra"
 	spf13viper "github.com/spf13/viper"
 )
 
-// autoflagsContextKey is used to store scope in command context
-type autoflagsContextKey struct{}
+// structcliContextKey is used to store scope in command context
+type structcliContextKey struct{}
 
-// Scope holds per-command state for autoflags
+// Scope holds per-command state for structcli
 type Scope struct {
 	v                 *spf13viper.Viper
 	boundEnvs         map[string]bool
@@ -32,7 +32,7 @@ func Get(c *cobra.Command) *Scope {
 	}
 
 	// Check if command already has scope
-	if s, ok := ctx.Value(autoflagsContextKey{}).(*Scope); ok {
+	if s, ok := ctx.Value(structcliContextKey{}).(*Scope); ok {
 		return s
 	}
 
@@ -45,7 +45,7 @@ func Get(c *cobra.Command) *Scope {
 	}
 
 	// Attach to command context
-	newCtx := context.WithValue(ctx, autoflagsContextKey{}, s)
+	newCtx := context.WithValue(ctx, structcliContextKey{}, s)
 	c.SetContext(newCtx)
 
 	return s
@@ -106,7 +106,7 @@ func (s *Scope) AddDefinedFlag(name, fieldPath string) error {
 	defer s.mu.Unlock()
 
 	if existingPath, ok := s.definedFlags[name]; ok {
-		return autoflagserrors.NewDuplicateFlagError(name, fieldPath, existingPath)
+		return structclierrors.NewDuplicateFlagError(name, fieldPath, existingPath)
 	}
 	s.definedFlags[name] = fieldPath
 

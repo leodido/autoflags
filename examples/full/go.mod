@@ -1,4 +1,4 @@
-module github.com/leodido/autoflags/examples/full
+module github.com/leodido/structcli/examples/full
 
 go 1.24
 

@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"strings"
 
-	internalscope "github.com/leodido/autoflags/internal/scope"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -17,7 +17,7 @@ var (
 )
 
 const (
-	FlagAnnotation = "___leodido_autoflags_flagenvs"
+	FlagAnnotation = "___leodido_structcli_flagenvs"
 )
 
 func NormEnv(str string) string {

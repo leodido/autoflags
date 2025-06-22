@@ -1,7 +1,7 @@
-package autoflags
+package structcli
 
 import (
-	internalusage "github.com/leodido/autoflags/internal/usage"
+	internalusage "github.com/leodido/structcli/internal/usage"
 	"github.com/spf13/cobra"
 )
 

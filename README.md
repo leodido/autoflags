@@ -1,10 +1,10 @@
-# autoflags
+# structcli
 
 > CLI generation from Go structs
 
 Transform your Go structs into fully-featured command-line interfaces with configuration files, environment variables, flags, validation, and beautiful help output.
 
-All with just a few struct tags: **declare your options in a struct, and let autoflags do the rest**.
+All with just a few struct tags: **declare your options in a struct, and let structcli do the rest**.
 
 Stop writing boilerplate. Start building features. ⋙
 
@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/leodido/autoflags"
+	"github.com/leodido/structcli"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap/zapcore"
 )
@@ -28,7 +28,7 @@ type Options struct {
 }
 
 func (o *Options) Attach(c *cobra.Command) error {
-	return autoflags.Define(c, o)
+	return structcli.Define(c, o)
 }
 
 func main() {
@@ -42,7 +42,7 @@ func main() {
 	}
 
 	cli.PreRunE = func(c *cobra.Command, args []string) error {
-		return autoflags.Unmarshal(c, opts) // Populates struct from flags
+		return structcli.Unmarshal(c, opts) // Populates struct from flags
 	}
 
 	cli.RunE = func(c *cobra.Command, args []string) error {
@@ -71,7 +71,7 @@ func main() {
 
 Want automatic environment variables, aliases, shorthand, flag description in usage?
 
-Just annotate your struct with `autoflags` tags.
+Just annotate your struct with `structcli` tags.
 
 ```go
 type Options struct {
@@ -193,7 +193,7 @@ The prefix of the environment variable name is the CLI name plus the command nam
 Easily set up configuration file discovery (flag, environment variable, and fallback paths) with a single line of code.
 
 ```go
-autoflags.SetupConfig(rootCmd, config.Options{AppName: "full"})
+structcli.SetupConfig(rootCmd, config.Options{AppName: "full"})
 ```
 
 The line above:
@@ -208,7 +208,7 @@ What's left? Tell your CLI to load the configuration file (if any).
 
 ```go
 rootC.PersistentPreRunE = func(c *cobra.Command, args []string) error {
-	_, configMessage, configErr := autoflags.UseConfigSimple(c)
+	_, configMessage, configErr := structcli.UseConfigSimple(c)
 	if configErr != nil {
 		return configErr
 	}
@@ -297,7 +297,7 @@ See a full working example [here](examples/full/cli/cli.go).
 Create a `--debug-options` flag (plus a `FULL_DEBUG_OPTIONS` env var) for troubleshooting config/env/flags resolution.
 
 ```go
-autoflags.SetupDebug(rootCmd, debug.Options{})
+structcli.SetupDebug(rootCmd, debug.Options{})
 ```
 
 ```bash
@@ -323,7 +323,7 @@ autoflags.SetupDebug(rootCmd, debug.Options{})
 
 ### ↪️ Sharing Options Between Commands
 
-In complex CLIs, multiple commands often need access to the same global configuration and shared resources (like a logger or a database connection). `autoflags` provides a powerful pattern using the [ContextOptions](/contract.go) interface to achieve this without resorting to global variables, by propagating a single "source of truth" through the command context.
+In complex CLIs, multiple commands often need access to the same global configuration and shared resources (like a logger or a database connection). `structcli` provides a powerful pattern using the [ContextOptions](/contract.go) interface to achieve this without resorting to global variables, by propagating a single "source of truth" through the command context.
 
 The pattern allows you to:
 
@@ -351,12 +351,12 @@ func (o *CommonOptions) Initialize() error { /* ... */ }
 ```
 
 Initialize the state in the root command. Use a `PersistentPreRunE` hook on your root command to populate your struct and initialize any resources.
-Invoking `autoflags.Unmarshal` will automatically inject the prepared object into the context for all subcommands to use.
+Invoking `structcli.Unmarshal` will automatically inject the prepared object into the context for all subcommands to use.
 
 ```go
 rootC.PersistentPreRunE = func(c *cobra.Command, args []string) error {
 	// Populate the master `commonOpts` from flags, env, and config file.
-	if err := autoflags.Unmarshal(c, commonOpts); err != nil {
+	if err := structcli.Unmarshal(c, commonOpts); err != nil {
 		return err
 	}
 	// Use the populated values to initialize the computed state (the logger).
@@ -417,7 +417,7 @@ func (o *ServerOptions) DefineTargetEnv(name, short, descr string, structField r
     fieldPtr := fieldValue.Addr().Interface().(*Environment)
     *fieldPtr = "dev" // Set default
 
-    return autoflagsvalues.NewString((*string)(fieldPtr)), enhancedDesc
+    return structclivalues.NewString((*string)(fieldPtr)), enhancedDesc
 }
 
 // DecodeTargetEnv converts the string input to the Environment type.
@@ -428,7 +428,7 @@ func (o *ServerOptions) DecodeTargetEnv(input any) (any, error) {
 
 // Attach handles flag definition and shell completion for our custom type.
 func (o *ServerOptions) Attach(c *cobra.Command) error {
-	if err := autoflags.Define(c, o); err != nil {
+	if err := structcli.Define(c, o); err != nil {
         return err
     }
 
@@ -451,7 +451,7 @@ Organize your `--help` output into logical groups for better readability.
 
 ```bash
 ❯ go run examples/full/main.go --help
-# A demonstration of the autoflags library with beautiful CLI features
+# A demonstration of the structcli library with beautiful CLI features
 #
 # Usage:
 #   full [flags]
@@ -523,7 +523,7 @@ Use these tags in your struct fields to control the behavior:
 
 ## 📖 Documentation
 
-For comprehensive documentation and advanced usage patterns, visit the [documentation](https://pkg.go.dev/github.com/leodido/autoflags).
+For comprehensive documentation and advanced usage patterns, visit the [documentation](https://pkg.go.dev/github.com/leodido/structcli).
 
 Or take a look at the [examples](examples/).
 

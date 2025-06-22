@@ -1,4 +1,4 @@
-package autoflags
+package structcli
 
 import (
 	"fmt"
@@ -8,13 +8,13 @@ import (
 	"sync"
 	"unsafe"
 
-	internalenv "github.com/leodido/autoflags/internal/env"
-	internalhooks "github.com/leodido/autoflags/internal/hooks"
-	internalpath "github.com/leodido/autoflags/internal/path"
-	internalreflect "github.com/leodido/autoflags/internal/reflect"
-	internaltag "github.com/leodido/autoflags/internal/tag"
-	internalusage "github.com/leodido/autoflags/internal/usage"
-	internalvalidation "github.com/leodido/autoflags/internal/validation"
+	internalenv "github.com/leodido/structcli/internal/env"
+	internalhooks "github.com/leodido/structcli/internal/hooks"
+	internalpath "github.com/leodido/structcli/internal/path"
+	internalreflect "github.com/leodido/structcli/internal/reflect"
+	internaltag "github.com/leodido/structcli/internal/tag"
+	internalusage "github.com/leodido/structcli/internal/usage"
+	internalvalidation "github.com/leodido/structcli/internal/validation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

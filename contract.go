@@ -1,4 +1,4 @@
-package autoflags
+package structcli
 
 import (
 	"context"

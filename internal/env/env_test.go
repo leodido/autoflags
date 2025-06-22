@@ -3,32 +3,32 @@ package internalenv_test
 import (
 	"testing"
 
-	"github.com/leodido/autoflags"
-	internalenv "github.com/leodido/autoflags/internal/env"
-	internalscope "github.com/leodido/autoflags/internal/scope"
+	"github.com/leodido/structcli"
+	internalenv "github.com/leodido/structcli/internal/env"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/suite"
 )
 
-type autoflagsSuite struct {
+type structcliSuite struct {
 	suite.Suite
 }
 
-func TestAutoflagsSuite(t *testing.T) {
-	suite.Run(t, new(autoflagsSuite))
+func TestStructCLISuite(t *testing.T) {
+	suite.Run(t, new(structcliSuite))
 }
 
-func (suite *autoflagsSuite) SetupTest() {
+func (suite *structcliSuite) SetupTest() {
 	// Reset viper state before each test to prevent test pollution
 	viper.Reset()
 	// Reset global prefix
-	autoflags.SetEnvPrefix("")
+	structcli.SetEnvPrefix("")
 }
 
 // createTestC creates a command with flags that have environment annotations
-func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][]string) *cobra.Command {
+func (suite *structcliSuite) createTestC(name string, flagsWithEnvs map[string][]string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use: name,
 	}
@@ -43,7 +43,7 @@ func (suite *autoflagsSuite) createTestC(name string, flagsWithEnvs map[string][
 	return cmd
 }
 
-func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
+func (suite *structcliSuite) TestBindEnv_FirstCall() {
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"},
 		"cgroup": {"S4SONIC_DNS_CGROUP"},
@@ -59,7 +59,7 @@ func (suite *autoflagsSuite) TestBindEnv_FirstCall() {
 	assert.True(suite.T(), boundEnvs["cgroup"], "cgroup flag should be marked as bound")
 }
 
-func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
+func (suite *structcliSuite) TestBindEnv_SecondCallSameCommand() {
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"},
 		"cgroup": {"S4SONIC_DNS_CGROUP"},
@@ -86,7 +86,7 @@ func (suite *autoflagsSuite) TestBindEnv_SecondCallSameCommand() {
 	assert.True(suite.T(), boundEnvs["new-flag"], "new-flag should be bound")
 }
 
-func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
+func (suite *structcliSuite) TestBindEnv_DifferentCommands() {
 	dnsCmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"},
 	})
@@ -114,7 +114,7 @@ func (suite *autoflagsSuite) TestBindEnv_DifferentCommands() {
 	assert.Len(suite.T(), ttyBoundEnvs, 1, "tty should have exactly 1 bound env")
 }
 
-func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
+func (suite *structcliSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 	cmd := suite.createTestC("dns", map[string][]string{
 		"freeze": {"S4SONIC_DNS_FREEZE"}, // Has env annotation
 		"no-env": {},                     // No env annotation
@@ -130,7 +130,7 @@ func (suite *autoflagsSuite) TestBindEnv_FlagsWithoutEnvAnnotations() {
 	assert.False(suite.T(), boundEnvs["no-env"], "no-env flag should not be bound")
 }
 
-func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
+func (suite *structcliSuite) TestBindEnv_EmptyCommand() {
 	cmd := &cobra.Command{Use: "empty"}
 
 	// Should not panic with empty command
@@ -144,7 +144,7 @@ func (suite *autoflagsSuite) TestBindEnv_EmptyCommand() {
 	assert.Empty(suite.T(), boundEnvs, "empty command should have no bound flags")
 }
 
-func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
+func (suite *structcliSuite) TestGetOrSetAppName_Consistency() {
 	tests := []struct {
 		descr          string
 		setup          func()
@@ -155,7 +155,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 	}{
 		{
 			descr:          "provided name with no existing prefix",
-			setup:          func() { autoflags.SetEnvPrefix("") },
+			setup:          func() { structcli.SetEnvPrefix("") },
 			name:           "myapp",
 			cName:          "cmd",
 			expected:       "myapp",
@@ -163,7 +163,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "fallback to command name",
-			setup:          func() { autoflags.SetEnvPrefix("") },
+			setup:          func() { structcli.SetEnvPrefix("") },
 			name:           "",
 			cName:          "mycmd",
 			expected:       "mycmd",
@@ -171,7 +171,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "no given app name, use existing prefix",
-			setup:          func() { autoflags.SetEnvPrefix("already-existing") },
+			setup:          func() { structcli.SetEnvPrefix("already-existing") },
 			name:           "",
 			cName:          "cmd",
 			expected:       "ALREADY_EXISTING",
@@ -179,7 +179,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "no prefix, no given app name, no command name",
-			setup:          func() { autoflags.SetEnvPrefix("") },
+			setup:          func() { structcli.SetEnvPrefix("") },
 			name:           "",
 			cName:          "",
 			expected:       "",
@@ -187,7 +187,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "prefix, no given app name, no command name",
-			setup:          func() { autoflags.SetEnvPrefix("prepre") },
+			setup:          func() { structcli.SetEnvPrefix("prepre") },
 			name:           "",
 			cName:          "",
 			expected:       "PREPRE",
@@ -195,7 +195,7 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 		},
 		{
 			descr:          "uppercase prefix, no given app name, no command name",
-			setup:          func() { autoflags.SetEnvPrefix("UPPERC") },
+			setup:          func() { structcli.SetEnvPrefix("UPPERC") },
 			name:           "",
 			cName:          "",
 			expected:       "UPPERC",
@@ -206,9 +206,9 @@ func (suite *autoflagsSuite) TestGetOrSetAppName_Consistency() {
 	for _, tt := range tests {
 		suite.T().Run(tt.descr, func(t *testing.T) {
 			tt.setup()
-			result := autoflags.GetOrSetAppName(tt.name, tt.cName)
+			result := structcli.GetOrSetAppName(tt.name, tt.cName)
 			assert.Equal(t, tt.expected, result)
-			assert.Equal(t, tt.expectedPrefix, autoflags.EnvPrefix())
+			assert.Equal(t, tt.expectedPrefix, structcli.EnvPrefix())
 		})
 	}
 }
