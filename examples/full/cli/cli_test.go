@@ -443,7 +443,7 @@ srv:
 		// Return a cleanup function to reset Viper's state after the test.
 		return func() {
 			viper.Reset()
-			structcli.ResetGlobals()
+			structcli.Reset()
 		}
 	}
 

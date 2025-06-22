@@ -122,7 +122,7 @@ func TestLoginSvcApplication(t *testing.T) {
 		// Use an in-memory filesystem for tests
 		fs := afero.NewMemMapFs()
 		viper.SetFs(fs)
-		structcli.ResetGlobals()
+		structcli.Reset()
 
 		if content != "" && path != "" {
 			require.NoError(t, fs.MkdirAll(filepath.Dir(path), 0755))
@@ -132,7 +132,7 @@ func TestLoginSvcApplication(t *testing.T) {
 		// Return a cleanup function
 		return func() {
 			viper.Reset()
-			structcli.ResetGlobals()
+			structcli.Reset()
 		}
 	}
 

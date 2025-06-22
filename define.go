@@ -345,7 +345,7 @@ func define(c *cobra.Command, o any, startingGroup string, structPath string, ex
 	return nil
 }
 
-func ResetGlobals() {
+func Reset() {
 	globalAliasCache = &sync.Map{}
 	globalDefaultsCache = &sync.Map{}
 }

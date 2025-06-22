@@ -105,7 +105,7 @@ func (o *unmarshalIntegrationOptions) Validate(_ context.Context) []error {
 func TestUnmarshal_Integration_WithLibraries(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		structcli.ResetGlobals()
+		structcli.Reset()
 	}
 
 	t.Run("PreMoldTransformationFails", func(t *testing.T) {
@@ -312,7 +312,7 @@ func (o TestDefineOptions) Validate() []error                   { return nil }
 func TestDefine_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		structcli.ResetGlobals()
+		structcli.Reset()
 	}
 
 	cases := []struct {
@@ -492,7 +492,7 @@ func TestSetupConfig_Integration(t *testing.T) {
 
 	teardownTest := func() {
 		viper.Reset()
-		structcli.ResetGlobals()
+		structcli.Reset()
 	}
 
 	t.Run("RootCommandValidation_Success", func(t *testing.T) {
@@ -2239,7 +2239,7 @@ func (m *multiCustomOptions) Attach(c *cobra.Command) error { return structcli.D
 func TestUnmarshal_CustomDecodeHook_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		structcli.ResetGlobals()
+		structcli.Reset()
 	}
 
 	t.Run("CustomDecodeHook_FromConfig", func(t *testing.T) {
@@ -2584,7 +2584,7 @@ func (o *wrongDefineReturn2Options) Attach(c *cobra.Command) error        { retu
 func TestFlagCustom_Integration(t *testing.T) {
 	setupTest := func() {
 		viper.Reset()
-		structcli.ResetGlobals()
+		structcli.Reset()
 	}
 
 	t.Run("MultipleFieldsWithSameCustomType", func(t *testing.T) {
