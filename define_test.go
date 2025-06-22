@@ -3046,7 +3046,7 @@ func (o *flagNameTestNestedInvalidOpts) Attach(c *cobra.Command) error { return 
 func (suite *structcliSuite) TestFlagNameValidation() {
 	testCases := []struct {
 		name        string
-		opts        Options // Corretto: ora usiamo l'interfaccia Options
+		opts        Options
 		expectError bool
 		errorMsg    string
 	}{
@@ -3112,7 +3112,7 @@ func (suite *structcliSuite) TestFlagNameValidation() {
 
 			if tc.expectError {
 				require.Error(t, err)
-				// Verifica che l'errore sia del tipo corretto che abbiamo definito
+
 				require.ErrorIs(t, err, structclierrors.ErrInvalidFlagName)
 				assert.Contains(t, err.Error(), tc.errorMsg)
 			} else {

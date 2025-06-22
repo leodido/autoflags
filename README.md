@@ -1,4 +1,4 @@
-[![Coverage](https://img.shields.io/codecov/c/github/leodido/structcli.svg?style=for-the-badge)](https://codecov.io/gh/leodido/structcli) [![Documentation](https://img.shields.io/badge/godoc-reference-blue.svg?style=for-the-badge)](https://godoc.org/github.com/leodido/structcli)
+[![Coverage](https://img.shields.io/codecov/c/github/leodido/structcli.svg?style=for-the-badge)](https://codecov.io/gh/leodido/structcli) [![Documentation](https://img.shields.io/badge/godoc-reference-blue.svg?style=for-the-badge)](https://godoc.org/github.com/leodido/structcli) [![GoReportCard](https://img.shields.io/badge/go%20report-A+-brightgreen.svg?style=for-the-badge)](https://goreportcard.com/report/github.com/leodido/structcli)
 
 > CLI generation from Go structs
 
