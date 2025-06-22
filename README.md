@@ -135,7 +135,13 @@ Your CLI now supports:
 - ✅ Automatic validation and type conversion
 - 📚 Beautiful help output with proper grouping
 
-## 📦  Key Features
+## ⬇️ Install
+
+```bash
+go get github.com/leodido/structcli
+```
+
+## 📦 Key Features
 
 ### 🧩 Declarative Flags Definition
 
