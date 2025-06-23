@@ -30,7 +30,7 @@ type Options struct {
 }
 
 func (o *Options) Attach(c *cobra.Command) error {
-	return structcli.Define(c, o)
+	return structcli.Define(c, o) // This is it
 }
 
 func main() {
@@ -38,13 +38,13 @@ func main() {
 	opts := &Options{}
 	cli := &cobra.Command{Use: "myapp"}
 
-	// This single line creates all the options (flags, env vars)
+	// This single line creates all the options (flags, env vars, config keys)
 	if err := opts.Attach(cli); err != nil {
 		log.Fatalln(err)
 	}
 
 	cli.PreRunE = func(c *cobra.Command, args []string) error {
-		return structcli.Unmarshal(c, opts) // Populates struct from flags
+		return structcli.Unmarshal(c, opts) // Populates struct from config keys, env variables, flags
 	}
 
 	cli.RunE = func(c *cobra.Command, args []string) error {
