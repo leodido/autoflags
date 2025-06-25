@@ -263,7 +263,6 @@ usr:
     age: 42
     # Command specific override
     dry: false
-
 # NOTE: Per the library's design, there is no other fallback other than from the top-level.
 # A command like 'usr delete' would ONLY use the global keys above (if those keys/flags are attached to it),
 # as an exact 'usr.delete' section is not defined.
@@ -452,6 +451,23 @@ func (o *ServerOptions) Attach(c *cobra.Command) error {
 In [values](/values/values.go) we provide `pflag.Value` implementations for standard types.
 
 See [full example](examples/full/cli/cli.go) for more details.
+
+### 🧱 Built-in Custom Types
+
+| Type            | Description                     | Example Values                                               | Special Features                   |
+| --------------- | ------------------------------- | ------------------------------------------------------------ | ---------------------------------- |
+| `zapcore.Level` | Zap logging levels              | `debug`, `info`, `warn`, `error`, `dpanic`, `panic`, `fatal` | Enum validation                    |
+| `slog.Level`    | Standard library logging levels | `debug`, `info`, `warn`, `error`, `error+2`, ...             | Level offsets: `ERROR+2`, `INFO-4` |
+| `time.Duration` | Time durations                  | `30s`, `5m`, `2h`, `1h30m`                                   | Go duration parsing                |
+| `[]string`      | String slices                   | `item1,item2,item3`                                          | Comma-separated                    |
+| `[]int`         | Integer slices                  | `1,2,3,42`                                                   | Comma-separated                    |
+
+All built-in types support:
+
+- Command-line flags with validation and help text
+- Environment variables with automatic binding
+- Configuration files (YAML, JSON, TOML)
+- Type validation with helpful error messages
 
 ### 🎨 Beautiful, Organized Help Output
 
