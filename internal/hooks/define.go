@@ -2,6 +2,7 @@ package internalhooks
 
 import (
 	"fmt"
+	"log/slog"
 	"reflect"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ type DefineHookFunc func(name, short, descr string, structField reflect.StructFi
 var DefineHookRegistry = map[string]DefineHookFunc{
 	"zapcore.Level": DefineZapcoreLevelHookFunc(),
 	"time.Duration": DefineTimeDurationHookFunc(),
+	"slog.Level":    DefineSlogLevelHookFunc(),
 }
 
 func DefineTimeDurationHookFunc() DefineHookFunc {
@@ -68,6 +70,38 @@ func DefineZapcoreLevelHookFunc() DefineHookFunc {
 
 		// Get pointer to the field for the enum flag
 		fieldPtr := (*zapcore.Level)(unsafe.Pointer(fieldValue.UnsafeAddr()))
+		enumFlag := enumflag.New(fieldPtr, structField.Type.String(), logLevels, enumflag.EnumCaseInsensitive)
+
+		return enumFlag, enhancedDescr
+	}
+}
+
+// DefineSlogLevelHookFunc creates a flag definition function for slog.Level.
+//
+// It returns an enum flag that implements pflag.Value.
+func DefineSlogLevelHookFunc() DefineHookFunc {
+	return func(name, short, descr string, structField reflect.StructField, fieldValue reflect.Value) (pflag.Value, string) {
+		logLevels := map[slog.Level][]string{
+			slog.LevelDebug: {"debug"},
+			slog.LevelInfo:  {"info"},
+			slog.LevelWarn:  {"warn"},
+			slog.LevelError: {"error"},
+		}
+
+		keys := []int{}
+		for k := range logLevels {
+			keys = append(keys, int(k))
+		}
+		sort.Ints(keys)
+		values := []string{}
+		for _, k := range keys {
+			values = append(values, logLevels[slog.Level(k)][0])
+		}
+		addendum := fmt.Sprintf(" {%s}", strings.Join(values, ","))
+		enhancedDescr := descr + addendum
+
+		// Get pointer to the field for the enum flag
+		fieldPtr := (*slog.Level)(unsafe.Pointer(fieldValue.UnsafeAddr()))
 		enumFlag := enumflag.New(fieldPtr, structField.Type.String(), logLevels, enumflag.EnumCaseInsensitive)
 
 		return enumFlag, enhancedDescr
