@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-viper/mapstructure/v2"
 	"github.com/leodido/structcli"
 	internalenv "github.com/leodido/structcli/internal/env"
 	internalhooks "github.com/leodido/structcli/internal/hooks"
@@ -1015,4 +1016,59 @@ func (suite *structcliSuite) TestHooks_SlogLevelWithOffsets() {
 				"Level %s should parse to %d but got %d", tc.input, tc.expected, opts.LogLevel)
 		})
 	}
+}
+
+func (suite *structcliSuite) TestStringToSlogLevelHookFunc_TypeGuard() {
+	type testStruct struct {
+		NotSlogLevel string `mapstructure:"level"`
+	}
+
+	opts := &testStruct{}
+
+	// Use our slog hook directly with mapstructure
+	// This will force the hook to be called even for non-slog.Level fields
+	slogHook := internalhooks.StringToSlogLevelHookFunc()
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: slogHook, // Force slog hook to be used for all fields
+		Result:     opts,
+	})
+	require.NoError(suite.T(), err)
+
+	input := map[string]any{"level": "warn"}
+
+	err = decoder.Decode(input)
+	assert.NoError(suite.T(), err)
+
+	// The string field should remain unchanged because the type guard
+	// should have returned early when target type != slog.Level
+	assert.Equal(suite.T(), "warn", opts.NotSlogLevel, "String should pass through unchanged due to type guard condition")
+}
+
+func (suite *structcliSuite) TestStringToZapcoreLevelHookFunc_TypeGuard() {
+	type testStruct struct {
+		NotZapcoreLevel string `mapstructure:"level"`
+	}
+
+	opts := &testStruct{}
+
+	// Use our zapcore hook directly with mapstructure
+	// This will force the hook to be called even for non-zapcore.Level fields
+	zapcoreHook := internalhooks.StringToZapcoreLevelHookFunc()
+
+	decoder, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: zapcoreHook, // Force zapcore hook to be used for all fields
+		Result:     opts,
+	})
+	require.NoError(suite.T(), err)
+
+	// Input data - string that would be valid for zapcore.Level
+	input := map[string]any{"level": "error"}
+
+	err = decoder.Decode(input)
+	assert.NoError(suite.T(), err)
+
+	// The string field should remain unchanged because the type guard
+	// should have returned early when target type != zapcore.Level
+	assert.Equal(suite.T(), "error", opts.NotZapcoreLevel, "String should pass through unchanged due to type guard condition")
 }
