@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/leodido/structcli"
 	internalenv "github.com/leodido/structcli/internal/env"
+	internalhooks "github.com/leodido/structcli/internal/hooks"
+	internalscope "github.com/leodido/structcli/internal/scope"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -44,6 +47,40 @@ func (suite *structcliSuite) createTempYAMLFile(content string) string {
 	require.NoError(suite.T(), err)
 
 	return tmpFile.Name()
+}
+
+func (suite *structcliSuite) TestStoreDecodeHookFunc() {
+	// Create a command with a flag
+	cmd := &cobra.Command{Use: "testcmd"}
+	cmd.Flags().String("custom-field", "", "test flag")
+
+	// Create a simple decode method
+	decodeMethod := func(input any) (any, error) {
+		return input, nil
+	}
+	decodeValue := reflect.ValueOf(decodeMethod)
+	targetType := reflect.TypeOf("")
+
+	// Call StoreDecodeHookFunc
+	err := internalhooks.StoreDecodeHookFunc(cmd, "custom-field", decodeValue, targetType)
+	require.NoError(suite.T(), err)
+
+	// Assert the scope contains the custom decode hook with correct key
+	scope := internalscope.Get(cmd)
+	expectedKey := fmt.Sprintf("customDecodeHook_%s_%s", cmd.Name(), "custom-field")
+
+	storedHook, exists := scope.GetCustomDecodeHook(expectedKey)
+	require.True(suite.T(), exists, "Custom decode hook should be stored in scope")
+	assert.NotNil(suite.T(), storedHook, "Stored hook should not be nil")
+
+	// Assert the flag has the annotation with the correct key
+	flag := cmd.Flags().Lookup("custom-field")
+	require.NotNil(suite.T(), flag, "Flag should exist")
+
+	annotations := flag.Annotations[internalhooks.FlagDecodeHookAnnotation]
+	require.NotNil(suite.T(), annotations, "Flag should have decode hook annotation")
+	require.Len(suite.T(), annotations, 1, "Should have exactly one annotation")
+	assert.Equal(suite.T(), expectedKey, annotations[0], "Annotation should contain the correct key")
 }
 
 type zapcoreLevelOptions struct {
