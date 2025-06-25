@@ -1,6 +1,8 @@
 package internalhooks_test
 
 import (
+	"fmt"
+	"log/slog"
 	"os"
 	"testing"
 	"time"
@@ -816,4 +818,164 @@ func (suite *structcliSuite) TestHooks_ZapcoreLevelFromYAML_InvalidLevel() {
 	assert.Error(suite.T(), err, "Unmarshal should return an error for invalid zapcore.Level")
 	assert.Contains(suite.T(), err.Error(), "couldn't unmarshal config to options:", "Error should be wrapped by Unmarshal")
 	assert.Contains(suite.T(), err.Error(), "invalid string for zapcore.Level 'invalidlevelstring'", "Error should contain the specific hook error message")
+}
+
+type slogLevelOptions struct {
+	LogLevel slog.Level `default:"info" flag:"log-level" flagdescr:"the logging level" flagenv:"true"`
+}
+
+func (o *slogLevelOptions) Attach(c *cobra.Command) error { return nil }
+
+func (suite *structcliSuite) TestHooks_DefineSlogLevelFlag() {
+	// Test just defining the flag, without config file
+	opts := &slogLevelOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	err := structcli.Define(cmd, opts)
+
+	require.Nil(suite.T(), err)
+
+	// Check if the flag was created
+	flag := cmd.Flags().Lookup("log-level")
+	assert.NotNil(suite.T(), flag)
+	assert.Contains(suite.T(), flag.Usage, "{debug,info,warn,error}")
+}
+
+func (suite *structcliSuite) TestHooks_SlogLevelFromYAML() {
+	// Create a temporary config file
+	configContent := `log-level: debug`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	// Define options with slog.Level field
+	opts := &slogLevelOptions{}
+
+	cmd := &cobra.Command{Use: "test"}
+
+	// Set up viper to read from our config file
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	// Define flags and unmarshal
+	structcli.Define(cmd, opts)
+	err := structcli.Unmarshal(cmd, opts)
+
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), slog.LevelDebug, opts.LogLevel)
+}
+
+func (suite *structcliSuite) TestHooks_SlogLevelFromEnv() {
+	// Store original environment
+	originalEnv := os.Getenv("TESTAPP_LOG_LEVEL")
+	defer func() {
+		if originalEnv == "" {
+			os.Unsetenv("TESTAPP_LOG_LEVEL")
+		} else {
+			os.Setenv("TESTAPP_LOG_LEVEL", originalEnv)
+		}
+		// Reset state after test
+		viper.Reset()
+		structcli.SetEnvPrefix("")
+	}()
+
+	// Set environment variable (note: log-level becomes LOG_LEVEL)
+	os.Setenv("TESTAPP_LOG_LEVEL", "warn")
+
+	// IMPORTANT: Set environment prefix BEFORE defining flags
+	structcli.SetEnvPrefix("TESTAPP")
+
+	opts := &slogLevelOptions{}
+	cmd := &cobra.Command{Use: "testapp"}
+
+	// Define flags and unmarshal
+	err := structcli.Define(cmd, opts)
+	require.NoError(suite.T(), err)
+
+	err = structcli.Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), slog.LevelWarn, opts.LogLevel)
+}
+
+func (suite *structcliSuite) TestHooks_SlogLevelFromFlag() {
+	opts := &slogLevelOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Define flags
+	err := structcli.Define(cmd, opts)
+	require.NoError(suite.T(), err)
+
+	// Set flag value directly instead of using Execute
+	err = cmd.Flags().Set("log-level", "error")
+	require.NoError(suite.T(), err)
+
+	err = structcli.Unmarshal(cmd, opts)
+	assert.NoError(suite.T(), err)
+	assert.Equal(suite.T(), slog.LevelError, opts.LogLevel)
+}
+
+func (suite *structcliSuite) TestHooks_SlogLevelInvalidValue() {
+	// Create a temporary config file with invalid level
+	configContent := `log-level: invalid`
+	configFile := suite.createTempYAMLFile(configContent)
+	defer os.Remove(configFile)
+
+	opts := &slogLevelOptions{}
+	cmd := &cobra.Command{Use: "test"}
+
+	// Set up viper to read from our config file
+	viper.SetConfigFile(configFile)
+	require.NoError(suite.T(), viper.ReadInConfig())
+
+	// Define flags and unmarshal
+	structcli.Define(cmd, opts)
+	err := structcli.Unmarshal(cmd, opts)
+
+	assert.Error(suite.T(), err)
+	assert.Contains(suite.T(), err.Error(), "invalid string for slog.Level")
+}
+
+func (suite *structcliSuite) TestHooks_SlogLevelWithOffsets() {
+	// Test the ERROR+2, INFO-4 feature
+	testCases := []struct {
+		input    string
+		expected slog.Level
+	}{
+		{"debug", slog.LevelDebug},
+		{"info", slog.LevelInfo},
+		{"warn", slog.LevelWarn},
+		{"error", slog.LevelError},
+		{"ERROR+2", slog.LevelError + 2},
+		{"INFO-4", slog.LevelInfo - 4},
+		{"WARN+1", slog.LevelWarn + 1},
+		{"DEBUG-2", slog.LevelDebug - 2},
+	}
+
+	for _, tc := range testCases {
+		suite.T().Run(fmt.Sprintf("level_%s", tc.input), func(t *testing.T) {
+			// Reset viper state for each subtest
+			viper.Reset()
+			structcli.SetEnvPrefix("")
+
+			// Create config file with the test level
+			configContent := fmt.Sprintf(`log-level: %s`, tc.input)
+			configFile := suite.createTempYAMLFile(configContent)
+			defer os.Remove(configFile)
+
+			opts := &slogLevelOptions{}
+			cmd := &cobra.Command{Use: "test"}
+
+			// Set up viper to read from our config file
+			viper.SetConfigFile(configFile)
+			require.NoError(t, viper.ReadInConfig())
+
+			// Define flags and unmarshal
+			err := structcli.Define(cmd, opts)
+			require.NoError(t, err)
+
+			err = structcli.Unmarshal(cmd, opts)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, opts.LogLevel,
+				"Level %s should parse to %d but got %d", tc.input, tc.expected, opts.LogLevel)
+		})
+	}
 }
