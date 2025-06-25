@@ -2,6 +2,7 @@ package internalhooks
 
 import (
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strconv"
 	"strings"
@@ -31,6 +32,10 @@ var DecodeHookRegistry = map[string]decodingAnnotation{
 	"zapcore.Level": {
 		"StringToZapcoreLevelHookFunc",
 		StringToZapcoreLevelHookFunc(),
+	},
+	"slog.Level": {
+		"StringToSlogLevelHookFunc",
+		StringToSlogLevelHookFunc(),
 	},
 	"[]string": {
 		"StringToSliceHookFunc",
@@ -81,6 +86,27 @@ func StringToZapcoreLevelHookFunc() mapstructure.DecodeHookFunc {
 		level, err := zapcore.ParseLevel(data.(string))
 		if err != nil {
 			return nil, fmt.Errorf("invalid string for zapcore.Level '%s': %w", data.(string), err)
+		}
+
+		return level, nil
+	}
+}
+
+// StringToSlogLevelHookFunc creates a decode hook that converts string values
+// to slog.Level types during configuration unmarshaling.
+func StringToSlogLevelHookFunc() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, data any) (any, error) {
+		if f.Kind() != reflect.String {
+			return data, nil
+		}
+		if t != reflect.TypeOf(slog.LevelInfo) {
+			return data, nil
+		}
+
+		var level slog.Level
+		err := level.UnmarshalText([]byte(data.(string)))
+		if err != nil {
+			return nil, fmt.Errorf("invalid string for slog.Level '%s': %w", data.(string), err)
 		}
 
 		return level, nil
